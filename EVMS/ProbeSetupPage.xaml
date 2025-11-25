@@ -1,0 +1,138 @@
+﻿<UserControl x:Class="EVMS.ProbeSetupPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:EVMS"
+             Background="White">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Style/Design.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+   
+
+    <Grid Margin="6">
+        
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Row 0: Select Part -->
+            <RowDefinition Height="*"/>
+            <!-- Row 1: Progress Bars -->
+            <!-- Row 2: New small row -->
+            <RowDefinition Height="Auto"/>
+            <!-- Row 3: Info + Buttons -->
+        </Grid.RowDefinitions>
+
+        <!-- Row 0: Select Part inside border -->
+
+        <Border Grid.Row="0" Style="{StaticResource SectionBorder}" Background="{StaticResource PageBackgroundBrush}">
+           
+            <Grid HorizontalAlignment="Center" >
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Probe Setup" 
+                           VerticalAlignment="Center" 
+                           Foreground="Black" 
+                           FontSize="20" 
+                           FontWeight="Bold" 
+                           Margin="0,0,12,0" 
+                           Grid.Column="0"/>
+
+              
+            </Grid>
+        </Border>
+
+        <!-- Row 1: Progress Bars -->
+        <Border Grid.Row="1" Style="{StaticResource SectionBorder}" Background="{StaticResource PageBackgroundBrush}">
+
+            <ItemsControl ItemsSource="{Binding Probes}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal"
+                           ItemWidth="156"
+                           ItemHeight="380" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <local:ProbeSetupProgressBar 
+                    Value="{Binding Value}" 
+                    Title="{Binding Title}" 
+                    ID="{Binding ID}" 
+                    Stroke="{Binding Stroke}" 
+                    Status="{Binding Status}"   
+                    Margin="8"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+        </Border>
+
+
+        <!-- Row 2: Two bordered columns—info and buttons -->
+        <Grid Grid.Row="3" Margin="0,5,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="4*"/>
+                <ColumnDefinition Width="2*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Info border -->
+            <Border Grid.Column="0" Style="{StaticResource SectionBorder}" Background="{StaticResource PageBackgroundBrush}">
+
+                <WrapPanel x:Name="InputButtonPanel" Grid.Row="3" Margin="0,0,0,0" />
+            </Border>
+
+            <!-- Buttons border -->
+            <Border Grid.Column="1" Style="{StaticResource SectionBorder}" Background="{StaticResource PageBackgroundBrush}">
+
+                <Grid >
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+
+
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Column="0" Content="Start Reading" 
+                                Style="{StaticResource ModernButtonStyle2}" 
+                                Height="40"
+                                Width="130"
+                                HorizontalAlignment="Center"
+                                Click="StartBtn_Click"/>        
+
+                    <Button Grid.Column="3" Content="Stop Reading" 
+                                Style="{StaticResource ModernButtonStyle2}" 
+                                Height="40" 
+                                Width="130"
+                                HorizontalAlignment="Center"
+                                Click="StopBtn_Click"/>
+                    <Button x:Name="MotorUpDownButton"
+                            Grid.Column="1"
+                            Content="Cylinder Up/Down"
+                            Style="{StaticResource ModernButtonStyle2}"
+                            Height="40"
+                            Width="130"
+                            HorizontalAlignment="Center"
+                            Click="MotorUpDownButton_Click"/>
+                    <Button x:Name="MotorRunButton"
+                             Grid.Column="2"
+                             Content="Motor Rotate"
+                             Style="{StaticResource ModernButtonStyle2}"
+                             Height="40"
+                             Width="130"
+                             HorizontalAlignment="Center"
+                             Click="MotorRunButton_Click"/>      
+ 
+                </Grid>
+            </Border>
+
+        </Grid>
+    </Grid>
+</UserControl>

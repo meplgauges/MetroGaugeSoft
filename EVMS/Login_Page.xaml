@@ -1,0 +1,79 @@
+﻿<Window x:Class="EVMS.Login_Page"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Width="400" Height="580"
+        ShowInTaskbar="False">
+
+    <Grid>
+        <!-- Main Card -->
+        <Border CornerRadius="12"
+                Background="Black"
+                Padding="28"
+                Width="320"
+                Height="400"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+
+            <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Center">
+
+                <!-- Title -->
+                <TextBlock Text="🔐 Login"
+                           FontSize="20"
+                           Foreground="White"
+                           FontWeight="Bold"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,20"/>
+
+                <!-- Username -->
+                <TextBlock Text="User Id" Foreground="#aaa" FontSize="12"/>
+                <TextBox x:Name="txtUsername"
+                         Height="38"
+                         Background="#323339"
+                         Foreground="White"
+                         BorderThickness="0"
+                         Margin="0,4,0,12"
+                         Padding="8,4"
+                         VerticalContentAlignment="Center"
+                         TextAlignment="Center"/>
+
+                <!-- Password -->
+                <TextBlock Text="Password" Foreground="#aaa" FontSize="12"/>
+                <PasswordBox x:Name="txtPassword"
+                             Height="38"
+                             Background="#323339"
+                             Foreground="White"
+                             BorderThickness="0"
+                             Margin="0,4,0,20"
+                             Padding="8,4"
+                             VerticalContentAlignment="Center"
+                             HorizontalContentAlignment="Center"/>
+
+                <!-- Buttons -->
+                <Button Content="Login"
+                        Height="42"
+                        Background="#2be18b"
+                        Foreground="White"
+                        FontWeight="Bold"
+                        BorderThickness="0"
+                        FontSize="14"
+                        Cursor="Hand"
+                        Margin="0,0,0,12"
+                        Click="BtnLogin_Click"/>
+
+                <Button Content="Cancel"
+                        Height="38"
+                        Background="#444"
+                        Foreground="White"
+                        BorderThickness="0"
+                        FontSize="13"
+                        Cursor="Hand"
+                        Click="Cancel_Click"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

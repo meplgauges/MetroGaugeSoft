@@ -1,0 +1,423 @@
+﻿using System;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Configuration;
+using System.Windows;
+using System.Windows.Controls;
+using Microsoft.Data.SqlClient;
+using OrbitCOM;
+
+namespace EVMS
+{
+    public partial class ProbeInstallPage : UserControl
+    {
+        private OrbitServerClass _orbServer;
+        private OrbitNetworks _orbNets;
+        private OrbitNetwork _orbNet;
+        private OrbitModules _orbModules;
+
+        private readonly string connectionString;
+
+        public ObservableCollection<ProbeViewModel> Probes { get; set; }
+
+        public ProbeInstallPage()
+        {
+            connectionString = ConfigurationManager.ConnectionStrings["EVMSDb"].ConnectionString;
+
+            InitializeComponent();
+            Probes = new ObservableCollection<ProbeViewModel>();
+            this.DataContext = this;
+
+            Loaded += ProbeInstallPage_Loaded;
+        }
+
+        private void ProbeInstallPage_Loaded(object sender, RoutedEventArgs e)
+        {
+            ConnectToOrbit();
+            LoadProbesFromDb();
+        }
+
+        /// <summary>
+        /// Connect to Orbit COM Server
+        /// </summary>
+        private void ConnectToOrbit()
+        {
+            try
+            {
+                _orbServer = new OrbitServerClass();
+
+                if (!_orbServer.Connected)
+                {
+                    _orbServer.Connect();
+                }
+
+                if (_orbServer.Connected)
+                {
+                    _orbNets = _orbServer.Networks;
+
+                    if (_orbNets != null && _orbNets.Count > 0)
+                    {
+                        _orbNet = _orbNets[0]; // or [0] if first
+                        _orbModules = _orbNet.Modules;
+
+                        MessageBox.Show($"{_orbNets.Count} Networks Found. Connected to Orbit.",
+                            "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show("No networks found in Orbit.", "Warning",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("Failed to connect to Orbit.", "Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error while connecting to Orbit: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Load probe names from DB (PartConfig table)
+        /// </summary>
+        private void LoadProbesFromDb()
+        {
+            Probes.Clear();
+            try
+            {
+                using (SqlConnection con = new SqlConnection(connectionString))
+                {
+                    con.Open();
+
+                    string query = @"
+                        SELECT SrNo, Parameter
+                        FROM PartConfig
+                        WHERE ProbeStatus = 'Probe'
+                        ORDER BY SrNo";
+
+                    using (SqlCommand cmd = new SqlCommand(query, con))
+                    using (SqlDataReader reader = cmd.ExecuteReader())
+                    {
+                        int counter = 1;
+
+                        while (reader.Read())
+                        {
+                            string parameter = reader.GetString(1);
+
+                            Probes.Add(new ProbeViewModel
+                            {
+                                No = counter,
+                                Name = parameter,
+                                ProbeName = $"Probe {counter}",
+                                ProbeId = "--",
+                                Stroke = "--",
+                                Status = "Pending"
+                            });
+
+                            counter++;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading probes: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Called when user clicks "✔ Check"
+        /// </summary>
+        private void CheckButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_orbModules == null)
+            {
+                MessageBox.Show("Orbit modules are not initialized. Please connect first.",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            if (sender is Button btn && btn.CommandParameter is ProbeViewModel probe)
+            {
+                try
+                {
+                    int count = _orbModules.Count;
+
+                    MessageBox.Show("Notifying Module (move probe now). Press ESC to cancel.",
+                        "Notification", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                    // Generate probe name
+                    string name = $"Module {_orbModules.Count + 1}";
+
+                    // This blocks until Orbit detects or cancels
+                    _orbModules.NotifyAndAdd(name);
+
+                    if (_orbModules.Count == count)
+                    {
+                        MessageBox.Show("No modules were added. Probe not detected or cancelled.",
+                            "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+
+                    // Get the newly added module
+                    var module = _orbModules[_orbModules.Count - 1];
+
+                    // Update bound probe row
+                    probe.ProbeId = module.ModuleID;
+                    probe.Stroke = module.Stroke.ToString();
+                    probe.Status = "Installed";
+                    probe.ProbeName = $"Probe {probe.No}";
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error while notifying/adding module: {ex.Message}",
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+public class ProbeViewModel : INotifyPropertyChanged
+    {
+        private int _no;
+        private string _name;
+        private string _probeName;
+        private string _probeId;
+        private string _stroke;
+        private string _status;
+
+        public int No
+        {
+            get => _no;
+            set { _no = value; OnPropertyChanged(); }
+        }
+
+        public string Name
+        {
+            get => _name;
+            set { _name = value; OnPropertyChanged(); }
+        }
+
+        public string ProbeName
+        {
+            get => _probeName;
+            set { _probeName = value; OnPropertyChanged(); }
+        }
+
+        public string ProbeId
+        {
+            get => _probeId;
+            set { _probeId = value; OnPropertyChanged(); }
+        }
+
+        public string Stroke
+        {
+            get => _stroke;
+            set { _stroke = value; OnPropertyChanged(); }
+        }
+
+        public string Status{
+            get => _status;
+            set { _status = value; OnPropertyChanged(); }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        protected void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+    }
+
+}
+}
+
+
+
+
+                    CREATE TABLE PartConfig (
+    SrNo INT IDENTITY(1,1) PRIMARY KEY,
+    Parameter VARCHAR(100) NOT NULL,
+    Nominal DECIMAL(18,2) NULL,
+    RTolPlus DECIMAL(18,2) NULL,
+    RTolMinus DECIMAL(18,2) NULL,
+    YTolPlus DECIMAL(18,2) NULL,
+    YTolMinus DECIMAL(18,2) NULL,
+    ProbeStatus VARCHAR(10) NULL  -- 'Probe' or 'Para'
+);
+
+
+
+CREATE TABLE Part_Entry (
+	Id INT IDENTITY(1,1) PRIMARY KEY,
+    Para_No VARCHAR(255) NOT NULL,
+    Para_Name VARCHAR(255) NOT NULL
+);
+
+select * from Part_Entry;
+
+select * from PartConfig;\
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+using System;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Threading;
+using ActUtlTypeLib;
+
+namespace EVMS
+{
+    public partial class IO_Controle_page : UserControl
+    {
+        private ActUtlType plc = new ActUtlType();
+        private bool isConnected = false;
+        private DispatcherTimer x4Timer = new DispatcherTimer();
+
+        public IO_Controle_page()
+        {
+            InitializeComponent(); // Connects XAML controls
+            PowerToggle.Checked += PowerToggle_Checked;
+            PowerToggle.Unchecked += PowerToggle_Unchecked;
+
+            // Add Y5 toggle event handlers
+            Y5Toggle.Checked += Y5Toggle_Checked;
+            Y5Toggle.Unchecked += Y5Toggle_Unchecked;
+
+            // Setup X4 monitoring timer
+            x4Timer.Interval = TimeSpan.FromMilliseconds(500); // Check every 500ms
+            x4Timer.Tick += X4Timer_Tick;
+        }
+
+        private void PowerToggle_Checked(object sender, RoutedEventArgs e)
+        {
+            plc.ActLogicalStationNumber = 1; // Set your PLC station number here
+            int result = plc.Open();
+            if (result == 0)
+            {
+                isConnected = true;
+                MessageBox.Show("✅ Connected to PLC", "PLC Connection", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                PlcStatusText.Text = "PLC Connected ✅";
+
+                // Start monitoring X4 when connected
+                x4Timer.Start();
+            }
+            else
+            {
+                isConnected = false;
+                MessageBox.Show($"❌ Failed to connect to PLC. Error code: {result}", "PLC Connection Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                PlcStatusText.Text = "Connection Failed ❌";
+                PowerToggle.IsChecked = false;
+            }
+        }
+
+        private void PowerToggle_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (isConnected)
+            {
+                plc.Close();
+                isConnected = false;
+                MessageBox.Show("PLC Disconnected", "PLC Connection", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                PlcStatusText.Text = "PLC Disconnected ❌";
+
+                // Stop monitoring X4 when disconnected
+                x4Timer.Stop();
+                // Reset button color to default
+                X4Button.Background = Brushes.Gray;
+            }
+            else
+            {
+                MessageBox.Show("PLC already disconnected.", "PLC Connection", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
+        }
+
+        // Y5 Toggle Button Event Handlers
+        private void Y5Toggle_Checked(object sender, RoutedEventArgs e)
+        {
+            if (isConnected)
+            {
+                int result = plc.SetDevice("Y5", 1);
+                if (result == 0)
+                {
+                    MessageBox.Show("Y5 turned ON", "Y5 Output", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                }
+                else
+                {
+                    MessageBox.Show($"Failed to turn Y5 ON. Error code: {result}", "Y5 Output Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                    Y5Toggle.IsChecked = false;
+                }
+            }
+            else
+            {
+                MessageBox.Show("PLC not connected. Connect first.", "Y5 Output Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                Y5Toggle.IsChecked = false;
+            }
+        }
+
+        private void Y5Toggle_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (isConnected)
+            {
+                int result = plc.SetDevice("Y5", 0);
+                if (result == 0)
+                {
+                    MessageBox.Show("Y5 turned OFF", "Y5 Output", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                }
+                else
+                {
+                    MessageBox.Show($"Failed to turn Y5 OFF. Error code: {result}", "Y5 Output Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                    Y5Toggle.IsChecked = true;
+                }
+            }
+            else
+            {
+                MessageBox.Show("PLC not connected. Connect first.", "Y5 Output Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
+        }
+
+        // X4 Input Monitoring Timer
+        private void X4Timer_Tick(object sender, EventArgs e)
+        {
+            if (isConnected)
+            {
+                int x4Value;
+                int result = plc.GetDevice("X4", out x4Value);
+                if (result == 0)
+                {
+                    if (x4Value == 1)
+                    {
+                        X4Button.Background = Brushes.Green; // Change to green when X4 = 1
+                    }
+                    else
+                    {
+                        X4Button.Background = Brushes.Red; // Change to red when X4 = 0
+                    }
+                }
+                else
+                {
+                    X4Button.Background = Brushes.Gray; // Gray for error/no communication
+                }
+            }
+        }
+    }
+}

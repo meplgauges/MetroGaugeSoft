@@ -1,0 +1,76 @@
+﻿<UserControl x:Class="EVMS.ProbeSetupProgressBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent"
+             MinHeight="150" MinWidth="60">
+
+    <Viewbox Stretch="Uniform">
+        <Border CornerRadius="20" BorderBrush="Aqua" BorderThickness="1" Padding="10" Background="Black">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MinWidth="100">
+                <Grid>
+                    <!-- Background slot for progress bar -->
+                    <Border Width="20" Height="250" CornerRadius="5" Background="#2C2C2C" BorderThickness="0">
+                        <ProgressBar x:Name="Bar"
+                                     Minimum="0" 
+                                     Maximum="100" 
+                                     Value="{Binding Value, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                     Orientation="Vertical"
+                   Background="Transparent" BorderThickness="0">
+                            <ProgressBar.Foreground>
+                                <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
+                                    <GradientStop Color="#4CAF50" Offset="0"/>
+                                    <GradientStop Color="#2196F3" Offset="1"/>
+                                </LinearGradientBrush>
+                            </ProgressBar.Foreground>
+                        </ProgressBar>
+                    </Border>
+
+
+                    <!-- Scale markers -->
+                    <Canvas Margin="0,0,50,-6" Width="30" Height="258" IsHitTestVisible="False" >
+                        <Line X1="0" X2="30" Y1="250" Y2="250" Stroke="#888" StrokeThickness="1" StrokeDashArray="4,2"/>
+                        <TextBlock Text="Low" Foreground="#F5F6FA" FontSize="11" Canvas.Left="0" Canvas.Top="230"/>
+                        <Line X1="0" X2="30" Y1="0" Y2="0" Stroke="#888" StrokeThickness="1" StrokeDashArray="4,2"/>
+                        <TextBlock Text="High" Foreground="#F5F6FA" FontSize="11" Canvas.Left="0" Canvas.Top="0"/>
+                    </Canvas>
+                </Grid>
+
+                <!-- Percentage display -->
+                <!-- Replace your existing TextBlock showing Value with this -->
+                <TextBlock HorizontalAlignment="Center"
+                           Foreground="#F5F6FA"
+                           FontSize="15"
+                           FontWeight="Bold"
+                           Margin="0,8,0,4"
+                           Text="{Binding Status, RelativeSource={RelativeSource AncestorType=UserControl}}"/>  
+
+
+
+                <!-- Probe info -->
+                <TextBox Text="{Binding Title, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                         Height="30" Width="119" 
+                         Background="#2C2C2C" Foreground="#F5F6FA"
+                         BorderBrush="#555" BorderThickness="1"
+                         Padding="2" HorizontalAlignment="Center"
+                         TextAlignment="Center"
+                         Focusable="False" Margin="0,0,0,5"/>
+
+                <TextBox Text="{Binding ID, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                         Height="25" Width="80" 
+                         Background="#2C2C2C" Foreground="#F5F6FA"
+                         BorderBrush="#555" BorderThickness="1"
+                         Padding="2" HorizontalAlignment="Center"
+                         TextAlignment="Center" IsReadOnly="True"
+                         Focusable="False" Margin="0,0,0,5"/>
+
+                <TextBox Text="{Binding Stroke, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                         Height="25" Width="80" 
+                         Background="#2C2C2C" Foreground="#F5F6FA"
+                         BorderBrush="#555" BorderThickness="1"
+                         Padding="2" HorizontalAlignment="Center"
+                         TextAlignment="Center" IsReadOnly="True"
+                         Focusable="False" Margin="0,0,0,0"/>
+            </StackPanel>
+        </Border>
+    </Viewbox>
+</UserControl>

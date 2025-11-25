@@ -1,0 +1,156 @@
+﻿<UserControl x:Class="EVMS.Report_GraphPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+xmlns:scottplot="clr-namespace:ScottPlot;assembly=ScottPlot.WPF"
+  xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
+    MinWidth="900" MinHeight="600"
+    Background="White"
+                          KeyDown="Report_GraphPage_PreviewKeyDown"
+
+    mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/EVMS;component/Style/ReportPageDesign.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="50"/>
+            <RowDefinition Height="100"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#2C3E50" CornerRadius="12" Padding="12" VerticalAlignment="Center">
+            <TextBlock Text="Graphs" Foreground="White" FontSize="20" FontWeight="DemiBold" HorizontalAlignment="Center" />
+        </Border>
+
+        <!-- Filters Row -->
+        <Border Grid.Row="1"         Background="{StaticResource PageBackgroundBrush}" CornerRadius="12" Padding="10" Margin="0,15,0,0" BorderBrush="#D1D9E6" BorderThickness="1">
+            <Grid HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="20"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- DateTimePicker From -->
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Date From" Margin="2,0,2,2" FontWeight="Bold"/>
+                    <xctk:DateTimePicker Margin="5" Width="200"
+                    BorderBrush="#1976D2" BorderThickness="1" Padding="4"
+                    Value="{Binding SelectedDateTimeFrom, Mode=TwoWay}" 
+                    Format="Custom" FormatString="MM/dd/yyyy HH:mm:ss"/>        
+                </StackPanel>
+
+                <TextBlock Text="TO" Grid.Column="1" Margin="1,15,1,1" 
+                    VerticalAlignment="Center" FontWeight="Bold" HorizontalAlignment="Center"/>
+
+                <!-- DateTimePicker To -->
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="Date To" Margin="30,0,2,2" FontWeight="Bold"/>
+                    <xctk:DateTimePicker Margin="4" Width="200"
+                        BorderBrush="#1976D2" BorderThickness="1" Padding="4"
+                        Value="{Binding SelectedDateTimeTo, Mode=TwoWay}" 
+                        Format="Custom" FormatString="MM/dd/yyyy HH:mm:ss"/>        
+                </StackPanel>
+
+                <!-- Part No -->
+                <StackPanel Grid.Column="3">
+                    <TextBlock Text="Part Number" FontWeight="Bold" Margin="30,0,0,2"/>
+                    <ComboBox x:Name="PartNo"
+                      Margin="4"
+                      ItemsSource="{Binding ActiveParts}"
+                      SelectedItem="{Binding SelectedPartNo, Mode=TwoWay}"
+                      Background="White"
+                      Foreground="Black"
+                      Style="{DynamicResource ModernComboBoxStyle}"
+                      VerticalContentAlignment="Center" />
+                </StackPanel>
+
+                <!-- Lot No -->
+                <StackPanel Grid.Column="4">
+                    <TextBlock Text="Lot Number" FontWeight="Bold" Margin="30,0,0,2"/>
+                    <ComboBox x:Name="LotNo"
+                      Margin="4"
+                      ItemsSource="{Binding LotNumbers}"
+                      SelectedItem="{Binding SelectedLotNo, Mode=TwoWay}"
+                      Style="{DynamicResource ModernComboBoxStyle}"
+                      VerticalContentAlignment="Center" />
+                </StackPanel>
+
+                <!-- Parameter -->
+                <StackPanel Grid.Column="5">
+                    <TextBlock Text="Parameter" FontWeight="Bold" Margin="30,0,0,2"/>
+                    <ComboBox x:Name="Parameter"
+                      Margin="4"
+                      Style="{DynamicResource ModernComboBoxStyle}"
+                      VerticalContentAlignment="Center"
+                      ItemsSource="{Binding ParametersOptions}"
+                      SelectedItem="{Binding SelectedParameter, Mode=TwoWay}" />
+                </StackPanel>
+
+                <!-- Design -->
+                <StackPanel Grid.Column="6">
+                    <TextBlock Text="Design" FontWeight="Bold" Margin="30,0,0,2"/>
+                    <ComboBox x:Name="Designe"
+                      Margin="4"
+                      ItemsSource="{Binding DesignOptions}"
+                      SelectedItem="{Binding SelectedDesign, Mode=TwoWay}"
+                      Style="{DynamicResource ModernComboBoxStyle}"
+                      VerticalContentAlignment="Center"
+                       />
+                </StackPanel>
+
+                <!-- Operator -->
+                <StackPanel Grid.Column="7">
+                    <TextBlock Text="Operator" FontWeight="Bold" Margin="30,0,0,2"/>
+                    <ComboBox x:Name="Operator"
+                      Margin="4"
+                      ItemsSource="{Binding Operators}"
+                      SelectedItem="{Binding SelectedOperator, Mode=TwoWay}"
+                      Style="{DynamicResource ModernComboBoxStyle}" />
+                </StackPanel>
+
+                <!-- Submit Button -->
+                <Button Grid.Column="8"
+                Width="90"
+                Margin="4,20,4,0"
+                Content="Submit"
+                Background="#1976D2"
+                Foreground="White"
+                FontWeight="Bold"
+                Cursor="Hand"
+                Click="OnSubmitClicked"
+                Style="{DynamicResource ModernButtonStyle1}" />
+            </Grid>
+        </Border>
+
+        <!-- Labels Row -->
+        <!-- Chart Area -->
+        <Border Grid.Row="3" Background="{StaticResource PageBackgroundBrush}"  
+        CornerRadius="12" Padding="15" Margin="0,15,0,0" 
+        BorderBrush="#D1D9E6" BorderThickness="1">
+            <Grid>
+                <Grid>
+                    <scottplot:WpfPlot x:Name="ScottPlotControl" Margin="8"/>
+
+                </Grid>
+
+            </Grid>
+        </Border>
+
+    </Grid>
+</UserControl>

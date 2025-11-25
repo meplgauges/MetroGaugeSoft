@@ -1,0 +1,159 @@
+﻿<UserControl x:Class="EVMS.PartConfig"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"             
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="White">
+    <!-- Reusable Label Style to avoid repeating TextBlock settings -->
+        <UserControl.Resources>
+            <ResourceDictionary>
+                <ResourceDictionary.MergedDictionaries>
+                    <ResourceDictionary Source="Style/Design.xaml"/>
+                </ResourceDictionary.MergedDictionaries>
+            </ResourceDictionary>
+        </UserControl.Resources>
+        <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="1.5*"/>
+            <ColumnDefinition Width="5*"/>
+        </Grid.ColumnDefinitions>
+        <!-- LEFT PANEL -->
+        <Border Grid.Column="0" Margin="18,18,8,18"
+                BorderBrush="#D9D9D9"
+                BorderThickness="1"
+                CornerRadius="14" Background="{StaticResource PageBackgroundBrush}">
+           
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+      
+                                  <!-- Title -->
+            <Border BorderBrush="BurlyWood" BorderThickness="1" Background="Black" CornerRadius="10" Padding="8" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,15,0,10">
+                <TextBlock Text="⚙ Part Configuration"
+                FontSize="14" FontWeight="Bold"
+                Foreground="Aqua"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"/>
+            </Border>
+                <StackPanel Grid.Row="1" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+                    <!-- ComboBox added above the Parameter label -->
+                    <TextBlock Text="Select Part No:" Style="{StaticResource FormLabelStyle}"/>
+                    <ComboBox x:Name="cmbPartNo"
+                              Style="{StaticResource ModernComboBoxStyle}"
+                              HorizontalAlignment="Stretch" />
+
+                    <!-- Using the reusable label style -->
+                    <TextBlock Text="Parameter:" Style="{StaticResource FormLabelStyle}"/>
+                    <TextBox x:Name="txtParameter" Style="{StaticResource ModernFilledTextBox}"/>
+
+                    
+
+                    <TextBlock Text="Nominal:" Style="{StaticResource FormLabelStyle}"/>
+                    <TextBox x:Name="txtNominal" Style="{StaticResource ModernFilledTextBox}"/>
+                    
+                    <TextBlock Text="R_Tol(+):" Style="{StaticResource FormLabelStyle}"/>
+                    <TextBox x:Name="txtRTolPlus" Style="{StaticResource ModernFilledTextBox}"/>
+                    
+                    <TextBlock Text="R_Tol(-):" Style="{StaticResource FormLabelStyle}"/>
+                    <TextBox x:Name="txtRTolMinus" Style="{StaticResource ModernFilledTextBox}"/>
+                    
+                    <TextBlock Text="Y_Tol(+):" Style="{StaticResource FormLabelStyle}"/>
+                    <TextBox x:Name="txtYTolPlus" Style="{StaticResource ModernFilledTextBox}"/>
+                    
+                    <TextBlock Text="Y_Tol(-):" Style="{StaticResource FormLabelStyle}"/>
+                    <TextBox x:Name="txtYTolMinus" Style="{StaticResource ModernFilledTextBox}"/>
+
+                    <TextBlock Text="Display Name:" Style="{StaticResource FormLabelStyle}"/>
+                    <TextBox x:Name="txtViewPara" Style="{StaticResource ModernFilledTextBox}"/>
+
+
+                    <TextBlock Text="Report Name:" Style="{StaticResource FormLabelStyle}"/>
+                    <TextBox x:Name="txtShort" Style="{StaticResource ModernFilledTextBox}"/>
+                    
+                    <CheckBox x:Name="chkProbe"
+                              Content="This is Probe ?"
+                              Style="{StaticResource PillCheckBox}"/>
+                </StackPanel>
+                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Top"  >
+                    <Button x:Name="btnAdd" Content="Add" Width="90" Height="36" Background="#2ECC71" Foreground="White" FontWeight="SemiBold" Margin="0,22,12,0" Style="{StaticResource ModernButtonStyle}"/>
+                    <Button x:Name="btnUpdate" Content="Update" Width="90" Height="36" Background="#F39C12" Foreground="White" FontWeight="SemiBold" Margin="0,22,12,0" Style="{StaticResource ModernButtonStyle}"/>
+                    <Button x:Name="btnDelete" Content="Delete" Width="90" Height="36" Background="#E74C3C" Foreground="White" FontWeight="SemiBold" Margin="0,22,12,0" Style="{StaticResource ModernButtonStyle}"/>
+                </StackPanel>
+
+              
+
+            </Grid>
+        </Border>
+        <!-- RIGHT PANEL -->
+        <Border Grid.Column="1" Margin="12,20,20,20"
+                BorderBrush="#D9D9D9"
+                BorderThickness="0.90" >
+           
+            <!-- DataGrid -->
+            <DataGrid x:Name="dataGrid"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="False"
+                      SelectionChanged="dataGrid_SelectionChanged"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      CanUserResizeRows="False"
+                      SelectionMode="Single"
+                      SelectionUnit="FullRow"
+                      HeadersVisibility="Column"
+                      AlternatingRowBackground="#F4F6F8"
+                      GridLinesVisibility="None"
+                      RowHeaderWidth="0"
+                      FontSize="14"
+                      Background="Transparent"
+                      BorderBrush="Transparent"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"
+                      Padding="4"
+                      RowHeight="38"
+                      EnableRowVirtualization="True"
+                      ColumnHeaderStyle="{StaticResource CustomDataGridColumnHeaderStyle}"
+                      RowStyle="{StaticResource CustomDataGridRowStyle}">
+
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Sr No" Binding="{Binding RowNo}" IsReadOnly="True" Width="60" 
+                        ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
+                    <DataGridTextColumn Header="Parameter" Binding="{Binding Parameter}" Width="1.5*" 
+                        ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
+                    <DataGridTextColumn Header="Nominal" Binding="{Binding Nominal}" Width="*" 
+                        ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
+                    <DataGridTextColumn Header="R_Tol(+)" Binding="{Binding RTolPlus}" Width="*" 
+                        ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
+                    <DataGridTextColumn Header="R_Tol(-)" Binding="{Binding RTolMinus}" Width="*" 
+                        ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
+                    <DataGridTextColumn Header="Y_Tol(+)" Binding="{Binding YTolPlus}" Width="*" 
+                        ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
+                    <DataGridTextColumn Header="Y_Tol(-)" Binding="{Binding YTolMinus}" Width="*" 
+                        ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
+                    <DataGridTextColumn Header="Type" Binding="{Binding ProbeStatus}" Width="*" 
+                        ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
+                    <DataGridTextColumn Header="Short Name" Binding="{Binding ShortName}" Width="*" 
+                        ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
+                    <DataGridTextColumn Header="Display Name" Binding="{Binding D_Name}" Width="*" 
+                                ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
+                    <DataGridTemplateColumn Header="Enable" Width="60">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <CheckBox HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      IsChecked="{Binding IsEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                      Checked="EnableCheckBox_Checked"
+                      Unchecked="EnableCheckBox_Unchecked" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                </DataGrid.Columns>
+
+            </DataGrid>
+        </Border>
+    </Grid>
+</UserControl>

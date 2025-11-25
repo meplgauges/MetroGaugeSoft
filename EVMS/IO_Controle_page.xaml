@@ -1,0 +1,193 @@
+﻿<UserControl x:Class="EVMS.IO_Controle_page"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="1000"
+             Background="White">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Style/ControlStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid Margin="10">
+        <!-- 3 columns -->
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="1*"/>
+            <ColumnDefinition Width="2*"/>
+            <ColumnDefinition Width="2*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- LEFT PANEL -->
+        <Border Grid.Column="0" >
+          
+            <Grid Margin="5">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="4*"/>
+                    <RowDefinition Height="2*"/>
+
+                </Grid.RowDefinitions>
+
+                <!-- Top Section -->
+                <Border Background="{StaticResource PageBackgroundBrush}" 
+                    Grid.Row="0" 
+                    BorderBrush="Gray" 
+                    BorderThickness="1" 
+                    CornerRadius="8" 
+                    Margin="5" 
+                    Padding="5"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    MinHeight="80" MinWidth="150">
+
+                    <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Margin="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <ToggleButton x:Name="PowerToggle"
+                      Style="{StaticResource PowerButtonStyle}"
+                      MinWidth="80"
+                      MinHeight="50"
+                      Grid.Row="0"
+                      HorizontalAlignment="Center"/>
+
+                        <TextBlock x:Name="PlcStatusText"
+                   Text="PLC"
+                   Foreground="Black"
+                   FontSize="14"
+                   FontWeight="Bold"
+                   Margin="0,6,0,0"
+                   HorizontalAlignment="Center"
+                   Grid.Row="1"/>
+                    </Grid>
+                </Border>
+
+
+
+
+                <!-- Middel -->
+
+                <Border Background="{StaticResource PageBackgroundBrush}" Grid.Row="1" BorderBrush="Gray" BorderThickness="1" CornerRadius="8" Margin="5" Padding="8" >
+                   
+                    <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                        <Border BorderBrush="BurlyWood" BorderThickness="1" Background="Black" CornerRadius="10" Padding="8" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,15,0,10">
+                            <TextBlock
+                                   Text="I/O REGISTER"
+                                   Foreground="White"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Center"/>
+                        </Border>
+                        <!-- Textboxes -->
+                       
+
+                        <StackPanel Margin="5">
+                            <TextBlock Text="DESCRIPTION:" Margin="35,0,0,0" FontWeight="Bold"/>
+                            <TextBox x:Name="DescTextBox" Width="270" Style="{StaticResource ModernFilledTextBox}"/>
+
+                        </StackPanel>
+
+                        <StackPanel Margin="5">
+                            <TextBlock Text="BIT:" Margin="35,0,0,0" FontWeight="Bold" />
+                            <TextBox x:Name="BitTextBox" Width="270" Style="{StaticResource ModernFilledTextBox}"/>
+
+                        </StackPanel>
+
+                        <!-- CheckBoxes -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="10,5">
+                            <CheckBox x:Name="InputCheckBox" Style="{StaticResource ModernCheckBox}" Content="Input"/>
+                            <CheckBox x:Name="OutputCheckBox"  Style="{StaticResource ModernCheckBox}" Content="Output"/>
+                        </StackPanel>
+
+                        <!-- Buttons -->
+                        <Button x:Name="AddButton" Style="{StaticResource GlossyBlueButton}" Margin="10" Content="ADD" Width="150" Height="35" />
+
+
+                        <Button x:Name="DeleteButton" Style="{StaticResource GlossyBlueButton}" Content="DELETE" Margin="10" Width="150" Height="35" Background="#F44336"/>
+
+                    </StackPanel>
+                </Border>
+
+
+                <!-- Bottom Section -->
+                <Border Background="{StaticResource PageBackgroundBrush}" Grid.Row="2" BorderBrush="Gray" BorderThickness="1" CornerRadius="8" Margin="5" Padding="5">
+                    
+                </Border>
+            </Grid>
+        </Border>
+
+      
+        <!-- RIGHT PANEL -->
+        <Border Background="{StaticResource PageBackgroundBrush}" Grid.Column="1" Margin="5" BorderBrush="Gray" BorderThickness="2" CornerRadius="10"  Padding="10">
+                
+            <StackPanel>
+                <TextBlock Text="INPUTS" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
+
+                <!-- Column Selector -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,10" VerticalAlignment="Center">
+                    <TextBlock Text="Columns:" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox x:Name="ColumnSelector1" Width="80" Style="{StaticResource ModernComboBoxStyle}"
+ >
+                        <ComboBoxItem Content="1"/>
+                        <ComboBoxItem Content="2"/>
+                        <ComboBoxItem Content="3"/>
+                        <ComboBoxItem Content="4"/>
+                    </ComboBox>
+                </StackPanel>
+
+                <!-- Your DataGrid -->
+                <DataGrid AutoGenerateColumns="True" Background="#3E3E4E" Foreground="White"
+                  RowBackground="#2E2E3E" AlternatingRowBackground="#333344"
+                  BorderThickness="1" HeadersVisibility="Column"/>
+
+                <!-- Toggle Grid -->
+                <UniformGrid Name="ToggleGrid1" Margin="0,10,0,0" Columns="1" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+                <!-- Status Button -->
+            </StackPanel>
+        </Border>
+
+
+
+        <!-- MIDDLE PANEL -->
+        <Border Background="{StaticResource PageBackgroundBrush}" Grid.Column="2" Margin="5" BorderBrush="Gray" BorderThickness="2" 
+                 CornerRadius="10"  Padding="10">
+           
+            <StackPanel>
+                <TextBlock Text="OUTPUTS" Foreground="White" FontSize="16" FontWeight="Bold"
+            Margin="0,0,0,10"/>
+
+                <!-- Column Selector -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,10" VerticalAlignment="Center">
+                    <TextBlock Text="Columns:" Foreground="White" 
+                VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox x:Name="ColumnSelector" Width="80" Style="{StaticResource ModernComboBoxStyle}">
+                        <ComboBoxItem Content="1"/>
+                        <ComboBoxItem Content="2"/>
+                        <ComboBoxItem Content="3"/>
+                        <ComboBoxItem Content="4"/>
+                    </ComboBox>
+                </StackPanel>
+
+                <!-- Your DataGrid -->
+                <DataGrid AutoGenerateColumns="True" Background="#3E3E4E" Foreground="White"
+           RowBackground="#2E2E3E" AlternatingRowBackground="#333344"
+           BorderThickness="1" HeadersVisibility="Column"/>
+
+                <!-- Toggle Grid -->
+                <UniformGrid Name="ToggleGrid" Margin="0,10,0,0" Columns="1" 
+              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+            </StackPanel>
+        </Border>
+
+    </Grid>
+</UserControl>

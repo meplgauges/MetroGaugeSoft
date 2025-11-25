@@ -1,0 +1,188 @@
+﻿<UserControl x:Class="EVMS.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="1000"
+             Background="White">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Style/ControlStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid Margin="10">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="320"/>
+            <!-- Left Panel -->
+            <ColumnDefinition Width="*"/>
+            <!-- Right Panel -->
+        </Grid.ColumnDefinitions>
+
+        <!-- LEFT PANEL -->
+        <StackPanel Grid.Column="0" Margin="5" VerticalAlignment="Top">
+
+            <!-- ADD CONTROLS PANEL -->
+            <Border Background="{StaticResource PageBackgroundBrush}"
+                    CornerRadius="10"
+                    BorderBrush="Gray"
+                    BorderThickness="1"
+                    Padding="15"
+                    Margin="0,0,0,15">
+
+                <StackPanel VerticalAlignment="Center">
+                    <!-- Title -->
+                    <Border Background="Black"
+                            BorderBrush="BurlyWood"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="10"
+                            HorizontalAlignment="Center"
+                            Margin="0,0,0,15">
+                        <TextBlock Text="Add Controls"
+                                   Foreground="White"
+                                   FontSize="16"
+                                   FontWeight="Bold"
+                                   TextAlignment="Center"/>
+                    </Border>
+
+                    <!-- Description -->
+                    <StackPanel Margin="5,10,5,0">
+                        <TextBlock Text="DESCRIPTION:"
+                                   FontWeight="Bold"
+                                   Margin="10,0,0,5"
+                                   Foreground="Black"/>
+                        <TextBox x:Name="DescTextBox"
+                                 Width="250"
+                                 Height="35"
+                                 Style="{StaticResource ModernFilledTextBox}"
+                                 Margin="10,0,0,10"/>
+                    </StackPanel>
+
+                    <!-- Bit -->
+                    <StackPanel Margin="5,10,5,0">
+                        <TextBlock Text="BIT:"
+                                   FontWeight="Bold"
+                                   Margin="10,0,0,5"
+                                   Foreground="Black"/>
+                        <TextBox x:Name="BitTextBox"
+                                 Width="250"
+                                 Height="35"
+                                 Style="{StaticResource ModernFilledTextBox}"
+                                 Margin="10,0,0,20"/>
+                    </StackPanel>
+
+                    <!-- Code -->
+                    <StackPanel Margin="5,10,5,0">
+                        <TextBlock Text="Code:"
+                                   FontWeight="Bold"
+                                   Margin="10,0,0,5"
+                                   Foreground="Black"/>
+                        <TextBox x:Name="BitCode"
+                                 Width="250"
+                                 Height="35"
+                                 Style="{StaticResource ModernFilledTextBox}"
+                                 Margin="10,0,0,20"/>
+                    </StackPanel>
+
+                    <!-- Buttons -->
+                    <StackPanel Orientation="Vertical" HorizontalAlignment="Center" Margin="0,10,0,0">
+                        <Button x:Name="AddButton"
+                                Content="ADD"
+                                Width="180"
+                                Height="40"
+                                Style="{StaticResource GlossyBlueButton}"
+                                Margin="0,5,0,5"/>
+
+                        <Button x:Name="DeleteButton"
+                                Content="DELETE"
+                                Width="180"
+                                Height="40"
+                                Style="{StaticResource GlossyBlueButton}"
+                                Background="#F44336"
+                                Margin="0,5,0,0"
+                                FontWeight="Bold"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- READING COUNT PANEL -->
+            <Border Background="{StaticResource PageBackgroundBrush}"
+                    CornerRadius="10"
+                    BorderBrush="Gray"
+                    BorderThickness="1"
+                    Padding="15">
+
+                <StackPanel VerticalAlignment="Center">
+                    <!-- Title -->
+                    <Border Background="Black"
+                            BorderBrush="BurlyWood"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="10"
+                            HorizontalAlignment="Center"
+                            Margin="0,0,0,15">
+                        <TextBlock Text="Reading Controls"
+                                   Foreground="White"
+                                   FontSize="16"
+                                   FontWeight="Bold"
+                                   TextAlignment="Center"/>
+                    </Border>
+
+                    <!-- Reading Count -->
+                    <StackPanel Margin="0,10,0,10" HorizontalAlignment="Center">
+                        <TextBlock Text="Reading Count:"
+                               FontWeight="Bold"
+                               Margin="0,0,0,5"
+                               Foreground="Black"
+                               HorizontalAlignment="Center"/>
+
+                        <TextBox x:Name="ReadingCountTextBox"
+                             Width="220"
+                             Height="35"
+                             Style="{StaticResource ModernFilledTextBox}"
+                             HorizontalAlignment="Center"/>     
+                    </StackPanel>
+
+
+                    <!-- Update Button -->
+                    <Button x:Name="UpdateButton"
+                            Content="UPDATE"
+                            Width="180"
+                            Height="40"
+                            Style="{StaticResource GlossyBlueButton}"
+                            Background="#4CAF50"
+                            FontWeight="Bold"
+                            HorizontalAlignment="Center"
+                            Margin="0,10,0,0"/>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+
+        <!-- RIGHT PANEL -->
+        <Border Background="{StaticResource PageBackgroundBrush}" 
+                Grid.Column="1" 
+                Margin="5" 
+                BorderBrush="Gray" 
+                BorderThickness="2" 
+                CornerRadius="10" 
+                Padding="20">
+
+            <StackPanel VerticalAlignment="Top">
+                <TextBlock Text="Setting Controls"
+                           Foreground="Black"
+                           FontSize="25"
+                           FontWeight="Bold"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,20"/>
+                <StackPanel x:Name="ToggleGrid1" Margin="5,0,5,10" VerticalAlignment="Top"/>
+            </StackPanel>
+        </Border>
+
+    </Grid>
+</UserControl>

@@ -1,0 +1,52 @@
+﻿<UserControl x:Class="EVMS.ProbeInstallPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:EVMS"
+             Width="900" Height="520"
+             Loaded="UserControl_Loaded">
+    <Grid Margin="8" >
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Top controls -->
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,8">
+            <Label Content="COM:" VerticalAlignment="Center"/>
+            <ComboBox x:Name="ComboPorts" Width="120" Margin="4,0"/>
+            <Button x:Name="BtnRefreshPorts" Content="Refresh" Margin="6,0" Click="BtnRefreshPorts_Click"/>
+            <Button x:Name="BtnConnect" Content="Connect" Margin="6,0" Click="BtnConnect_Click"/>
+            <Button x:Name="BtnDisconnect" Content="Disconnect" Margin="6,0" Click="BtnDisconnect_Click"/>
+            <Button x:Name="BtnStart" Content="Start Live" Margin="18,0" Click="BtnStart_Click"/>
+            <Button x:Name="BtnStop" Content="Stop Live" Margin="6,0" Click="BtnStop_Click"/>
+            <TextBlock x:Name="TxtStatus" Margin="18,0" VerticalAlignment="Center" Text="Ready." />
+        </StackPanel>
+
+        <!-- Data grid -->
+        <DataGrid x:Name="GridParameters"
+                  Grid.Row="1"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="True"
+                  CanUserDeleteRows="True"
+                  ItemsSource="{Binding Parameters}"
+                  RowHeaderWidth="0"
+                  Margin="0,0,0,8">
+            <DataGrid.Columns>
+                <!-- Name -->
+                <DataGridTextColumn Header="Name" Binding="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="2*"/>
+                <!-- BoxId -->
+                <DataGridTextColumn Header="BoxId" Binding="{Binding BoxId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="70"/>
+                <!-- Channels (comma-separated) -->
+                <DataGridTextColumn Header="Channels" Binding="{Binding ChannelsAsString, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="150"/>
+                <!-- LiveValue -->
+                <DataGridTextColumn Header="LiveValue" Binding="{Binding LiveValue}" IsReadOnly="True" Width="*"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Bottom note -->
+        <TextBlock Grid.Row="2" TextWrapping="Wrap" Foreground="Gray" FontSize="12">
+            Note: Channels are 1-based and belong to the same BoxId. Enter channels as comma-separated values (e.g. "1,3").
+        </TextBlock>
+    </Grid>
+</UserControl>
