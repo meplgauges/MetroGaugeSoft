@@ -33,6 +33,8 @@ namespace EVMS
 
         public ObservableCollection<string> NgOkCountOptions { get; set; } = new ObservableCollection<string> { "No", "Yes" };
 
+        public ObservableCollection<string> ReportTypeOptions { get; set; } = new ObservableCollection<string> { "All", "NG", "OK" };
+
         public ObservableCollection<NgOkSummaryItem> NgOkSummaryItems { get; set; } = new ObservableCollection<NgOkSummaryItem>();
 
 
@@ -109,7 +111,19 @@ namespace EVMS
         }
 
 
-
+        private string selectedReportType = "All";
+        public string SelectedReportType
+        {
+            get => selectedReportType;
+            set
+            {
+                if (selectedReportType != value)
+                {
+                    selectedReportType = value;
+                    OnPropertyChanged(nameof(SelectedReportType));
+                }
+            }
+        }
 
         private DateTime? _selectedDateTimeTo = DateTime.Now;
         public DateTime? SelectedDateTimeTo
@@ -301,78 +315,90 @@ namespace EVMS
             var results = await _dataService.GetMeasurementReadingsAsync(
                 partFilter, lotFilter, operatorFilter, _selectedDateTimeFrom, _selectedDateTimeTo);
 
-            if (results == null || !results.Any())
+            if (results != null && results.Any())
             {
-                MessageBox.Show("No data found for the selected filters.");
-                return;
-            }
+                List<MeasurementReading> filteredResults = results.ToList();
 
-            // 🔹 Fetch part configuration for tolerances
-            var partConfigs = _dataService.GetPartConfig(partFilter ?? results.First().PartNo);
-            var allParameters = partConfigs.Select(c => c.Parameter).Distinct().ToList();
-
-            // 🔹 Determine which parameters to include
-            List<string> finalParams = SelectedParameter == "All"
-                ? allParameters
-                : new List<string> { SelectedParameter };
-
-            // 🔹 Generate dynamic columns
-            GenerateParameterColumns(finalParams);
-
-            int serialNo = 1;
-
-            foreach (var r in results)
-            {
-                var item = new ReportTableItem
+                if (SelectedReportType == "NG")
                 {
-                    Id = r.Id,
-                    SerialNo = serialNo++,
-                    PartNo = r.PartNo,
-                    LotNo = r.LotNo,
-                    Operator = r.Operator_ID,
-                    Date = r.MeasurementDate.ToString("yyyy-MM-dd HH:mm"),
-                    Parameters = new Dictionary<string, double>()
-                };
-
-                bool isAnyParamOutOfRange = false;
-
-                // 🔹 Populate and check each parameter
-                foreach (var param in finalParams)
+                    filteredResults = results.Where(r => r.Status == "NG").ToList();
+                }
+                else if (SelectedReportType == "OK")
                 {
-                    var propName = MapParameterToColumn(param);
-                    var propInfo = r.GetType().GetProperty(propName);
-                    double measuredValue = 0;
-
-                    if (propInfo != null)
-                    {
-                        var valueObj = propInfo.GetValue(r);
-                        if (valueObj != null && double.TryParse(valueObj.ToString(), out double parsed))
-                            measuredValue = parsed;
-                    }
-
-                    // Find parameter config to get tolerance values
-                    var config = partConfigs.FirstOrDefault(pc =>
-                        pc.Parameter.Equals(param, StringComparison.OrdinalIgnoreCase));
-
-                    if (config != null)
-                    {
-                        double usl = config.Nominal + config.RTolPlus;
-                        double lsl = config.Nominal - config.RTolMinus;
-
-                        // Mark as out of range if needed
-                        if (measuredValue < lsl || measuredValue > usl)
-                            isAnyParamOutOfRange = true;
-                    }
-
-                    item.Parameters[param] = measuredValue;
+                    filteredResults = results.Where(r => r.Status == "OK").ToList();
                 }
 
-                // 🔹 Determine row-level status
-                item.Status = isAnyParamOutOfRange ? "FAIL" : "PASS";
+                if (!filteredResults.Any())
+                {
+                    MessageBox.Show("No data found for the selected filters.");
+                    return;
+                }
 
-                ReportTableItems.Add(item);
+                var partConfigs = _dataService.GetPartConfig(partFilter ?? filteredResults.First().PartNo);
+                var allParameters = partConfigs.Select(c => c.Parameter).Distinct().ToList();
+
+                List<string> finalParams = SelectedParameter == "All"
+                    ? allParameters
+                    : new List<string> { SelectedParameter };
+
+                GenerateParameterColumns(finalParams);
+
+                int serialNo = 1;
+
+                foreach (var r in filteredResults)
+                {
+                    var item = new ReportTableItem
+                    {
+                        Id = r.Id,
+                        SerialNo = serialNo++,
+                        PartNo = r.PartNo,
+                        LotNo = r.LotNo,
+                        Operator = r.Operator_ID,
+                        Date = r.MeasurementDate.ToString("yyyy-MM-dd HH:mm"),
+                        Parameters = new Dictionary<string, double>()
+                    };
+
+                    bool isAnyParamOutOfRange = false;
+
+                    foreach (var param in finalParams)
+                    {
+                        var propName = MapParameterToColumn(param);
+                        var propInfo = r.GetType().GetProperty(propName);
+                        double measuredValue = 0;
+
+                        if (propInfo != null)
+                        {
+                            var valueObj = propInfo.GetValue(r);
+                            if (valueObj != null && double.TryParse(valueObj.ToString(), out double parsed))
+                                measuredValue = parsed;
+                        }
+
+                        var config = partConfigs.FirstOrDefault(pc =>
+                            pc.Parameter.Equals(param, StringComparison.OrdinalIgnoreCase));
+
+                        if (config != null)
+                        {
+                            double usl = config.Nominal + config.RTolPlus;
+                            double lsl = config.Nominal - config.RTolMinus;
+
+                            if (measuredValue < lsl || measuredValue > usl)
+                                isAnyParamOutOfRange = true;
+                        }
+
+                        item.Parameters[param] = measuredValue;
+                    }
+
+                    item.Status = isAnyParamOutOfRange ? "FAIL" : "PASS";
+
+                    ReportTableItems.Add(item);
+                }
+            }
+            else
+            {
+                MessageBox.Show("No data found for the selected filters.");
             }
         }
+
 
         private async Task LoadNgOkCountTableAsync()
         {
@@ -853,7 +879,7 @@ namespace EVMS
                 double margin = 25;
                 double rowHeight = 14;
 
-                // 🔹 Fetch part config
+                // Fetch part config
                 var partConfigs = _dataService.GetPartConfigByPartNumber(SelectedPartNo ?? ReportTableItems.First().PartNo).ToList();
 
                 var paramToShort = partConfigs.ToDictionary(
@@ -864,7 +890,6 @@ namespace EVMS
 
                 bool isSingleParameter = SelectedParameter != null && SelectedParameter != "All";
 
-                // 🔹 Parameter list
                 var paramList = isSingleParameter
                     ? new List<string> { SelectedParameter }
                     : ReportTableItems.First().Parameters.Keys.ToList();
@@ -873,16 +898,13 @@ namespace EVMS
                     .Select(p => paramToShort.TryGetValue(p, out var shortName) ? shortName : p)
                     .ToList();
 
-                // Fixed headers
                 var fixedHeaders = new List<string> { "S.No", "Part No", "Lot No", "Operator", "Date" };
                 var allHeaders = new List<string>(fixedHeaders);
                 allHeaders.AddRange(paramShortList);
 
-                // 🔸 Add "Status" only if NOT a single parameter
                 if (!isSingleParameter)
                     allHeaders.Add("Status");
 
-                // Tolerances
                 var USL = partConfigs.Select(p => p.Nominal - p.RTolMinus).ToList();
                 var MEAN = partConfigs.Select(p => p.Nominal).ToList();
                 var LSL = partConfigs.Select(p => p.Nominal + p.RTolPlus).ToList();
@@ -891,11 +913,14 @@ namespace EVMS
                 page.Orientation = PdfSharpCore.PageOrientation.Landscape;
                 var gfx = XGraphics.FromPdfPage(page);
 
+                // 🔹 Load Logo Once
+                string logoPath = @"D:\Project\MetroGaugeSoft\NITTAN 0.1\EVMS\Resource\0987.png";
+                XImage logo = XImage.FromFile(logoPath);
+
                 double pageWidth = page.Width;
                 double pageHeight = page.Height;
                 double usableWidth = pageWidth - (2 * margin);
 
-                // Dynamic widths
                 var dynamicWidths = new Dictionary<string, double>();
                 int totalCols = allHeaders.Count;
 
@@ -906,7 +931,6 @@ namespace EVMS
                     else dynamicWidths[h] = usableWidth * (0.84 / (totalCols - 2));
                 }
 
-                // Helper for centered text
                 void DrawStringCentered(XGraphics g, string text, XFont font, XBrush brush, XRect rect)
                 {
                     if (string.IsNullOrEmpty(text)) return;
@@ -918,14 +942,13 @@ namespace EVMS
 
                 double y = margin;
 
-                // Draw Header
+                // DRAW HEADER FUNCTION
                 void DrawHeader(XGraphics g, PdfPage pg, ref double yPos, bool includeMeta)
                 {
                     yPos = margin;
 
                     if (includeMeta)
                     {
-                        // Title
                         var titleRect = new XRect(margin, yPos, pg.Width - 2 * margin, 25);
                         g.DrawRectangle(XBrushes.LightGray, titleRect);
                         DrawStringCentered(g, "MEASUREMENT REPORT", titleFont, XBrushes.Black, titleRect);
@@ -933,7 +956,6 @@ namespace EVMS
 
                         double labelWidth = 70, valueWidth = 150, x1 = margin, x2 = margin + 200, x3 = margin + 400;
 
-                        // Row 1
                         DrawStringCentered(g, "Part No:", infoFontBold, XBrushes.Black, new XRect(x1, yPos, labelWidth, 10));
                         DrawStringCentered(g, SelectedPartNo ?? "-", infoFont, XBrushes.Black, new XRect(x1 + labelWidth, yPos, valueWidth, 10));
 
@@ -966,7 +988,6 @@ namespace EVMS
 
                     yPos += rowHeight;
 
-                    // Summary rows
                     string[] summaryLabels = { "USL", "MEAN", "LSL" };
                     List<List<double>> summaryValues = new() { USL, MEAN, LSL };
                     XBrush[] brushes = { XBrushes.Red, XBrushes.ForestGreen, XBrushes.Red };
@@ -982,8 +1003,9 @@ namespace EVMS
 
                         for (int i = 0; i < paramList.Count; i++)
                         {
-                            var param = paramList[i];
+                            string param = paramList[i];
                             var config = partConfigs.FirstOrDefault(pc => pc.Parameter.Equals(param, StringComparison.OrdinalIgnoreCase));
+
                             double val = 0;
                             if (config != null)
                             {
@@ -994,6 +1016,7 @@ namespace EVMS
 
                             string shortHeader = paramToShort.TryGetValue(param, out var shortName) ? shortName : param;
                             double colWidth = dynamicWidths.ContainsKey(shortHeader) ? dynamicWidths[shortHeader] : (usableWidth / Math.Max(1, paramList.Count));
+
                             var rect = new XRect(x, yPos, colWidth, rowHeight);
                             DrawStringCentered(g, val.ToString("0.###"), bodyFont, brushes[s], rect);
                             x += colWidth;
@@ -1003,8 +1026,17 @@ namespace EVMS
                     }
 
                     yPos += 5;
+
+                    // 🔹 Draw small logo bottom-right
+                    double logoWidth = 40;       // small size
+                    double logoHeight = 40;
+                    double logoX = pg.Width - margin - logoWidth;
+                    double logoY = pg.Height - margin - logoHeight;
+
+                    g.DrawImage(logo, logoX, logoY, logoWidth, logoHeight);
                 }
 
+                // First page header + logo
                 DrawHeader(gfx, page, ref y, true);
 
                 int rowCounter = 0;
@@ -1014,7 +1046,6 @@ namespace EVMS
                     double x = margin;
                     XBrush rowBrush = rowCounter % 2 == 0 ? XBrushes.White : XBrushes.Ivory;
 
-                    // Fixed columns
                     var fixedValues = new List<string>
             {
                 item.SerialNo.ToString(),
@@ -1036,46 +1067,40 @@ namespace EVMS
                     {
                         string fullParam = paramList[i];
                         string shortName = paramShortList[i];
+
                         double colWidth = dynamicWidths.ContainsKey(shortName)
-                            ? dynamicWidths[shortName]
-                            : (usableWidth / Math.Max(1, paramList.Count));
+      ? dynamicWidths[shortName]
+      : (usableWidth / Math.Max(1, paramList.Count));
+
 
                         var rect = new XRect(x, y, colWidth, rowHeight);
 
-                        // Default alternating row color
                         XBrush backgroundBrush = rowBrush;
                         XBrush textBrush = XBrushes.Black;
 
-                        // Get measured value
                         double val = item.Parameters.ContainsKey(fullParam) ? item.Parameters[fullParam] : 0;
 
-                        // Find this parameter’s config (for its specific USL/LSL)
                         var config = partConfigs.FirstOrDefault(pc =>
                             pc.Parameter.Equals(fullParam, StringComparison.OrdinalIgnoreCase));
 
                         if (config != null)
                         {
-                            // Compute individual parameter limits
                             double usl = config.Nominal + config.RTolPlus;
                             double lsl = config.Nominal - config.RTolMinus;
 
-                            // Out-of-range detection
                             if (val < lsl || val > usl)
                             {
-                                // Out of range → red font + light red background
                                 textBrush = XBrushes.Red;
                                 backgroundBrush = XBrushes.MistyRose;
                             }
                         }
 
-                        // Draw cell and value
                         gfx.DrawRectangle(XPens.Black, backgroundBrush, rect);
                         DrawStringCentered(gfx, val.ToString("0.###"), bodyFont, textBrush, rect);
 
                         x += colWidth;
                     }
 
-                    // 🔸 Only draw Status column if NOT single parameter
                     if (!isSingleParameter)
                     {
                         var statusRect = new XRect(x, y, dynamicWidths["Status"], rowHeight);
@@ -1092,6 +1117,8 @@ namespace EVMS
                         page = document.AddPage();
                         page.Orientation = PdfSharpCore.PageOrientation.Landscape;
                         gfx = XGraphics.FromPdfPage(page);
+
+                        // NEW PAGE — header + logo
                         DrawHeader(gfx, page, ref y, false);
                     }
                 }
@@ -1104,14 +1131,15 @@ namespace EVMS
                 string filePath = Path.Combine(baseFolder, fileName);
 
                 document.Save(filePath);
-                MessageBox.Show($"✅ PDF exported successfully to: {filePath}");
+                MessageBox.Show($"PDF exported successfully:\n{filePath}");
                 Process.Start(new ProcessStartInfo(filePath) { UseShellExecute = true });
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"❌ PDF generation failed: {ex.Message}");
+                MessageBox.Show("PDF Error: " + ex.Message);
             }
         }
+
 
         private void ReportDataGrid_LoadingRow(object sender, DataGridRowEventArgs e)
         {

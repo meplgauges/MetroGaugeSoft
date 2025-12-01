@@ -1228,7 +1228,7 @@ namespace EVMS.Service
                 case "ovality sdg":
                     return CalculateOvalitySDG(probeMeasurements, dbRefDict, mode, signChange, compensation);
                 case "ovality sdu":
-                    return CalculateOvalitySDU(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                    return CalculateOvalitySDU(probeMeasurements, dbRefDict, mode, signChange, compensation); 
                 case "ovality head":
                     return CalculateOvalityHead(probeMeasurements, dbRefDict, mode, signChange, compensation);
                 case "stem taper":

@@ -28,6 +28,8 @@ namespace EVMS
         public ObservableCollection<string> ParametersOptions { get; set; } = new();
         public ObservableCollection<string> Operators { get; set; } = new();
         public ObservableCollection<string> DesignOptions { get; set; } = new();
+        public ObservableCollection<string> ReportTypeOptions { get; set; } = new ObservableCollection<string> { "All", "NG", "OK" };
+
 
         // Selected properties
         private string _selectedPartNo;
@@ -156,6 +158,22 @@ namespace EVMS
                 }
             }
         }
+
+
+
+        private string selectedReportType = "All";
+        public string SelectedReportType
+        {
+            get => selectedReportType;
+            set
+            {
+                if (selectedReportType != value)
+                {
+                    selectedReportType = value;
+                    OnPropertyChanged(nameof(SelectedReportType));
+                }
+            }
+        }
         #endregion
 
         #region Initialization & loaders
@@ -179,7 +197,7 @@ namespace EVMS
             DesignOptions.Add("Gage R&R");             // Trend / Run Chart
 
             // Default selected
-            SelectedDesign = DesignOptions.FirstOrDefault();
+            //SelectedDesign = DesignOptions.FirstOrDefault();
         }
 
         private void LoadActiveParts()
@@ -483,7 +501,25 @@ namespace EVMS
         // (Above: kept your existing call; you may replace with direct call if needed)
         if (list == null) return;
 
-        string col = ParameterToColumn.ContainsKey(SelectedParameter) ? ParameterToColumn[SelectedParameter] : null;
+                if (SelectedReportType == "NG")
+                {
+                    list = list.Where(r => r.Status == "NG").ToList();
+                }
+                else if (SelectedReportType == "OK")
+                {
+                    list = list.Where(r => r.Status == "OK").ToList();
+                }
+                // else "All" → Do nothing (keep full list)
+
+                // If no data after filtering
+                if (!list.Any())
+                {
+                    MessageBox.Show("No data found for the selected Report Type.");
+                    return;
+                }
+
+
+                string col = ParameterToColumn.ContainsKey(SelectedParameter) ? ParameterToColumn[SelectedParameter] : null;
         if (col == null) return;
 
         // Collect numeric values

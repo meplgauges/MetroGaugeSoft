@@ -44,6 +44,8 @@ xmlns:scottplot="clr-namespace:ScottPlot;assembly=ScottPlot.WPF"
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
+
+                    <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- DateTimePicker From -->
@@ -124,10 +126,19 @@ xmlns:scottplot="clr-namespace:ScottPlot;assembly=ScottPlot.WPF"
                       Style="{DynamicResource ModernComboBoxStyle}" />
                 </StackPanel>
 
+                <!-- Show NG/OK ComboBox -->
+                <StackPanel Grid.Column="8" Margin="0,0,0,0">
+                    <TextBlock Text="Show NG/OK" Margin="2,0,2,2" FontWeight="Bold" />
+                    <ComboBox x:Name="ReportTypeDropdown"
+                        ItemsSource="{Binding ReportTypeOptions}"
+                        SelectedItem="{Binding SelectedReportType, Mode=TwoWay}"
+                        Style="{DynamicResource ModernComboBoxStyle}"
+                        Margin="2" />       
+                </StackPanel>
                 <!-- Submit Button -->
-                <Button Grid.Column="8"
+                <Button Grid.Column="9"
                 Width="90"
-                Margin="4,20,4,0"
+                Margin="30,20,5,0"
                 Content="Submit"
                 Background="#1976D2"
                 Foreground="White"
