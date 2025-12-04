@@ -63,8 +63,7 @@
                         <local:ProbeSetupProgressBar 
                     Value="{Binding Value}" 
                     Title="{Binding Title}" 
-                    ID="{Binding ID}" 
-                    Stroke="{Binding Stroke}" 
+                   
                     Status="{Binding Status}"   
                     Margin="8"/>
                     </DataTemplate>
@@ -117,7 +116,7 @@
                             Grid.Column="1"
                             Content="Cylinder Up/Down"
                             Style="{StaticResource ModernButtonStyle2}"
-                            Height="40"
+                            Height="40" 
                             Width="130"
                             HorizontalAlignment="Center"
                             Click="MotorUpDownButton_Click"/>

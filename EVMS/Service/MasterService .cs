@@ -21,8 +21,8 @@ namespace EVMS.Service
         public string? ProbeId { get; set; }
         public string? Name { get; set; }
         public List<double> Readings { get; set; } = new List<double>();
-        public double ReferenceValue { get; set; } = 0;
-        public double MinReferenceValue { get; set; } = 0;  // Add this property
+        public double MaxValue { get; set; } = 0;
+        public double MinValue { get; set; } = 0;  // Add this property
         public double MasterValue { get; set; } = 0;
         public double TolerancePlus { get; set; }
         public double ToleranceMinus { get; set; }
@@ -260,8 +260,8 @@ namespace EVMS.Service
                 foreach (var pm in sortedProbeMeasurements)
                 {
                     pm.Readings.Clear();
-                    pm.ReferenceValue = 0;
-                    pm.MinReferenceValue = 0;
+                    pm.MaxValue = 0;
+                    pm.MinValue = 0;
                 }
 
                 if (mode == ProcedureMode.Measurement)
@@ -770,13 +770,13 @@ namespace EVMS.Service
 
                 if (validReadings.Count > 0)
                 {
-                    pm.ReferenceValue = validReadings.Max();
-                    pm.MinReferenceValue = validReadings.Min(); // always calculate min
+                    pm.MaxValue = validReadings.Max();
+                    pm.MinValue = validReadings.Min(); // always calculate min
                 }
                 else
                 {
-                    pm.ReferenceValue = 0;
-                    pm.MinReferenceValue = 0;
+                    pm.MaxValue = 0;
+                    pm.MinValue = 0;
                 }
 
             }
@@ -793,7 +793,7 @@ namespace EVMS.Service
 
                     var masterValues = probeMeasurements
                         .Where(pm => !string.IsNullOrEmpty(pm.Name))
-                        .ToDictionary(pm => pm.Name!, pm => pm.ReferenceValue);
+                        .ToDictionary(pm => pm.Name!, pm => pm.MaxValue);
 
                     OnCalculatedValuesReady(masterValues);
 
@@ -858,7 +858,7 @@ namespace EVMS.Service
                 _dataStorageService.SaveProbeReadings(
                     _dataStorageService.GetProbeInstallByPartNumber(_currentPartCode),
                     _currentPartCode,
-                    new Dictionary<string, double> { { pm.ProbeId, pm.ReferenceValue } }
+                    new Dictionary<string, double> { { pm.ProbeId, pm.MaxValue } }
                 );
             }
 
@@ -867,7 +867,7 @@ namespace EVMS.Service
                 .Where(pm => !string.IsNullOrEmpty(pm.Name))
                 .ToDictionary(
                     pm => pm.Name!,
-                    pm => new ParameterResult { Value = pm.ReferenceValue, IsOk = true } // assuming OK on mastering
+                    pm => new ParameterResult { Value = pm.MaxValue, IsOk = true } // assuming OK on mastering
                 );
             OnCalculatedValuesWithStatusReady(resultsWithStatus);
 
@@ -1253,7 +1253,7 @@ namespace EVMS.Service
             if (!probeMeasurements.TryGetValue("Datum to End", out var pm)) return double.NaN;
             if (!dbRefDict.TryGetValue("Datum to End", out var dbRefValue)) dbRefValue = 0.0;
 
-            double current = pm.ReferenceValue;
+            double current = pm.MaxValue;
             double offset = current - dbRefValue;
             double datumToEnd = Math.Abs(offset);
 
@@ -1291,7 +1291,7 @@ namespace EVMS.Service
             if (!probeMeasurements.TryGetValue("Overall Length", out var pm)) return double.NaN;
             if (!dbRefDict.TryGetValue("Overall Length", out var dbRefValue)) dbRefValue = 0.0;
 
-            double offset = pm.ReferenceValue - dbRefValue;
+            double offset = pm.MaxValue - dbRefValue;
             double result;
 
             if (mode == ProcedureMode.Measurement)
@@ -1321,7 +1321,7 @@ namespace EVMS.Service
             if (!probeMeasurements.TryGetValue("Head Diameter", out var pm)) return double.NaN;
             if (!dbRefDict.TryGetValue("Head Diameter", out var dbRefValue)) dbRefValue = 0.0;
 
-            double offset = pm.ReferenceValue - dbRefValue;
+            double offset = pm.MaxValue - dbRefValue;
             double result;
 
             if (mode == ProcedureMode.Measurement)
@@ -1351,7 +1351,7 @@ namespace EVMS.Service
             if (!probeMeasurements.TryGetValue("Groove Position", out var pm)) return double.NaN;
             if (!dbRefDict.TryGetValue("Groove Position", out var dbRefValue)) dbRefValue = 0.0;
 
-            double offset = pm.ReferenceValue - dbRefValue;
+            double offset = pm.MaxValue - dbRefValue;
             double result;
 
             if (mode == ProcedureMode.Measurement)
@@ -1381,7 +1381,7 @@ namespace EVMS.Service
             if (!probeMeasurements.TryGetValue("Stem Dia Near Groove", out var pm)) return double.NaN;
             if (!dbRefDict.TryGetValue("Stem Dia Near Groove", out var dbRefValue)) dbRefValue = 0.0;
 
-            double offset = pm.ReferenceValue - dbRefValue;
+            double offset = pm.MaxValue - dbRefValue;
             double result;
 
             if (mode == ProcedureMode.Measurement)
@@ -1411,7 +1411,7 @@ namespace EVMS.Service
             if (!probeMeasurements.TryGetValue("Stem Dia Near Undercut", out var pm)) return double.NaN;
             if (!dbRefDict.TryGetValue("Stem Dia Near Undercut", out var dbRefValue)) dbRefValue = 0.0;
 
-            double offset = pm.ReferenceValue - dbRefValue;
+            double offset = pm.MaxValue - dbRefValue;
             double result;
 
             if (mode == ProcedureMode.Measurement)
@@ -1441,7 +1441,7 @@ namespace EVMS.Service
             if (!probeMeasurements.TryGetValue("Straightness", out var pm)) return double.NaN;
             if (!dbRefDict.TryGetValue("Straightness", out var dbRefValue)) dbRefValue = 0.0;
 
-            double offset = pm.ReferenceValue - dbRefValue;
+            double offset = pm.MaxValue - dbRefValue;
             if (offset < 0.001) offset = 0.001;
 
             double result;
@@ -1473,7 +1473,7 @@ namespace EVMS.Service
             if (!probeMeasurements.TryGetValue("End Face Runout", out var pm)) return double.NaN;
             if (!dbRefDict.TryGetValue("End Face Runout", out var dbRefValue)) dbRefValue = 0.0;
 
-            double offset = pm.ReferenceValue - dbRefValue;
+            double offset = pm.MaxValue - dbRefValue;
             double result;
 
             if (mode == ProcedureMode.Measurement)
@@ -1503,7 +1503,7 @@ namespace EVMS.Service
             if (!probeMeasurements.TryGetValue("Groove Diameter", out var pm)) return double.NaN;
             if (!dbRefDict.TryGetValue("Groove Diameter", out var dbRefValue)) dbRefValue = 0.0;
 
-            double offset = pm.ReferenceValue - dbRefValue;
+            double offset = pm.MaxValue - dbRefValue;
             double result;
 
             if (mode == ProcedureMode.Measurement)
@@ -1546,7 +1546,7 @@ namespace EVMS.Service
         {
             if (!probeMeasurements.TryGetValue("Datum to End", out var pm)) return double.NaN;
 
-            double seatRunout = pm.ReferenceValue - pm.MinReferenceValue;
+            double seatRunout = pm.MaxValue - pm.MinValue;
 
             if (mode == ProcedureMode.Measurement && compensation != 0)
                 seatRunout += compensation;
@@ -1577,7 +1577,7 @@ namespace EVMS.Service
         {
             if (!probeMeasurements.TryGetValue("Stem Dia Near Groove", out var pm)) return double.NaN;
 
-            double result = pm.ReferenceValue - pm.MinReferenceValue;
+            double result = pm.MaxValue - pm.MinValue;
 
             if (mode == ProcedureMode.Measurement && compensation != 0)
                 result += compensation;
@@ -1594,7 +1594,7 @@ namespace EVMS.Service
         {
             if (!probeMeasurements.TryGetValue("Stem Dia Near Undercut", out var pm)) return double.NaN;
 
-            double result = pm.ReferenceValue - pm.MinReferenceValue;
+            double result = pm.MaxValue - pm.MinValue;
             if (result < 0.001) result = 0.001;
 
             if (mode == ProcedureMode.Measurement && compensation != 0)
@@ -1612,7 +1612,7 @@ namespace EVMS.Service
         {
             if (!probeMeasurements.TryGetValue("Head Diameter", out var pm)) return double.NaN;
 
-            double ovality = pm.ReferenceValue - pm.MinReferenceValue;
+            double ovality = pm.MaxValue - pm.MinValue;
 
             if (mode == ProcedureMode.Measurement && compensation != 0)
                 ovality += compensation;
@@ -1646,7 +1646,7 @@ namespace EVMS.Service
         {
             if (!probeMeasurements.TryGetValue("Overall Length", out var pm)) return double.NaN;
 
-            double faceRunout = pm.ReferenceValue - pm.MinReferenceValue;
+            double faceRunout = pm.MaxValue - pm.MinValue;
 
             if (mode == ProcedureMode.Measurement && compensation != 0)
                 faceRunout += compensation;

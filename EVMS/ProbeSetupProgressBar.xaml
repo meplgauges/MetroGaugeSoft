@@ -5,71 +5,75 @@
              MinHeight="150" MinWidth="60">
 
     <Viewbox Stretch="Uniform">
-        <Border CornerRadius="20" BorderBrush="Aqua" BorderThickness="1" Padding="10" Background="Black">
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MinWidth="100">
+        <Border CornerRadius="16" BorderBrush="#4AE2E2" BorderThickness="2" Padding="14" 
+                Background="#11181F" 
+                Effect="{DynamicResource DropShadowEffect}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MinWidth="120" >
+
+                <!-- Vertical Bar Grid -->
                 <Grid>
-                    <!-- Background slot for progress bar -->
-                    <Border Width="20" Height="250" CornerRadius="5" Background="#2C2C2C" BorderThickness="0">
-                        <ProgressBar x:Name="Bar"
-                                     Minimum="0" 
-                                     Maximum="100" 
-                                     Value="{Binding Value, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                     Orientation="Vertical"
-                   Background="Transparent" BorderThickness="0">
-                            <ProgressBar.Foreground>
-                                <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
-                                    <GradientStop Color="#4CAF50" Offset="0"/>
-                                    <GradientStop Color="#2196F3" Offset="1"/>
-                                </LinearGradientBrush>
-                            </ProgressBar.Foreground>
-                        </ProgressBar>
+                    <Border Width="24" Height="250" CornerRadius="8"
+                            Background="#1E2733" 
+                            SnapsToDevicePixels="True">
+                        <Canvas x:Name="BarCanvas" Width="24" Height="250" ClipToBounds="True">
+                            <!-- MID LINE (0) -->
+                            <Line x:Name="MidLine" X1="0" X2="24" Y1="130" Y2="130" Stroke="#B0D6D6" StrokeThickness="2" StrokeDashArray="3,5"/>
+
+                            <!-- NEGATIVE bar: fills downward -->
+                            <Rectangle x:Name="LeftBar" Width="24" Height="0" Fill="#50E3C2" Canvas.Top="130" RadiusY="4" RadiusX="4"/>
+
+                            <!-- POSITIVE bar: fills upward -->
+                            <Rectangle x:Name="RightBar" Width="24" Height="0" Fill="#50E3C2" Canvas.Top="130" RadiusY="4" RadiusX="4"/>
+                        </Canvas>
                     </Border>
 
-
                     <!-- Scale markers -->
-                    <Canvas Margin="0,0,50,-6" Width="30" Height="258" IsHitTestVisible="False" >
-                        <Line X1="0" X2="30" Y1="250" Y2="250" Stroke="#888" StrokeThickness="1" StrokeDashArray="4,2"/>
-                        <TextBlock Text="Low" Foreground="#F5F6FA" FontSize="11" Canvas.Left="0" Canvas.Top="230"/>
-                        <Line X1="0" X2="30" Y1="0" Y2="0" Stroke="#888" StrokeThickness="1" StrokeDashArray="4,2"/>
-                        <TextBlock Text="High" Foreground="#F5F6FA" FontSize="11" Canvas.Left="0" Canvas.Top="0"/>
+                    <Canvas Margin="0,0,60,-6" Width="36" Height="268" IsHitTestVisible="False">
+                        <Line X1="0" X2="36" Y1="260" Y2="260" Stroke="#C0D9D9" StrokeThickness="1" StrokeDashArray="5,3"/>
+                        <TextBlock Text="Low" Foreground="#C0D9D9" FontSize="12" FontWeight="SemiBold" Canvas.Left="0" Canvas.Top="240"/>
+
+                        <Line X1="0" X2="36" Y1="0" Y2="0" Stroke="#C0D9D9" StrokeThickness="1" StrokeDashArray="5,3"/>
+                        <TextBlock Text="High" Foreground="#C0D9D9" FontSize="12" FontWeight="SemiBold" Canvas.Left="0" Canvas.Top="-1"/>
                     </Canvas>
                 </Grid>
 
-                <!-- Percentage display -->
-                <!-- Replace your existing TextBlock showing Value with this -->
+                <!-- Percentage / Status display -->
                 <TextBlock HorizontalAlignment="Center"
-                           Foreground="#F5F6FA"
-                           FontSize="15"
+                           Foreground="#A1E3E3"
+                           FontSize="20"
                            FontWeight="Bold"
-                           Margin="0,8,0,4"
-                           Text="{Binding Status, RelativeSource={RelativeSource AncestorType=UserControl}}"/>  
-
-
+                           Margin="0,12,0,6"
+                           FontFamily="Segoe UI Semibold"
+                           Text="{Binding Status, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
 
                 <!-- Probe info -->
                 <TextBox Text="{Binding Title, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                         Height="30" Width="119" 
-                         Background="#2C2C2C" Foreground="#F5F6FA"
-                         BorderBrush="#555" BorderThickness="1"
-                         Padding="2" HorizontalAlignment="Center"
+                         Height="32" Width="140" 
+                         FontSize="15"
+                         Background="#1E2733" Foreground="#BEE9E9"
+                         BorderBrush="#3A4F54" BorderThickness="1"
+                         Padding="6" HorizontalAlignment="Center"
                          TextAlignment="Center"
-                         Focusable="False" Margin="0,0,0,5"/>
+                         Focusable="False" Margin="0,0,0,6"
+                         FontFamily="Segoe UI"/>
 
                 <TextBox Text="{Binding ID, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                         Height="25" Width="80" 
-                         Background="#2C2C2C" Foreground="#F5F6FA"
-                         BorderBrush="#555" BorderThickness="1"
-                         Padding="2" HorizontalAlignment="Center"
+                         Height="28" Width="100" 
+                         Background="#1E2733" Foreground="#BEE9E9"
+                         BorderBrush="#3A4F54" BorderThickness="1"
+                         Padding="6" HorizontalAlignment="Center"
                          TextAlignment="Center" IsReadOnly="True"
-                         Focusable="False" Margin="0,0,0,5"/>
+                         Focusable="False" Margin="0,0,0,6"
+                         FontFamily="Segoe UI"/>
 
                 <TextBox Text="{Binding Stroke, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                         Height="25" Width="80" 
-                         Background="#2C2C2C" Foreground="#F5F6FA"
-                         BorderBrush="#555" BorderThickness="1"
-                         Padding="2" HorizontalAlignment="Center"
+                         Height="28" Width="100" 
+                         Background="#1E2733" Foreground="#BEE9E9"
+                         BorderBrush="#3A4F54" BorderThickness="1"
+                         Padding="6" HorizontalAlignment="Center"
                          TextAlignment="Center" IsReadOnly="True"
-                         Focusable="False" Margin="0,0,0,0"/>
+                         Focusable="False" Margin="0,0,0,0"
+                         FontFamily="Segoe UI"/>
             </StackPanel>
         </Border>
     </Viewbox>

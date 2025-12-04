@@ -264,6 +264,7 @@ namespace EVMS
             }
         }
 
+        // ------------------ LIVE READING WITH DEBUG ------------------  
         private async Task ReadOnceAsync()
         {
             if (_serial == null || !_serial.IsOpen) return;
@@ -287,14 +288,21 @@ namespace EVMS
                     continue;
                 }
 
-                string resp = ReadFullResponse(60);
+                // INCREASED TIMEOUT FOR BETTER DATA CAPTURE
+                string resp = ReadFullResponse(150);  // 150ms timeout
                 if (string.IsNullOrEmpty(resp))
                 {
                     foreach (var p in g) UpdateParamValue(p, "ERR");
                     continue;
                 }
 
+                // 🚨 DEBUG: SHOW RAW SERIAL DATA
+             
+
                 double[] vals = ParseResponse(resp);
+
+                // 🚨 DEBUG: SHOW PARSED VALUES
+              
 
                 foreach (var p in g)
                 {
@@ -308,7 +316,7 @@ namespace EVMS
 
                     var numericValues = assigned.Select(ch => vals[ch]).ToList();
                     bool anyInvalid = numericValues.Any(v => double.IsNaN(v));
-                    
+
                     if (anyInvalid)
                     {
                         UpdateParamValue(p, "ERR");
@@ -316,70 +324,110 @@ namespace EVMS
                     }
 
                     double sum = numericValues.Sum();
-                    UpdateParamValue(p, sum.ToString("0.000", CultureInfo.InvariantCulture));
+                    // ALWAYS SHOW SIGN +0.123 or -0.456
+                    string formatted = sum.ToString("+0.000;-0.000;+0.000", CultureInfo.InvariantCulture);
+                    UpdateParamValue(p, formatted);
                 }
             }
-
-            await Task.CompletedTask;
         }
 
-        private string ReadFullResponse(int timeoutMs = 20)
+        // ------------------ ENHANCED SERIAL RESPONSE READER ------------------  
+        private string ReadFullResponse(int timeoutMs = 150)
         {
             if (_serial == null) return string.Empty;
-            string resp = "";
+
+            var buffer = new System.Text.StringBuilder();
             var sw = System.Diagnostics.Stopwatch.StartNew();
 
             try
             {
                 while (sw.ElapsedMilliseconds < timeoutMs)
                 {
-                    try
+                    if (_serial.BytesToRead > 0)
                     {
-                        resp += _serial.ReadExisting();
+                        string chunk = _serial.ReadExisting();
+                        buffer.Append(chunk);
                     }
-                    catch { }
 
-                    if (!string.IsNullOrEmpty(resp) && resp.Contains("#"))
-                        break;
+                    string resp = buffer.ToString();
+                    if (resp.Contains("#"))
+                    {
+                        // DEBUG: LOG COMPLETE RAW RESPONSE TO VS OUTPUT
+                        return resp;
+                    }
 
-                    Thread.Sleep(5);
+                    Thread.Sleep(3);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Read error: {ex.Message}");
+            }
 
-            return resp;
+            string finalResp = buffer.ToString();
+            return finalResp;
         }
 
+        // ------------------ ENHANCED PARSER WITH DEBUG ------------------  
         private double[] ParseResponse(string r)
         {
             double[] ch = new double[5];
             for (int i = 1; i <= 4; i++) ch[i] = double.NaN;
 
-            if (string.IsNullOrWhiteSpace(r)) return ch;
-
-            int idx = r.IndexOf("VALL", StringComparison.OrdinalIgnoreCase);
-            if (idx >= 0) r = r.Substring(idx + 4);
-
-            r = r.Replace("#", "").Replace("\r", "").Replace("\n", "").TrimEnd();
-
-            if (r.Length < _pos.Last()) return ch;
-
-            for (int i = 0; i < 4; i++)
+            if (string.IsNullOrWhiteSpace(r))
             {
-                int start = _pos[i];
-                int len = (i == 3 ? r.Length - start : _pos[i + 1] - start);
+                return ch;
+            }
 
-                if (start + len > r.Length) continue;
+            // Remove VALL if present
+            int idx = r.IndexOf("VALL", StringComparison.OrdinalIgnoreCase);
+            if (idx >= 0 && idx + 4 < r.Length)
+                r = r.Substring(idx + 4);
 
-                string seg = r.Substring(start, len).Trim();
-                var m = Regex.Match(seg, @"[-+]?\d+\.\d+");
+            // Clean
+            r = r.Replace("#", "").Replace("\r", "").Replace("\n", "").Trim();
+            
 
-                if (m.Success && double.TryParse(m.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out double v))
+            // 🌟 GAGENET CSV FORMAT: C05-01.1814,C06-01.1748,...
+            var matches = Regex.Matches(r, @"C\d{2}([-+]?\d*\.?\d+)");
+
+         
+
+            for (int i = 0; i < matches.Count && i < 4; i++)
+            {
+                string fullMatch = matches[i].Value;        // "C05-01.1814"
+                string valueStr = matches[i].Groups[1].Value; // "-01.1814"
+
+              
+
+                if (double.TryParse(valueStr, NumberStyles.Float, CultureInfo.InvariantCulture, out double v))
+                {
                     ch[i + 1] = v;
+                    
+                }
+                else
+                {
+                    //System.Diagnostics.Debug.WriteLine($"❌ Ch{i + 1} Parse failed: '{valueStr}'");
+                }
             }
 
             return ch;
         }
+
+
+
+        private string ExtractFirstNumber(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s))
+                return string.Empty;
+
+            // Accepts: -1.234, +0.55, .234, 123., 0.123
+            var m = Regex.Match(s, @"[-+]?(?:\d*\.\d+|\d+\.?\d*)");
+
+            return m.Success ? m.Value : string.Empty;
+        }
+
+
 
         private void UpdateParamValue(ParameterItem p, string text)
         {

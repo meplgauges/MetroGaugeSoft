@@ -828,11 +828,11 @@ namespace EVMS
             // ⚠️ Set columns based on design selection
             if (useFirstDesign)
             {
-                ProgressBarContainer.Columns = 9;   // DESIGN 1
+                ProgressBarContainer.Columns = 5;   // DESIGN 1
             }
             else
             {
-                ProgressBarContainer.Columns = 11;    // DESIGN 2 (set your value)
+                ProgressBarContainer.Columns = 7;    // DESIGN 2 (set your value)
             }
 
             foreach (var param in parameterData)
@@ -848,8 +848,8 @@ namespace EVMS
                     // ---- DESIGN 1 ----
                     var pb = new ResultProgressBar();
                     pb.Margin = new Thickness(5);
-                    pb.Width = 200;
-                    pb.Height = 160;
+                    pb.Width = 350;
+                    pb.Height = 200;
 
                     pb.ParameterName = param.D_Name;
                     pb.MinValue = min;

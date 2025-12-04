@@ -253,9 +253,9 @@ namespace EVMS
                 using (SqlConnection con = new SqlConnection(connectionString))
                 {
                     con.Open();
-                    string query = @"INSERT INTO PartConfig 
-                                    (Para_No, Parameter, Nominal, RTolPlus, RTolMinus, YTolPlus, YTolMinus, ProbeStatus,ShortName,D_Name)
-                                    VALUES (@Para_No, @Parameter, @Nominal, @RTolPlus, @RTolMinus, @YTolPlus, @YTolMinus, @ProbeStatus,@ShortName,@D_Name)";
+                    string query = @"INSERT INTO PartConfig
+                    (Para_No, Parameter, Nominal, RTolPlus, RTolMinus, YTolPlus, YTolMinus, ProbeStatus, ShortName, D_Name, Sign_Change, Compensation)
+                    VALUES (@Para_No, @Parameter, @Nominal, @RTolPlus, @RTolMinus, @YTolPlus, @YTolMinus, @ProbeStatus, @ShortName, @D_Name, @Sign_Change, @Compensation)";
                     using (SqlCommand cmd = new SqlCommand(query, con))
                     {
                         cmd.Parameters.AddWithValue("@Para_No", Para_No);
@@ -268,8 +268,8 @@ namespace EVMS
                         cmd.Parameters.AddWithValue("@ProbeStatus", probeStatus);
                         cmd.Parameters.AddWithValue("@ShortName", ShortName);
                         cmd.Parameters.AddWithValue("@D_Name", ShowPara);
-
-
+                        cmd.Parameters.AddWithValue("@Sign_Change", 0); // always 0
+                        cmd.Parameters.AddWithValue("@Compensation", 0); //
                         cmd.ExecuteNonQuery();
                     }
                 }

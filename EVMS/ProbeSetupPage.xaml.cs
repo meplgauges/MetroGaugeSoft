@@ -1,17 +1,23 @@
 ﻿using ActUtlType64Lib;
+using ICSharpCode.SharpZipLib.Zip;
 using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Configuration;
+using System.Globalization;
+using System.IO.Ports;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
-using static EVMS.IO_Controle_page;
 
 namespace EVMS
 {
@@ -19,22 +25,25 @@ namespace EVMS
     {
         private readonly string _connectionString;
         private readonly DispatcherTimer _timer;
-        private readonly OrbitService _orbitService = new OrbitService();
+        private readonly DispatcherTimer ioMonitorTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
         public event Action<string>? StatusMessageChanged;
 
+        // PLC
         private IActUtlType64 plc = new ActUtlType64Class();
         private bool isPlcConnected = false;
-        private bool plcBitState = false; // Track the toggle state
-        private bool motorRunState = false; // Track current run state
+        private bool plcBitState = false;
+        private bool motorRunState = false;
 
+        // IO devices
         private List<IODevice> inputDevices = new();
         private Dictionary<string, Button> inputButtons = new();
-        //private ActUtlType plcDevice = new ActUtlType();
-        private readonly DispatcherTimer ioMonitorTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
 
+        // Serial
+        private SerialPort? _serial;
+        private CancellationTokenSource? _serialCts;
+        private readonly int[] _pos = { 4, 16, 28, 40 };
 
-
-
+        // Data collections
         public ObservableCollection<string> PartNumbers { get; } = new();
         public ObservableCollection<ProbeRow> Probes { get; } = new();
 
@@ -48,7 +57,7 @@ namespace EVMS
                 {
                     _selectedPartNo = value;
                     RaisePropertyChanged();
-                    _ = LoadProbeNamesFromPartConfigAsync(_selectedPartNo);
+                    _ = LoadProbeDataFromInstallationDataAsync(_selectedPartNo);
                 }
             }
         }
@@ -57,15 +66,16 @@ namespace EVMS
         {
             InitializeComponent();
             DataContext = this;
-            _connectionString = ConfigurationManager.ConnectionStrings["EVMSDb"].ConnectionString;
-            _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(10) };
+
+            _connectionString = ConfigurationManager.ConnectionStrings["EVMSDb"].ConnectionString!;
+            _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
             _timer.Tick += Timer_Tick;
+            Loaded += ProbeSetupPage_Loaded;
 
             this.Loaded += SettingsPage_Loaded;
             this.PreviewKeyDown += SettingsPage_PreviewKeyDown;
         }
 
-        // 🔹 ESC key to go back to HomePage
         private void SettingsPage_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Escape)
@@ -75,8 +85,30 @@ namespace EVMS
             }
         }
 
-        // 🔹 Page load: connect to Orbit and load part numbers
-        // 🔹 Page load: connect to Orbit and load part numbers (non-blocking)
+        private void ProbeSetupPage_Loaded(object sender, RoutedEventArgs e)
+        {
+            ConnectToCom3();
+        }
+
+        private void ConnectToCom3()
+        {
+            try
+            {
+                _serial?.Close();
+                _serial?.Dispose();
+                _serial = null;
+
+                _serial = new SerialPort("COM3", 115200, Parity.None, 8, StopBits.One)
+                {
+                    ReadTimeout = 500,
+                    WriteTimeout = 500
+                };
+
+                _serial.Open();
+            }
+            catch { }
+        }
+
         private async void SettingsPage_Loaded(object? sender, RoutedEventArgs e)
         {
             try
@@ -85,52 +117,12 @@ namespace EVMS
                 GenerateInputButtons();
                 StartIOMonitoring();
 
-                this.Focusable = true;
-                this.IsTabStop = true;
-                Keyboard.Focus(this);
-                FocusManager.SetFocusedElement(Window.GetWindow(this)!, this);
+                await LoadPartNumbersAsync();
 
-                // Load part numbers
-                await LoadPartNumbersAsync();   // ← auto selected first one
-
-                // Auto-load probe names + details
                 if (!string.IsNullOrEmpty(SelectedPartNo))
-                {
-                    await LoadProbeNamesFromPartConfigAsync(SelectedPartNo);
-                    await LoadProbeDetailsFromInstallationDataAsync(SelectedPartNo);
-                }
+                    await LoadProbeDataFromInstallationDataAsync(SelectedPartNo);
 
-                // Start Orbit connection in background
-                _ = Task.Run(async () =>
-                {
-                    NotifyStatus("Connecting to Orbit...");
-
-                    bool connected = await _orbitService.ConnectAsync();
-
-                    Application.Current.Dispatcher.Invoke(async () =>
-                    {
-                        if (connected)
-                        {
-                            NotifyStatus($"Connected to Probes");
-
-                            // Once Orbit is connected → load again + start progress bar
-                            if (!string.IsNullOrEmpty(SelectedPartNo))
-                            {
-                                await LoadProbeNamesFromPartConfigAsync(SelectedPartNo);
-                                await LoadProbeDetailsFromInstallationDataAsync(SelectedPartNo);
-                            }
-
-                            // Auto-start live reading
-                            _timer.Start();
-                        }
-                        else
-                        {
-                            MessageBox.Show("Failed to connect Orbit.");
-                        }
-                    });
-                });
-
-                ConnectPlcOnPageLoad();
+                NotifyStatus("PLC auto-connect not attempted.");
             }
             catch (Exception ex)
             {
@@ -138,87 +130,19 @@ namespace EVMS
             }
         }
 
-
-        // 🔹 PLC Auto-Connect Method
-        // 🔹 PLC Auto-Connect (Async)
-        // 🔹 Asynchronous PLC connection (background, non-blocking)
-        private void ConnectPlcOnPageLoad()
-        {
-            NotifyStatus("🔄 Connecting to PLC...");
-
-            //Task.Run(async () =>
-            //{
-            //    try
-            //    {
-            //        plc.ActLogicalStationNumber = 1; // 🧩 Your station number
-            //        int openResult = -1;
-
-            //        // Attempt up to 3 retries (optional)
-            //        for (int attempt = 1; attempt <= 3; attempt++)
-            //        {
-            //            try
-            //            {
-            //                openResult = plc.Open();
-            //            }
-            //            catch
-            //            {
-            //                openResult = -1; // Mark as failed
-            //            }
-
-            //            if (openResult == 0)
-            //                break; // success, exit retry loop
-
-            //            await Task.Delay(1000); // small pause before retry
-            //        }
-
-            //        // Back to UI thread to update status
-            //        Application.Current.Dispatcher.Invoke(() =>
-            //        {
-            //            if (openResult == 0)
-            //            {
-            //                isPlcConnected = true;
-            //                NotifyStatus("✅ PLC connected successfully.");
-            //            }
-            //            else
-            //            {
-            //                isPlcConnected = false;
-            //                NotifyStatus("⚠️ PLC connection failed after retries.");
-            //                MessageBox.Show("⚠️ Failed to connect to PLC. Please check the connection.",
-            //                    "PLC Connection Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-            //            }
-            //              });
-            //        }
-            //    catch (Exception ex)
-            //    {
-            //        Application.Current.Dispatcher.Invoke(() =>
-            //        {
-            //            isPlcConnected = false;
-            //            NotifyStatus($"❌ Error connecting to PLC: {ex.Message}");
-            //            MessageBox.Show($"Error connecting to PLC: {ex.Message}",
-            //                "PLC Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            //        });
-            //    }
-            //});
-        }
-
-
-
-
-        // 🔹 Motor Up/Down Toggle Button
+        #region MOTOR PLC BUTTONS
         private void MotorUpDownButton_Click(object sender, RoutedEventArgs e)
         {
             if (!isPlcConnected)
             {
-                MessageBox.Show("⚠️ PLC not connected. Please check connection.",
-                    "PLC Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("PLC not connected.");
                 return;
             }
 
-            string plcBit = "M10"; // PLC bit for Motor Up/Down
+            string plcBit = "M10";
 
             try
             {
-                // Toggle state
                 plcBitState = !plcBitState;
                 int valueToWrite = plcBitState ? 1 : 0;
 
@@ -227,35 +151,23 @@ namespace EVMS
                 if (result == 0)
                 {
                     MotorUpDownButton.Content = plcBitState ? "Cylinder: DOWN" : "Cylinder: UP";
-                    NotifyStatus($"PLC bit {plcBit} set to {valueToWrite} (Motor {(plcBitState ? "Started" : "Stopped")})");
-                }
-                else
-                {
-                    MessageBox.Show($"Failed to write to {plcBit}. Error Code: {result}",
-                        "PLC Write Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error toggling Motor bit: {ex.Message}",
-                    "PLC Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            catch { }
         }
 
         private void MotorRunButton_Click(object sender, RoutedEventArgs e)
         {
             if (!isPlcConnected)
             {
-                MessageBox.Show("⚠️ PLC not connected. Please check connection.",
-                    "PLC Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("PLC not connected.");
                 return;
             }
 
-            string plcBit = "M14"; // 🔹 PLC bit for Motor Run (different from M10)
+            string plcBit = "M14";
 
             try
             {
-                // Toggle state
                 motorRunState = !motorRunState;
                 int valueToWrite = motorRunState ? 1 : 0;
 
@@ -264,298 +176,407 @@ namespace EVMS
                 if (result == 0)
                 {
                     MotorRunButton.Content = motorRunState ? "MOTOR: ON" : "MOTOR: OFF";
-                    NotifyStatus($"PLC bit {plcBit} set to {valueToWrite} (Motor {(motorRunState ? "Running" : "Stopped")})");
-                }
-                else
-                {
-                    MessageBox.Show($"Failed to write to {plcBit}. Error Code: {result}",
-                        "PLC Write Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error toggling Motor Run bit: {ex.Message}",
-                    "PLC Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            catch { }
         }
+        #endregion
 
-
-        // 🔹 Load Part Numbers
+        #region DATABASE LOADING
         private async Task LoadPartNumbersAsync()
         {
             try
             {
                 using var con = new SqlConnection(_connectionString);
                 await con.OpenAsync();
+
                 using var cmd = new SqlCommand("SELECT DISTINCT Para_No FROM PART_ENTRY ORDER BY Para_No", con);
-                using var reader = await cmd.ExecuteReaderAsync();
+
                 PartNumbers.Clear();
+
+                using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
                     PartNumbers.Add(reader.GetString(0));
                 }
 
                 if (PartNumbers.Count > 0)
-                {
                     SelectedPartNo = PartNumbers[0];
-                }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading Part Numbers: {ex.Message}", "Database Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Error loading part numbers: {ex.Message}");
             }
         }
 
-        // 🔹 Load Probe Names from Config
-        private async Task LoadProbeNamesFromPartConfigAsync(string partNo)
+        // *** THIS IS NOW THE ONLY PROBE SOURCE ***
+        private async Task LoadProbeDataFromInstallationDataAsync(string partNo)
         {
             if (string.IsNullOrEmpty(partNo)) return;
+
             try
             {
                 using var con = new SqlConnection(_connectionString);
                 await con.OpenAsync();
-                const string query = @"SELECT Parameter,D_Name FROM PartConfig WHERE Para_No = @Para_No AND ProbeStatus = 'Probe'";
+
+                string query = @"
+            SELECT ParameterName, BoxId, ChannelId 
+            FROM ProbeInstallationData 
+            WHERE PartNo = @P
+            ORDER BY ParameterName, ChannelId";
+
                 using var cmd = new SqlCommand(query, con);
-                cmd.Parameters.AddWithValue("@Para_No", partNo);
+                cmd.Parameters.AddWithValue("@P", partNo);
+
                 using var reader = await cmd.ExecuteReaderAsync();
+
                 Probes.Clear();
+
                 while (await reader.ReadAsync())
                 {
+                    string name = reader["ParameterName"].ToString();
+                    int boxId = Convert.ToInt32(reader["BoxId"]);
+                    int channel = Convert.ToInt32(reader["ChannelId"]);
+
+                    // ⚡ EACH PROBE IS A SEPARATE ROW NOW
                     Probes.Add(new ProbeRow
                     {
-                        Title = reader.GetString(1),
-                        ID = string.Empty,
-                        Stroke = string.Empty,
-                        Value = 0,
-                        InRange = false
+                        Title = $"{name} (CH {channel})",
+                        BoxId = boxId,
+                        Channels = new List<int> { channel }  // SINGLE PROBE ONLY
                     });
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading probe names: {ex.Message}", "Database Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Error loading ProbeInstallationData: {ex.Message}");
             }
         }
 
-        // 🔹 Load Probe Installation Details
-        private async Task LoadProbeDetailsFromInstallationDataAsync(string partNo)
+        #endregion
+
+        #region SERIAL READING
+        private void Timer_Tick(object? sender, EventArgs? e) { }
+
+        private void DisconnectSerialButton_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(partNo)) return;
+            StopSerial();
             try
             {
-                using var con = new SqlConnection(_connectionString);
-                await con.OpenAsync();
-                const string query = @"SELECT ProbeId, Stroke 
-                                       FROM ProbeInstallationData 
-                                       WHERE PartNo = @PartNo AND Status = @Status";
-                using var cmd = new SqlCommand(query, con);
-                cmd.Parameters.AddWithValue("@PartNo", partNo);
-                cmd.Parameters.AddWithValue("@Status", "Installed");
-                using var reader = await cmd.ExecuteReaderAsync();
-
-                int index = 0;
-                while (await reader.ReadAsync() && index < Probes.Count)
-                {
-                    string probeId = reader.GetString(0);
-                    string stroke = reader.GetString(1);
-
-                    var probe = Probes[index];
-                    if (_orbitService.IsModuleConnected(probeId))
-                    {
-                        probe.ID = probeId;
-                        probe.Stroke = stroke;
-                    }
-                    else
-                    {
-                        probe.ID = string.Empty;
-                        probe.Stroke = string.Empty;
-                    }
-                    index++;
-                }
+                _serial?.Close();
+                _serial?.Dispose();
+                _serial = null;
             }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading probe details: {ex.Message}", "Database Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            catch { }
         }
 
-        // 🔹 Live Reading Timer
-        private void Timer_Tick(object? sender, EventArgs? e)
+        private void StartSerialButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_orbitService.ModulesById == null || _orbitService.ModulesById.Count == 0)
-                return;
-
-            double maxScale = 2.0;
-
-            foreach (var probe in Probes)
+            if (_serial == null || !_serial.IsOpen)
             {
-                if (probe == null || string.IsNullOrEmpty(probe.ID))
-                    continue;
-
-                if (!_orbitService.ModulesById.TryGetValue(probe.ID, out dynamic module))
-                    continue;
-
-                try
-                {
-                    double reading = (double)module.ReadingInUnits;
-                    double normalizedValue = (reading / maxScale) * 100;
-                    probe.Value = Math.Min(Math.Max(normalizedValue, 0), 100);
-
-                    if (reading > 1.200)
-                    {
-                        probe.Status = "OVER";
-                        probe.InRange = false;
-                    }
-                    else if (reading < 0.2)
-                    {
-                        probe.Status = "UNDER";
-                        probe.InRange = false;
-                    }
-                    else
-                    {
-                        probe.Status = $"{reading:0.000} mm";
-                        probe.InRange = true;
-                    }
-                }
-                catch
-                {
-                    probe.Value = 0;
-                    probe.Status = "ERR";
-                    probe.InRange = false;
-                }
-            }
-        }
-
-        // 🔹 Start Button
-        private async void StartBtn_Click(object sender, RoutedEventArgs e)
-        {
-            if (string.IsNullOrEmpty(SelectedPartNo))
-            {
-                MessageBox.Show("Please select a Part Number first.", "Input Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Connect serial first.");
                 return;
             }
 
-            if (!_orbitService.IsConnected)
+            if (_serialCts != null)
             {
-                MessageBox.Show("Orbit Controller is not connected. Please reconnect and try again.",
-                    "Connection Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("Already running.");
                 return;
             }
 
-            await LoadProbeNamesFromPartConfigAsync(SelectedPartNo);
-            await LoadProbeDetailsFromInstallationDataAsync(SelectedPartNo);
-
-            var missingIds = new List<string>();
-            foreach (var probe in Probes)
-            {
-                if (probe == null || string.IsNullOrEmpty(probe.ID))
-                    missingIds.Add(probe?.Title ?? "<Unknown>");
-            }
-
-            if (missingIds.Count > 0)
-            {
-                string missing = string.Join(", ", missingIds);
-                MessageBox.Show($"The following probes are missing or not connected: {missing}",
-                    "Probe Missing", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-
-            _timer.Start();
-            //MessageBox.Show("Live probe reading started.",
-            //    "Reading Active", MessageBoxButton.OK, MessageBoxImage.Information);
+            _serialCts = new CancellationTokenSource();
+            _ = Task.Run(() => SerialLiveLoopAsync(_serialCts.Token));
         }
 
-        // 🔹 Stop Button
-        private void StopBtn_Click(object sender, RoutedEventArgs e)
-        {
-            _timer.Stop();
-            foreach (var probe in Probes)
-            {
-                probe.Value = 0;
-                probe.ID = string.Empty;
-                probe.Stroke = string.Empty;
-                probe.Status = string.Empty;
-                probe.InRange = false;
-            }
-            //_orbitService.Disconnect();
-            //MessageBox.Show("Live reading stopped.", "Stopped", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-
-        // 🔹 PropertyChanged boilerplate
-        public event PropertyChangedEventHandler? PropertyChanged;
-        private void RaisePropertyChanged([CallerMemberName] string? propertyName = null) =>
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-
-        // 🔹 Inner Class for ProbeRow
-        public class ProbeRow : INotifyPropertyChanged
-        {
-            private string _title = string.Empty;
-            private string _id = string.Empty;
-            private string _stroke = string.Empty;
-            private string _status = string.Empty;
-            private double _value;
-            private bool _inRange;
-
-            public string Title { get => _title; set => SetField(ref _title, value); }
-            public string ID { get => _id; set => SetField(ref _id, value); }
-            public string Stroke { get => _stroke; set => SetField(ref _stroke, value); }
-            public string Status { get => _status; set => SetField(ref _status, value); }
-            public double Value { get => _value; set => SetField(ref _value, value); }
-            public bool InRange { get => _inRange; set => SetField(ref _inRange, value); }
-
-            public event PropertyChangedEventHandler? PropertyChanged;
-            protected bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
-            {
-                if (Equals(field, value)) return false;
-                field = value;
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-                return true;
-            }
-        }
-        private void NotifyStatus(string message)
-        {
-            StatusMessageChanged?.Invoke(message);
-        }
-
-        // 🔹 ESC Key Handler (go to Home)
-        private void HandleEscKeyAction()
+        private void StopSerial()
         {
             try
             {
-                _timer?.Stop();
-                _orbitService?.Disconnect();
-                StopIOMonitoring();
-                plc?.Close();
 
-                Window currentWindow = Window.GetWindow(this);
-                if (currentWindow != null)
+                // 1. Cancel immediately
+                _serialCts?.Cancel();
+
+                // 2. Wait briefly for graceful exit (300ms max)
+                if (_serialCts != null)
                 {
-                    var mainContentGrid = currentWindow.FindName("MainContentGrid") as Grid;
-                    if (mainContentGrid != null)
-                    {
-                        mainContentGrid.Children.Clear();
-
-                        var resultPage = new Dashboard
-                        {
-                            HorizontalAlignment = HorizontalAlignment.Stretch,
-                            VerticalAlignment = VerticalAlignment.Stretch
-                        };
-
-                        mainContentGrid.Children.Add(resultPage);
-                        resultPage.Focus();
-                    }
+                    _serialCts.Token.WaitHandle.WaitOne(300);
+                    _serialCts.Dispose();
                 }
+                _serialCts = null;
 
-                GC.Collect();
-                GC.WaitForPendingFinalizers();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error while cleaning up resources: {ex.Message}",
-                    "Cleanup Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Diagnostics.Debug.WriteLine($"StopSerial error: {ex.Message}");
             }
         }
 
+
+        private async Task SerialLiveLoopAsync(CancellationToken token)
+        {
+            try
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    var boxes = Probes.Select(p => p.BoxId).Distinct().Where(b => b > 0).ToList();
+
+                    foreach (int box in boxes)
+                    {
+                        // ✅ Check cancellation before each box read
+                        token.ThrowIfCancellationRequested();
+
+                        // ✅ PASS TOKEN TO ReadBoxOnce
+                        await ReadBoxOnce(box, token);
+                        await Task.Delay(10, token);
+                    }
+
+                    await Task.Delay(50, token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                System.Diagnostics.Debug.WriteLine("✅ Serial loop cancelled gracefully");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Serial error: {ex.Message}");
+            }
+        }
+
+
+        private async Task ReadBoxOnce(int box, CancellationToken token)
+        {
+            if (_serial == null || !_serial.IsOpen) return;
+
+            string cmd = $"*{box:D3}VALL#\r";
+
+            try
+            {
+                _serial.DiscardInBuffer();
+                _serial.DiscardOutBuffer();
+                _serial.Write(cmd);
+            }
+            catch
+            {
+                MarkProbesBoxError(box);
+                return;
+            }
+
+            // ✅ PASS TOKEN HERE
+            string resp = await Task.Run(() => ReadFullResponse(80, token));
+            if (string.IsNullOrEmpty(resp))
+            {
+                MarkProbesBoxError(box);
+                return;
+            }
+
+            double[] values = ParseResponse(resp);
+            UpdateProbesFromBox(box, values);
+        }
+
+
+
+        private void MarkProbesBoxError(int box)
+        {
+            foreach (var p in Probes.Where(p => p.BoxId == box))
+                UpdateProbeUI(p, 0, "ERR", false);
+        }
+
+        private void UpdateProbesFromBox(int box, double[] vals)
+        {
+            foreach (var p in Probes.Where(x => x.BoxId == box))
+            {
+                if (p.Channels == null || p.Channels.Count == 0)
+                {
+                    UpdateProbeUI(p, 0, "No CH", false);
+                    continue;
+                }
+
+                int ch = p.Channels[0];  // Use the first (and only) channel
+
+                if (ch < 1 || ch > 4)
+                {
+                    UpdateProbeUI(p, 0, "CH ERR", false);
+                    continue;
+                }
+
+                double value = vals[ch];
+
+                if (double.IsNaN(value))
+                {
+                    UpdateProbeUI(p, 0, "ERR", false);
+                    continue;
+                }
+
+                // Pass the ACTUAL raw value directly, no normalization here
+                // Change UpdateProbeUI's first argument to raw value
+                bool ok = value >= 0.2 && value <= 1.2;
+
+                UpdateProbeUI(p, value, $"{value:0.000}", ok);
+            }
+        }
+
+
+
+        private void UpdateProbeUI(ProbeRow p, double val, string status, bool ok)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                p.Value = val;
+                p.Status = status;
+                p.InRange = ok;
+            });
+        }
+
+        private string ReadFullResponse(int timeoutMs = 80, CancellationToken? token = null)
+        {
+            if (_serial == null) return "";
+            string resp = "";
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            try
+            {
+                while (sw.ElapsedMilliseconds < timeoutMs)
+                {
+                    // ✅ CRITICAL: Check cancellation BEFORE reading
+                    token?.ThrowIfCancellationRequested();
+
+                    // Only read if data available (non-blocking)
+                    if (_serial.BytesToRead > 0)
+                    {
+                        resp += _serial.ReadExisting();
+                        if (resp.Contains("#")) break;
+                    }
+
+                    Thread.Sleep(1); // Reduced from 3ms for faster response
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                return ""; // Graceful exit
+            }
+            catch { }
+
+            return resp;
+        }
+
+
+        private double[] ParseResponse(string r)
+        {
+            double[] ch = new double[5];
+            for (int i = 1; i <= 4; i++) ch[i] = double.NaN;
+
+            if (string.IsNullOrWhiteSpace(r))
+            {
+                System.Diagnostics.Debug.WriteLine("❌ Empty response");
+                return ch;
+            }
+
+            // Remove VALL if present
+            int idx = r.IndexOf("VALL", StringComparison.OrdinalIgnoreCase);
+            if (idx >= 0) r = r[(idx + 4)..];
+
+            // Clean completely
+            r = r.Replace("#", "").Replace("\r", "").Replace("\n", "").Trim();
+
+            // 🌟 GAGENET CSV: C05-01.1814,C06-01.1748,C07-00.0332,C08-00.0315
+            var matches = Regex.Matches(r, @"C\d{2}([-+]?\d*\.?\d+)");
+
+            for (int i = 0; i < matches.Count && i < 4; i++)
+            {
+                string fullMatch = matches[i].Value;        // "C05-01.1814"
+                string valueStr = matches[i].Groups[1].Value; // "-01.1814"
+
+
+                if (double.TryParse(valueStr, NumberStyles.Any, CultureInfo.InvariantCulture, out double v))
+                {
+                    ch[i + 1] = v;
+                    //System.Diagnostics.Debug.WriteLine($"✅ Ch{i + 1}: '{fullMatch}' -> {v:+0.000;-0.000}");
+                }
+                else
+                {
+                   // System.Diagnostics.Debug.WriteLine($"❌ Ch{i + 1} Parse failed: '{valueStr}'");
+                }
+            }
+
+            return ch;
+        }
+
+        #endregion
+
+        #region START / STOP MAIN BUTTON
+
+        private Task? _serialReadTask;
+
+
+        private async void StopBtn_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Cancel serial reading task
+                _serialCts?.Cancel();
+
+                // Wait up to 500ms for reading task to end gracefully
+                if (_serialReadTask != null)
+                {
+                    await Task.WhenAny(_serialReadTask, Task.Delay(500));
+                    _serialReadTask = null;
+                }
+
+                _serialCts?.Dispose();
+                _serialCts = null;
+
+                // Check if port is open before closing
+                if (_serial != null && _serial.IsOpen)
+                {
+                    _serial.Close();
+                    _serial.Dispose();
+                    _serial = null;
+                }
+
+                System.Diagnostics.Debug.WriteLine("Serial port closed cleanly.");
+
+                // Optionally clear UI or reset probe values here
+                foreach (var p in Probes)
+                {
+                    p.Value = 0;
+                    p.Status = "";
+                    p.InRange = false;
+                }
+
+                if (_timer.IsEnabled)
+                    _timer.Stop();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error closing serial port: {ex.Message}");
+            }
+        }
+
+
+        private void StartBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (_serial == null || !_serial.IsOpen)
+            {
+                MessageBox.Show("Connect serial first.");
+                return;
+            }
+
+            if (_serialCts != null)
+            {
+                MessageBox.Show("Already running.");
+                return;
+            }
+
+            _serialCts = new CancellationTokenSource();
+
+            // Store the task to await during stop
+            _serialReadTask = Task.Run(() => SerialLiveLoopAsync(_serialCts.Token));
+        }
+
+        #endregion
+
+        #region IO MONITOR
         private async Task LoadInputDevicesAsync()
         {
             inputDevices.Clear();
@@ -572,99 +593,115 @@ namespace EVMS
                 });
             }
         }
+
         private void GenerateInputButtons()
         {
             InputButtonPanel.Children.Clear();
             inputButtons.Clear();
-            foreach (var device in inputDevices)
+
+            foreach (var dev in inputDevices)
             {
-                Button inputButton = new Button
-                        {
-                            Width = 140,
-                            Height = 40,
-                            Margin = new Thickness(10),
-                            Tag = device,
-                            Background = Brushes.White,
-                            Foreground = Brushes.Black,
-                            Opacity=0.7,
-                            FontWeight = FontWeights.Bold,
-                            Content = new TextBlock
-                            {
-                                Text = device.Description,
-                                TextWrapping = TextWrapping.Wrap,
-                                TextAlignment = TextAlignment.Center,
-                                HorizontalAlignment = HorizontalAlignment.Center,
-                                VerticalAlignment = VerticalAlignment.Center
-                            }
-                        };
-                try
+                Button b = new Button
                 {
-                    inputButton.Style = (Style)FindResource("ModernButtonStyle");
-                }
-                catch (ResourceReferenceKeyNotFoundException)
-                {
-                    // Style not found, continue with default
-                }
-                inputButtons[device.Bit] = inputButton;
-                InputButtonPanel.Children.Add(inputButton);
+                    Width = 140,
+                    Height = 40,
+                    Margin = new Thickness(10),
+                    Tag = dev,
+                    Background = Brushes.White,
+                    Foreground = Brushes.Black,
+                    Opacity = 0.7,
+                    FontWeight = FontWeights.Bold,
+                    Content = dev.Description
+                };
+
+                inputButtons[dev.Bit] = b;
+                InputButtonPanel.Children.Add(b);
             }
         }
 
         private void UpdateInputButtonStates()
         {
-            try
-            {
-                if (!isPlcConnected) return;
+            if (!isPlcConnected) return;
 
-                foreach (var device in inputDevices)
-                {
-                    try
-                    {
-                        if (inputButtons.ContainsKey(device.Bit))
-                        {
-                            int value;
-                            int result = plc.GetDevice(device.Bit, out value);
-                            if (result == 0)
-                            {
-                                inputButtons[device.Bit].Background = (value == 1) ? Brushes.Green : Brushes.Red;
-                            }
-                            else
-                            {
-                                inputButtons[device.Bit].Background = Brushes.Gray;
-                            }
-                        }
-
-                    }
-                    catch (Exception ex)
-                    {
-                        // Optionally log ex.Message
-                        if (inputButtons.TryGetValue(device.Bit.Trim(), out var inputButton))
-                        {
-                            inputButton.Background = Brushes.Gray;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
+            foreach (var dev in inputDevices)
             {
-                // Stop timer if critical error, alert user
-                ioMonitorTimer.Stop();
-                MessageBox.Show($"Input monitor error: {ex.Message}", "Monitor Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                if (!inputButtons.ContainsKey(dev.Bit)) continue;
+
+                int result = plc.GetDevice(dev.Bit, out int value);
+
+                inputButtons[dev.Bit].Background =
+                    result == 0
+                        ? (value == 1 ? Brushes.Green : Brushes.Red)
+                        : Brushes.Gray;
             }
         }
-
-
-
 
         private void StartIOMonitoring()
         {
             ioMonitorTimer.Tick += (s, e) => UpdateInputButtonStates();
             ioMonitorTimer.Start();
         }
-        private void StopIOMonitoring()
+
+        private void StopIOMonitoring() => ioMonitorTimer.Stop();
+        #endregion
+
+        #region CLEANUP
+        private void NotifyStatus(string msg) => StatusMessageChanged?.Invoke(msg);
+
+        private void HandleEscKeyAction()
         {
-            ioMonitorTimer.Stop();
+            try
+            {
+                _timer?.Stop();
+                StopSerial();
+                StopIOMonitoring();
+                plc?.Close();
+
+                Window window = Window.GetWindow(this);
+                var grid = window?.FindName("MainContentGrid") as Grid;
+                if (grid != null)
+                {
+                    grid.Children.Clear();
+                    grid.Children.Add(new Dashboard());
+                }
+
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+            catch { }
+        }
+        #endregion
+
+        #region MODELS
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void RaisePropertyChanged([CallerMemberName] string? p = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
+
+        public class ProbeRow : INotifyPropertyChanged
+        {
+            private string _title = "";
+            private int _boxId;
+            private List<int> _channels = new();
+            private string _status = "";
+            private double _value;
+            private bool _inRange;
+
+            public string Title { get => _title; set => Set(ref _title, value); }
+            public int BoxId { get => _boxId; set => Set(ref _boxId, value); }
+            public List<int> Channels { get => _channels; set => Set(ref _channels, value); }
+            public string Status { get => _status; set => Set(ref _status, value); }
+            public double Value { get => _value; set => Set(ref _value, value); }
+            public bool InRange { get => _inRange; set => Set(ref _inRange, value); }
+
+            public event PropertyChangedEventHandler? PropertyChanged;
+            private void Set<T>(ref T field, T v, [CallerMemberName] string n = "")
+            {
+                if (!EqualityComparer<T>.Default.Equals(field, v))
+                {
+                    field = v;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
+                }
+            }
         }
 
         public class IODevice
@@ -672,7 +709,6 @@ namespace EVMS
             public string Description { get; set; } = "";
             public string Bit { get; set; } = "";
         }
-
-
+        #endregion
     }
 }
