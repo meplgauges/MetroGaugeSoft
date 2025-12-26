@@ -20,6 +20,7 @@
             <ColumnDefinition Width="320"/>
             <!-- Left Panel -->
             <ColumnDefinition Width="*"/>
+
             <!-- Right Panel -->
         </Grid.ColumnDefinitions>
 
@@ -145,7 +146,7 @@
                              Width="220"
                              Height="35"
                              Style="{StaticResource ModernFilledTextBox}"
-                             HorizontalAlignment="Center"/>     
+                             HorizontalAlignment="Center"/>
                     </StackPanel>
 
 
@@ -162,6 +163,38 @@
                 </StackPanel>
             </Border>
 
+            <!-- COM PORT SELECTOR PANEL - DROPDOWN WITH AUTO-DETECT -->
+            <!-- COM PORT SELECTOR PANEL - DETECT + SELECT + SAVE -->
+            <!-- COM PORT DETECTOR -->
+            <Border Background="{StaticResource PageBackgroundBrush}"
+        CornerRadius="10" BorderBrush="Gray" BorderThickness="1" 
+        Padding="19" Margin="0,15,0,0">
+                <StackPanel>
+                    <Border Background="Black" BorderBrush="BurlyWood" BorderThickness="1" 
+                CornerRadius="10" Padding="10" HorizontalAlignment="Center" Margin="0,0,0,15">
+                        <TextBlock Text="COM Port " Foreground="White" FontSize="16" 
+                       FontWeight="Bold" TextAlignment="Center"/>
+                    </Border>
+
+                    <StackPanel Margin="5,1,5,0">
+                        <TextBlock Text="Select Port:" FontWeight="Bold" Margin="10,0,0,5" Foreground="Black"/>
+                        <ComboBox x:Name="ComPortComboBox" Width="250" Height="40" 
+                   Margin="10,0,0,2" 
+                      FontSize="14" FontWeight="Bold"/>
+                    </StackPanel>
+
+                    <TextBlock x:Name="PortStatusText" Text="Detecting ports..." FontWeight="Bold" 
+                   HorizontalAlignment="Center" Margin="0,0,0,15"/>
+
+                    <Button x:Name="SaveComPortButton" Content="SAVE " Width="180" Height="40"
+                Style="{StaticResource GlossyBlueButton}" Background="#4CAF50" 
+                FontWeight="Bold" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+
+
+
         </StackPanel>
 
         <!-- RIGHT PANEL -->
@@ -171,7 +204,7 @@
                 BorderBrush="Gray" 
                 BorderThickness="2" 
                 CornerRadius="10" 
-                Padding="20">
+                Padding="10">
 
             <StackPanel VerticalAlignment="Top">
                 <TextBlock Text="Setting Controls"
@@ -180,7 +213,7 @@
                            FontWeight="Bold"
                            HorizontalAlignment="Center"
                            Margin="0,0,0,20"/>
-                <StackPanel x:Name="ToggleGrid1" Margin="5,0,5,10" VerticalAlignment="Top"/>
+                <StackPanel x:Name="ToggleGrid1" Margin="20,0,20,20" VerticalAlignment="Top"/>
             </StackPanel>
         </Border>
 

@@ -1,14 +1,11 @@
 ﻿using EVMS.Service;
 using System.ComponentModel;
 using System.Diagnostics;  // ✅ Needed for Process.Start
-using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;   // 👈 this is required
-using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Media3D;
 using System.Windows.Threading;
 using static EVMS.Login_Page;
 
@@ -35,14 +32,14 @@ namespace EVMS
         public MainWindow()
         {
             InitializeComponent();
-            
+
 
             DataContext = this;
             _instance = this;
 
             _dataService = new DataStorageService();
             Loaded += MainWindow_Loaded;
-           // Loaded += Window_Loaded;
+            // Loaded += Window_Loaded;
             masterService = new MasterService();
 
             masterService.StatusMessageUpdated += message =>
@@ -54,7 +51,7 @@ namespace EVMS
             };
             // GenerateTestExcelReport();
 
-            
+
         }
         //private void Window_Loaded(object sender, RoutedEventArgs e)
         //{
@@ -102,18 +99,19 @@ namespace EVMS
                 });
                 // Run report generation on a background thread
                 try
-                    {
+                {
                     // Do not use Dispatcher here – keeps this background
-                    GenerateYesterdayActivePartDailyReport();                    }
-                    catch (Exception ex)
+                    GenerateYesterdayActivePartDailyReport();
+                }
+                catch (Exception ex)
+                {
+                    // Only use Dispatcher for showing the error
+                    Dispatcher.Invoke(() =>
                     {
-                        // Only use Dispatcher for showing the error
-                        Dispatcher.Invoke(() =>
-                        {
-                            MessageBox.Show($"Failed to generate Excel report for part: {ex.Message}");
-                        });
-                    }
-              
+                        MessageBox.Show($"Failed to generate Excel report for part: {ex.Message}");
+                    });
+                }
+
             });
         }
 
@@ -190,7 +188,7 @@ namespace EVMS
             MainContentGrid.Children.Add(resultPage);
         }
 
-        
+
 
 
 
@@ -272,7 +270,7 @@ namespace EVMS
             MainContentGrid.Children.Add(resultPage);
         }
 
-        
+
         private void Report_Page(object sender, RoutedEventArgs e)
         {
             MainContentGrid.Children.Clear();
@@ -328,7 +326,7 @@ namespace EVMS
             MainContentGrid.Children.Add(resultPage);
         }
 
-        private async void ProbeInstall_Click(object sender, RoutedEventArgs e)
+        private void ProbeInstall_Click(object sender, RoutedEventArgs e)
         {
             //// Show message box
             //MessageBox.Show("Please wait, initializing...", "Loading", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -418,6 +416,9 @@ namespace EVMS
                 return;
             }
 
+            // ✅ CLEANUP: Dispose current ProbeSetupPage if it exists
+            CleanupCurrentProbePage();
+
             MainContentGrid.Children.Clear();
 
             var dashboard = new Dashboard();
@@ -428,6 +429,24 @@ namespace EVMS
 
             //ApplyMenuPermissions();
         }
+
+        // ✅ NEW: Centralized cleanup method
+        private void CleanupCurrentProbePage()
+        {
+            if (MainContentGrid.Children.Count == 0) return;
+
+            foreach (var child in MainContentGrid.Children.OfType<UIElement>().ToList())
+            {
+                if (child is ProbeSetupPage probePage)
+                {
+                    probePage.HandleEscKeyAction(); // Calls all cleanup including serial port close
+                    MainContentGrid.Children.Remove(probePage);
+                    System.Diagnostics.Debug.WriteLine("✅ ProbeSetupPage disposed and serial port closed");
+                    return; // Only one page at a time
+                }
+            }
+        }
+
 
 
 
@@ -465,8 +484,8 @@ namespace EVMS
         {
             // Clear session info
             SessionManager.IsAuthenticated = false;
-            SessionManager.UserID = null;
-            SessionManager.UserType = null;
+            SessionManager.UserID = string.Empty;      // ✅
+            SessionManager.UserType = string.Empty;    // ✅
             LoginButton.IsEnabled = true;
 
             MessageBox.Show("Logout Successful!\nThank you for using the application.",
@@ -476,6 +495,7 @@ namespace EVMS
             ShowStatusMessage("");
             OpenHomePage();
         }
+
 
         private void OpenHomePage()
         {
@@ -644,8 +664,8 @@ namespace EVMS
                     if (activeParts == null || activeParts.Count == 0)
                         return;
 
-                    string activePartNo = activeParts[0].Para_No;
-                    string folderPath = Path.Combine(baseExportFolder,activePartNo);
+                    string? activePartNo = activeParts[0].Para_No;
+                    string? folderPath = Path.Combine(baseExportFolder, activePartNo);
                     Directory.CreateDirectory(folderPath);
 
                     var dataExportService = new DataExportService(_dataService, folderPath);

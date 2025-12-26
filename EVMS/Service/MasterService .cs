@@ -1,34 +1,23 @@
 ﻿using ActUtlType64Lib;
-using DocumentFormat.OpenXml.EMMA;
-using DocumentFormat.OpenXml.Wordprocessing;
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Threading;
-using Windows.Storage.Streams;
-using Windows.UI.WindowManagement;
-using static SkiaSharp.HarfBuzz.SKShaper;
 
 namespace EVMS.Service
 {
     public class ProbeMeasurement
     {
-        public string? ProbeId { get; set; }
-        public string? Name { get; set; }
+        public string ProbeId { get; set; } = "";      // Unique key: e.g. Diameter_CH1
+        public string Name { get; set; } = "";         // Logical parameter name: Diameter
         public List<double> Readings { get; set; } = new List<double>();
         public double MaxValue { get; set; } = 0;
-        public double MinValue { get; set; } = 0;  // Add this property
+        public double MinValue { get; set; } = 0;
         public double MasterValue { get; set; } = 0;
-        public double TolerancePlus { get; set; }
-        public double ToleranceMinus { get; set; }
-        public int SignChange { get; set; }        // 0 = add, 1 = subtract
-        public double Compensation { get; set; }
+        public double TolerancePlus { get; set; } = 0;
+        public double ToleranceMinus { get; set; } = 0;
+        public int SignChange { get; set; } = 0;
+        public double Compensation { get; set; } = 0;
     }
+
 
 
     public class ParameterResult
@@ -36,7 +25,7 @@ namespace EVMS.Service
         public double Value { get; set; }
         public bool IsOk { get; set; }
     }
- 
+
 
     public class MasterService : IDisposable
     {
@@ -72,7 +61,7 @@ namespace EVMS.Service
             = new ConcurrentQueue<(string, double)>();
 
         private int _currentOperationalMode = 1;
-        private string _currentPartCode = "";
+        private string _currentPartCode = "3366566";
 
         public bool IsMasteringStage { get; set; } = true;
         public bool MasterComplete { get; set; } = false;
@@ -90,9 +79,10 @@ namespace EVMS.Service
 
             _dataStorageService = new DataStorageService();
             _plcProbeService = new PlcProbeService();
-           plc = new ActUtlType64Class { ActLogicalStationNumber = 1 };
-            _plcProbeService.ProbeValueUpdated += ProbeValueUpdatedHandler;
+            plc = new ActUtlType64Class { ActLogicalStationNumber = 1 };
             ArraySize = _dataStorageService.GetReadingCount();
+
+            LoadProbeConfigurationsforMasterInspection(_currentPartCode);
 
         }
         public async Task StartMeasurementAsync()
@@ -112,6 +102,8 @@ namespace EVMS.Service
         }
         public bool IsConnected => _plcProbeService?.IsConnected ?? false;
 
+
+
         public async Task<bool> EnsureConnectionAsync()
         {
             if (_plcProbeService == null) return false;
@@ -119,25 +111,26 @@ namespace EVMS.Service
             if (!_plcProbeService.IsConnected)
             {
                 bool connected = await _plcProbeService.ConnectAsync();
-                if (connected)
-                {
-                    _plcProbeService.ProbeValueUpdated += ProbeValueUpdatedHandler;
-                    int openResult = plc.Open();
-                    if (openResult != 0)
-                    {
-                        MessageBox.Show($"Failed to open PLC connection. Error code: {openResult}", "PLC Init Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                        return false;
-                    }
-                }
-                return connected;
+                if (!connected) return false;
             }
+
+            // PLC connection (unchanged)
+            int openResult = plc.Open();
+            if (openResult != 0)
+            {
+                MessageBox.Show($"Failed to open PLC connection. Error code: {openResult}",
+                    "PLC Init Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+
             return true;
         }
 
-        private void ProbeValueUpdatedHandler(object? sender, ProbeReadingEventArgs e)
-        {
-            _collectedReadings.Enqueue((e.ModuleId, e.Value));
-        }
+
+        //private void ProbeValueUpdatedHandler(object? sender, ProbeReadingEventArgs e)
+        //{
+        //    _collectedReadings.Enqueue((e.ModuleId, e.Value));
+        //}
 
         public bool SetPlcDevice(string device, int value)
         {
@@ -164,10 +157,9 @@ namespace EVMS.Service
 
         private void Cleanup()
         {
-            _plcProbeService.StopLiveReading();
-            _plcProbeService?.Disconnect();
-            _plcProbeService.ProbeValueUpdated -= ProbeValueUpdatedHandler;
-            plc.Close();
+            _plcProbeService.StopLiveReading();  // ✅ ADD
+            _plcProbeService.Dispose();          // ✅ ADD
+            plc?.Close();
         }
 
         public enum ProcedureMode
@@ -245,7 +237,7 @@ namespace EVMS.Service
                 }
 
                 SetPlcDevice("M10", 0);
-                if (mode==ProcedureMode.MasterInspection)
+                if (mode == ProcedureMode.MasterInspection)
                 {
                     LoadProbeConfigurationsforMasterInspection(_currentPartCode);
 
@@ -288,7 +280,7 @@ namespace EVMS.Service
                     }
                     else
                     {
-                        
+
                         string startMsg = mode == ProcedureMode.Mastering ? "Press Robo start button to start mastering." : "Press Robo start button to start MasterInspection.";
                         await NotifyOnUIAsync(startMsg);
                         while (GetPlcDeviceBit("M20") != 1) await Task.Delay(100);
@@ -299,9 +291,9 @@ namespace EVMS.Service
                         await NotifyOnUIAsync("Waiting Robot for Safe Position...");
                         while (GetPlcDeviceBit("M101") != 0) await Task.Delay(100);
                     }
-                    
-                        await RunMotorAndCollectReadingsAsync(sortedProbeMeasurements, mode);
-                    
+
+                    await RunMotorAndCollectReadingsAsync(sortedProbeMeasurements, mode);
+
                     await HandleProcedurePostProcessingAsync(mode, sortedProbeMeasurements, firstMeasurementCycle);
                 }
             }
@@ -311,137 +303,6 @@ namespace EVMS.Service
             }
         }
 
-        // ** Separate measurement function for external toggle to run cycle **
-        //public async Task RunMeasurementCycleAsync()
-        //{
-        //    var autoList = _dataStorageService.GetActiveBit();
-        //    var autoControl = autoList?.FirstOrDefault(c =>
-        //        string.Equals(c.Description, "Auto/Manual", StringComparison.OrdinalIgnoreCase));
-        //    int bitValue = GetPlcDeviceBit("X14"); // Auto/Manual PLC bit
-
-        //    if (!(autoControl != null && (autoControl.Bit == bitValue)))
-        //    {
-        //        if (autoControl?.Bit == 0 && bitValue == 1)
-        //            await NotifyOnUIAsync("Software is in Manual mode. Please switch PLC to Manual mode.");
-        //        else if (autoControl?.Bit == 1 && bitValue == 0)
-        //            await NotifyOnUIAsync("Software is in Auto mode. Change PLC to Auto mode.");
-        //        return;
-        //    }
-
-        //    var sortedProbeMeasurements = _orderedProbeMeasurements;
-        //    bool firstMeasurementCycle = true;
-
-        //    do
-        //    {
-        //        // Only check _continueMeasurement before starting a new cycle
-        //        if (!firstMeasurementCycle && !_continueMeasurement)
-        //        {
-        //            await NotifyOnUIAsync("Stop requested. Finishing current cycle before stopping...");
-        //            break; // exit loop after finishing current cycle
-        //        }
-
-        //        // Clear previous readings if not the first cycle
-        //        if (!firstMeasurementCycle)
-        //        {
-        //            foreach (var probe in sortedProbeMeasurements)
-        //                probe.Readings.Clear();
-        //        }
-
-        //        // Wait for robot safe position if not the first cycle
-        //        if (!firstMeasurementCycle)
-        //        {
-        //            await NotifyOnUIAsync("Waiting for robot to reach safe position...");
-        //            while (GetPlcDeviceBit("M301") != 0) await Task.Delay(100);
-        //            await NotifyOnUIAsync("Robot is in safe position. Ready to load next part.");
-        //        }
-
-        //        // ===== Start Cycle =====
-        //        if (firstMeasurementCycle)
-        //        {
-        //            if (autoControl?.Bit == 0)
-        //            {
-        //                //await NotifyOnUIAsync("Place part for measurement...");
-        //                //await WaitForValidProbeReadingAsync("100AY08P42");
-
-        //                //await NotifyOnUIAsync("PRESS START SWITCH TO START MEASUREMENT");
-        //                //while (GetPlcDeviceBit("X1") != 1) await Task.Delay(100);
-
-        //                //await NotifyOnUIAsync("START BUTTON PRESSED");
-        //            }
-        //            else
-        //            {
-        //                if (!_continueMeasurement) break;
-
-        //                await NotifyOnUIAsync("Press Robo start button to start measurement.");
-        //                while (GetPlcDeviceBit("M20") != 1 && _continueMeasurement) await Task.Delay(100);
-
-        //                if (!_continueMeasurement) break;
-
-        //                await NotifyOnUIAsync("Robo start button Pressed");
-        //                SetPlcDevice("M301", 1);
-
-        //                await NotifyOnUIAsync("Waiting Robot to Load Part...");
-        //                if (_continueMeasurement)
-        //                    await WaitForValidProbeReadingAsync("100AY33P34");
-
-        //                if (!_continueMeasurement) break;
-
-        //                await NotifyOnUIAsync("Waiting Robot for Safe Position...");
-        //                while (GetPlcDeviceBit("M301") != 0 && _continueMeasurement) await Task.Delay(100);
-        //            }
-        //        }
-        //        else
-        //        {
-        //            if (!_continueMeasurement) break;
-
-        //            await NotifyOnUIAsync("Robo start button Pressed");
-        //            SetPlcDevice("M301", 1);
-
-        //            await NotifyOnUIAsync("Waiting Robot to Load Part...");
-        //            if (_continueMeasurement)
-        //                await WaitForValidProbeReadingAsync("100AY33P34");
-
-        //            if (!_continueMeasurement) break;
-
-        //            await NotifyOnUIAsync("Waiting Robot for Safe Position...");
-        //            while (GetPlcDeviceBit("M301") != 0 && _continueMeasurement) await Task.Delay(100);
-        //        }
-
-        //        /// Only run motor if measurement is ON
-        //        if (_continueMeasurement)
-        //        {
-        //            await RunMotorAndCollectReadingsAsync(sortedProbeMeasurements, ProcedureMode.Measurement);
-        //        }
-
-
-        //        var probeMeasurementByNameMeasurement = sortedProbeMeasurements
-        //            .Where(pm => !string.IsNullOrEmpty(pm.Name))
-        //            .ToDictionary(pm => pm.Name!);
-
-        //        HandleMeasurementStage(probeMeasurementByNameMeasurement, _currentPartCode);
-
-        //        var readingsSummary = string.Join("; ",
-        //            sortedProbeMeasurements.Select(p =>
-        //                $"{p.Name}: {string.Join(",", p.Readings)}"));
-
-        //        await NotifyOnUIAsync($"Cycle completed. Probe readings: {readingsSummary}");
-
-        //        firstMeasurementCycle = false;
-
-        //        await NotifyOnUIAsync("Ready for next cycle.");
-
-        //    } while (ShouldContinueMeasurement());
-
-        //    // ===== Stop & Reset =====
-        //    await NotifyOnUIAsync("Measurement cycle stopped by user.");
-
-        //    SetPlcDevice("M10", 0);   // Motor OFF
-        //                              //SetPlcDevice("M20", 0);   // Robo Start OFF if needed
-        //    SetPlcDevice("M300", 0);  // Measurement Complete OFF
-        //                              //SetPlcDevice("M301", 0);  // Robot Safe Position Reset if needed
-
-        //    MeasurementStopped?.Invoke();
-        //}
 
         // Helper should continue method
 
@@ -493,7 +354,7 @@ namespace EVMS.Service
                 {
                     if (autoControl?.Bit == 0)
                     {
-                       
+
 
                         await WaitForValidProbeReadingAsync("100AY33P34");
 
@@ -526,7 +387,7 @@ namespace EVMS.Service
 
                         if (!_continueMeasurement) break;
 
-                   
+
                         await NotifyOnUIAsync("Waiting for Robot to Safe Position...");
                         while (GetPlcDeviceBit("M301") != 0 && _continueMeasurement) await Task.Delay(100);
                     }
@@ -542,33 +403,33 @@ namespace EVMS.Service
 
                         await NotifyOnUIAsync("Part removed..");
 
-                            if (!_continueMeasurement)
-                                break;
+                        if (!_continueMeasurement)
+                            break;
 
-                            // 1️⃣ Ask operator to load the part
-                            await NotifyOnUIAsync("Please load part...");
-                            await WaitForValidProbeReadingAsync("100AY33P34");
+                        // 1️⃣ Ask operator to load the part
+                        await NotifyOnUIAsync("Please load part...");
+                        await WaitForValidProbeReadingAsync("100AY33P34");
 
-                            if (!_continueMeasurement)
-                                break;
+                        if (!_continueMeasurement)
+                            break;
 
-                            // 2️⃣ Ask operator to press start switch
-                            await NotifyOnUIAsync("Part detected. Press Start switch to begin measurement.");
-                            while (GetPlcDeviceBit("X1") != 1 && _continueMeasurement)
-                                await Task.Delay(100);
+                        // 2️⃣ Ask operator to press start switch
+                        await NotifyOnUIAsync("Part detected. Press Start switch to begin measurement.");
+                        while (GetPlcDeviceBit("X1") != 1 && _continueMeasurement)
+                            await Task.Delay(100);
 
-                            if (!_continueMeasurement)
-                                break;
+                        if (!_continueMeasurement)
+                            break;
 
-                            await NotifyOnUIAsync("Starting measurement..");
+                        await NotifyOnUIAsync("Starting measurement..");
 
-                          
-                            // 6️⃣ Wait for part to be removed
-                           
-                            // 7️⃣ Small delay before next cycle
-                            //await Task.Delay(1000);
 
-                        } 
+                        // 6️⃣ Wait for part to be removed
+
+                        // 7️⃣ Small delay before next cycle
+                        //await Task.Delay(1000);
+
+                    }
 
                     else
                     {
@@ -615,30 +476,30 @@ namespace EVMS.Service
         }
 
 
-        public async Task WaitForValidProbeReadingAsync(string targetProbeId, bool suppressDetectedMessage = false)
+        public async Task WaitForValidProbeReadingAsync(string targetParameterName, bool suppressDetectedMessage = false)
         {
             await NotifyOnUIAsync("Initializing probe readings...");
 
-            _plcProbeService.StartLiveReading(100);
+            _plcProbeService.StartLiveReading(100);  // ✅ Start serial reading
 
             bool partDetected = false;
             bool messageFired = false;
 
             if (!suppressDetectedMessage)
+            {
                 if (GetPlcDeviceBit("X14") == 1)
                     await NotifyOnUIAsync("Waiting the robo to load part");
                 else
                     await NotifyOnUIAsync("Load the part");
+            }
+
             while (!partDetected)
             {
                 await Task.Delay(100);
 
-                var probeVal = _collectedReadings
-                    .Where(r => r.ProbeId == targetProbeId)
-                    .Select(r => r.Value)
-                    .LastOrDefault();
-
-                bool partPresent = Math.Abs(probeVal) > 0.100;
+                // ✅ CHANGE: Direct dictionary access
+                double? probeVal = _plcProbeService.GetProbeValue(targetParameterName);
+                bool partPresent = Math.Abs(probeVal ?? 0) > 0.100;
 
                 if (partPresent && !messageFired)
                 {
@@ -653,21 +514,13 @@ namespace EVMS.Service
                     if (!suppressDetectedMessage)
                         await NotifyOnUIAsync("Part removed. Waiting for new part...");
                 }
-                else if (!partPresent && !messageFired)
-                {
-                    if (!suppressDetectedMessage)
-                        if (GetPlcDeviceBit("X14") == 1)
-                            await NotifyOnUIAsync("Waiting the robo to load part");
-                        else
-                            await NotifyOnUIAsync("Load the part");
-                }
             }
 
             _plcProbeService.StopLiveReading();
-
             if (!suppressDetectedMessage)
                 await NotifyOnUIAsync("Values updated...");
         }
+
 
 
         // 🆕 Added Helper for Manual Mode (wait until part removed)
@@ -709,80 +562,80 @@ namespace EVMS.Service
 
         private async Task RunMotorAndCollectReadingsAsync(List<ProbeMeasurement> sortedProbeMeasurements, ProcedureMode mode)
         {
-            
-            
-            SetPlcDevice("M10", 1);
-            NotifyStatus("Collecting the readings...");
-
-            // Wait for PLC ready signal
-            while (GetPlcDeviceBit("X0") != 1)
-                await Task.Delay(100);
-
-            SetPlcDevice("M14", 1);
-
-            // Clear old data once
-            while (_collectedReadings.TryDequeue(out _)) { }
-
-            // Start live reading once
-            _plcProbeService.StartLiveReading();
-
-            for (int i = 0; i < ArraySize; i++)
+            try
             {
-                if (Abort)
+                NotifyStatus("Collecting probe readings...");
+
+                // Reset previous data
+                foreach (var pm in sortedProbeMeasurements)
+                    pm.Readings.Clear();
+
+                while (_collectedReadings.TryDequeue(out _)) { }
+
+                _plcProbeService.StartLiveReading(15);
+
+                int completed = 0;
+
+                while (!Abort)
                 {
-                    MessageBox.Show("Operation aborted.", "Abort", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    break;
+                    // DEQUEUE from probe service
+                    while (_plcProbeService.CollectedReadings.TryDequeue(out var reading))
+                    {
+                        if (_probeMeasurements.TryGetValue(reading.ParameterName, out var pm))
+                        {
+                            if (pm.Readings.Count < ArraySize)
+                            {
+                                pm.Readings.Add(reading.Value);
+
+                                if (pm.Readings.Count == ArraySize)
+                                    completed++;
+                            }
+                        }
+                    }
+
+                    if (completed >= sortedProbeMeasurements.Count)
+                        break;
+
+                    await Task.Delay(10);
                 }
 
-                await Task.Delay(15);
+                _plcProbeService.StopLiveReading();
+                NotifyStatus("Live reading stopped. Processing results...");
 
-                while (_collectedReadings.TryDequeue(out var reading))
+                // POST-PROCESSING
+                foreach (var pm in sortedProbeMeasurements)
                 {
-                    if (_probeMeasurements.TryGetValue(reading.ProbeId, out var pm))
+                    if (pm.Readings.Count > 0)
                     {
-                        if (pm.Readings.Count < ArraySize)
-                        {
-                            pm.Readings.Add(reading.Value);
-                        }
+                        var clean = pm.Readings.Where(x => !double.IsNaN(x)).ToList();
+                        pm.MinValue = clean.Min();
+                        pm.MaxValue = clean.Max();
+                    }
+                    else
+                    {
+                        pm.MinValue = pm.MaxValue = 0;
                     }
                 }
 
-                if (_probeMeasurements.Values.All(pm => pm.Readings.Count >= ArraySize))
-                {
-                    // All probes have enough readings, stop the loop
-                    break;
-                }
+                var probeMeasurementByNameMeasurement = sortedProbeMeasurements
+                   .Where(pm => !string.IsNullOrEmpty(pm.Name))
+                   .ToDictionary(pm => pm.Name!);
+                NotifyStatus("Probe data collection completed successfully.");
+                // await HandleProcedurePostProcessingAsync(ProcedureMode.Mastering, _orderedProbeMeasurements, true);
+                HandleMeasurementStage(probeMeasurementByNameMeasurement, _currentPartCode);
+
+
             }
-
-            // Stop reading
-            _plcProbeService.StopLiveReading();
-            SetPlcDevice("M14", 0);
-            SetPlcDevice("M10", 0);
-
-            // Process readings for each probe
-            foreach (var pm in sortedProbeMeasurements)
+            catch (Exception ex)
             {
-                // Clean up readings
-                var validReadings = pm.Readings
-                    .Where(r => !double.IsNaN(r))
-                    .OrderBy(r => r) // sort values (ascending)
-                    .ToList();
-
-                if (validReadings.Count > 0)
-                {
-                    pm.MaxValue = validReadings.Max();
-                    pm.MinValue = validReadings.Min(); // always calculate min
-                }
-                else
-                {
-                    pm.MaxValue = 0;
-                    pm.MinValue = 0;
-                }
-
+                NotifyStatus($"Error during probe reading: {ex.Message}");
+                _plcProbeService.StopLiveReading();
             }
-
-            NotifyStatus("Reading collection completed.");
         }
+
+
+
+
 
         private async Task HandleProcedurePostProcessingAsync(ProcedureMode mode, List<ProbeMeasurement> probeMeasurements, bool isFirstMeasurementCycle)
         {
@@ -792,11 +645,16 @@ namespace EVMS.Service
                     await NotifyOnUIAsync("Mastering Completed. Press Enter to Inspect the Master");
 
                     var masterValues = probeMeasurements
-                        .Where(pm => !string.IsNullOrEmpty(pm.Name))
-                        .ToDictionary(pm => pm.Name!, pm => pm.MaxValue);
+                             .Where(pm => !string.IsNullOrEmpty(pm.ProbeId))
+                             .ToDictionary(
+                                 pm => pm.ProbeId!,
+                                 pm => pm.MaxValue);   // only Max
+
+                    OnCalculatedValuesReady(masterValues);   // OK: Dictionary<string, double>
+
+
 
                     OnCalculatedValuesReady(masterValues);
-
                     await HandleMasteringStageAsync();
                     break;
 
@@ -840,7 +698,7 @@ namespace EVMS.Service
             }
         }
 
-        
+
 
 
 
@@ -853,22 +711,26 @@ namespace EVMS.Service
                 return;
             }
 
-            foreach (var pm in _probeMeasurements.Values)
-            {
-                _dataStorageService.SaveProbeReadings(
-                    _dataStorageService.GetProbeInstallByPartNumber(_currentPartCode),
-                    _currentPartCode,
-                    new Dictionary<string, double> { { pm.ProbeId, pm.MaxValue } }
-                );
-            }
+            var effectiveByName = BuildEffectiveProbesByName(_orderedProbeMeasurements)
+     .ToDictionary(k => k.Key, v => v.Value);
+
+            // key = ProbeId, value = (Min, Max)
+            var masterValues = effectiveByName.ToDictionary(
+                kvp => kvp.Value.ProbeId,
+                kvp => (Min: kvp.Value.MinValue,
+                        Max: kvp.Value.MaxValue));
+
+            _dataStorageService.SaveProbeReadings(
+                _dataStorageService.GetProbeInstallByPartNumber(_currentPartCode),
+                _currentPartCode,
+                masterValues);
 
             MasterComplete = true;
-            var resultsWithStatus = _probeMeasurements.Values
-                .Where(pm => !string.IsNullOrEmpty(pm.Name))
+            var resultsWithStatus = effectiveByName.Values
                 .ToDictionary(
-                    pm => pm.Name!,
-                    pm => new ParameterResult { Value = pm.MaxValue, IsOk = true } // assuming OK on mastering
-                );
+                    pm => pm.Name!,  // ✅ Display name for UI
+                    pm => new ParameterResult { Value = pm.MaxValue, IsOk = true });
+
             OnCalculatedValuesWithStatusReady(resultsWithStatus);
 
             // Determine current mode
@@ -898,18 +760,22 @@ namespace EVMS.Service
 
         private void HandleMasterInspectionStage(Dictionary<string, ProbeMeasurement> probeMeasurements, string partCode)
         {
+            var probeMeasurementByName =
+                                         BuildEffectiveProbesByName(probeMeasurements.Values.ToList());
             var dbRefList = _dataStorageService.GetMasterProbeRef(_currentPartCode);
 
             var mode = ProcedureMode.MasterInspection;
 
             // ✅ FIXED: Prevent "duplicate key" crash
             var dbRefDict = dbRefList
-                .GroupBy(x => x.Name)
-                .ToDictionary(g => g.Key, g => g.First().Value);
+                 .GroupBy(x => x.Name)
+                 .ToDictionary(
+                     g => g.Key,
+                     g => (Min: g.First().Min, Max: g.First().Max));
 
             // Fetch master part configurations including tolerances
             var masterVals = _dataStorageService.GetMasterReadingByPart(partCode);
-           // var masterp = _dataStorageService.GetPartConfig(partCode);
+            // var masterp = _dataStorageService.GetPartConfig(partCode);
 
             // 17 measurement parameters in order
 
@@ -941,7 +807,7 @@ namespace EVMS.Service
             {
                 try
                 {
-                    double val = CalculateProbeValue(pInfo, probeMeasurements, dbRefDict, mode);
+                    double val = CalculateProbeValue(pInfo, probeMeasurementByName, dbRefDict, mode);
                     calculatedValues[pInfo.Name] = val;
                 }
                 catch
@@ -999,8 +865,10 @@ namespace EVMS.Service
             var dbRefList = _dataStorageService.GetMasterProbeRef(partCode);
             var mode = ProcedureMode.Measurement;
             var dbRefDict = dbRefList
-                .GroupBy(x => x.Name)
-                .ToDictionary(g => g.Key, g => g.First().Value);
+                 .GroupBy(x => x.Name)
+                 .ToDictionary(
+                     g => g.Key,
+                     g => (Min: g.First().Min, Max: g.First().Max));
 
             // Load master part configurations (nominal values and tolerances)
             var masterVals = _dataStorageService.GetPartConfig(partCode);
@@ -1065,12 +933,14 @@ namespace EVMS.Service
                 double minAllowed = masterVal - tolMinus;
                 double maxAllowed = masterVal + tolPlus;
 
-                bool isOk = !double.IsNaN(val) && val >= minAllowed && val <= maxAllowed;
+                double FinalResult = val + masterVal;
+
+                bool isOk = !double.IsNaN(FinalResult) && FinalResult >= minAllowed && FinalResult <= maxAllowed;
                 if (!isOk) overallOk = false;
 
                 resultsWithStatus[paramName] = new ParameterResult
                 {
-                    Value = Math.Abs(val),
+                    Value = Math.Abs(FinalResult),
                     IsOk = isOk
                 };
             }
@@ -1082,99 +952,100 @@ namespace EVMS.Service
 
 
 
-            int bitValue = GetPlcDeviceBit("X14"); // Auto/Manual PLC bit
 
-            var autoList = _dataStorageService.GetActiveBit();
+            //int bitValue = GetPlcDeviceBit("X14"); // Auto/Manual PLC bit
 
-            var shControl = autoList.FirstOrDefault(c => c.Code == "SH");
-            var sroControl = autoList.FirstOrDefault(c => c.Code == "SRO");
-            var stdiControl = autoList.FirstOrDefault(c => c.Code == "STDI");
-            var gdControl = autoList.FirstOrDefault(c => c.Code == "GD");
+            //var autoList = _dataStorageService.GetActiveBit();
 
-            try
-            {
-                if (bitValue == 1) // Auto mode only
-                {
-                    int ngCount = resultsWithStatus.Count(r => !r.Value.IsOk);
+            //var shControl = autoList.FirstOrDefault(c => c.Code == "SH");
+            //var sroControl = autoList.FirstOrDefault(c => c.Code == "SRO");
+            //var stdiControl = autoList.FirstOrDefault(c => c.Code == "STDI");
+            //var gdControl = autoList.FirstOrDefault(c => c.Code == "GD");
 
-                    // If any NG exists, pulse signal M13
-                    if (ngCount > 0)
-                    {
-                        SetPlcDevice("M13", 1); // Turn ON
-                        Thread.Sleep(10);        // 5 ms pulse (adjust as needed)
-                        SetPlcDevice("M13", 0); // Turn OFF
-                    }
+            //try
+            //{
+            //    if (bitValue == 1) // Auto mode only
+            //    {
+            //        int ngCount = resultsWithStatus.Count(r => !r.Value.IsOk);
+
+            //        // If any NG exists, pulse signal M13
+            //        if (ngCount > 0)
+            //        {
+            //            SetPlcDevice("M13", 1); // Turn ON
+            //            Thread.Sleep(10);        // 5 ms pulse (adjust as needed)
+            //            SetPlcDevice("M13", 0); // Turn OFF
+            //        }
 
 
-                    // ---- Case 1: More than 2 NGs => Direct general rejection ----
-                    if (ngCount > 2)
-                    {
-                        SetPlcDevice("M302", 1); // General rejection
-                        return; // stop checking further
-                    }
+            //        // ---- Case 1: More than 2 NGs => Direct general rejection ----
+            //        if (ngCount > 2)
+            //        {
+            //            SetPlcDevice("M302", 1); // General rejection
+            //            return; // stop checking further
+            //        }
 
-                    // ---- Case 2: 1 or 2 NGs => check specific conditions ----
-                    bool anyReject = false;
+            //        // ---- Case 2: 1 or 2 NGs => check specific conditions ----
+            //        bool anyReject = false;
 
-                    // ---- Seat Height ----
-                    if (resultsWithStatus.ContainsKey("Seat Height") &&
-                        !resultsWithStatus["Seat Height"].IsOk &&
-                        shControl != null && shControl.Bit == 1)
-                    {
-                        SetPlcDevice("M305", 1); // Seat Height rejection
-                        anyReject = true;
-                    }
+            //        // ---- Seat Height ----
+            //        if (resultsWithStatus.ContainsKey("Seat Height") &&
+            //            !resultsWithStatus["Seat Height"].IsOk &&
+            //            shControl != null && shControl.Bit == 1)
+            //        {
+            //            SetPlcDevice("M305", 1); // Seat Height rejection
+            //            anyReject = true;
+            //        }
 
-                    // ---- Seat Runout ----
-                    if (resultsWithStatus.ContainsKey("Seat Runout") &&
-                        !resultsWithStatus["Seat Runout"].IsOk &&
-                        sroControl != null && sroControl.Bit == 1)
-                    {
-                        SetPlcDevice("M303", 1); // Seat Runout rejection
-                        anyReject = true;
-                    }
+            //        // ---- Seat Runout ----
+            //        if (resultsWithStatus.ContainsKey("Seat Runout") &&
+            //            !resultsWithStatus["Seat Runout"].IsOk &&
+            //            sroControl != null && sroControl.Bit == 1)
+            //        {
+            //            SetPlcDevice("M303", 1); // Seat Runout rejection
+            //            anyReject = true;
+            //        }
 
-                    // ---- Stem Diameter ----
-                    if (((resultsWithStatus.ContainsKey("Stem Dia Near Groove") &&
-                          !resultsWithStatus["Stem Dia Near Groove"].IsOk) ||
-                         (resultsWithStatus.ContainsKey("Stem Dia Near Undercut") &&
-                          !resultsWithStatus["Stem Dia Near Undercut"].IsOk)) &&
-                        stdiControl != null && stdiControl.Bit == 1)
-                    {
-                        SetPlcDevice("M304", 1); // Stem Diameter rejection
-                        anyReject = true;
-                    }
+            //        // ---- Stem Diameter ----
+            //        if (((resultsWithStatus.ContainsKey("Stem Dia Near Groove") &&
+            //              !resultsWithStatus["Stem Dia Near Groove"].IsOk) ||
+            //             (resultsWithStatus.ContainsKey("Stem Dia Near Undercut") &&
+            //              !resultsWithStatus["Stem Dia Near Undercut"].IsOk)) &&
+            //            stdiControl != null && stdiControl.Bit == 1)
+            //        {
+            //            SetPlcDevice("M304", 1); // Stem Diameter rejection
+            //            anyReject = true;
+            //        }
 
-                    // ---- Groove ----
-                    //if (((resultsWithStatus.ContainsKey("Groove Diameter") &&
-                    //      !resultsWithStatus["Groove Diameter"].IsOk) ||
-                    //     (resultsWithStatus.ContainsKey("Groove Position") &&
-                    //      !resultsWithStatus["Groove Position"].IsOk)) &&
-                    //    gdControl != null && gdControl.Bit == 1)
-                    //{
-                    //    SetPlcDevice("M307", 1); // Groove rejection
-                    //    anyReject = true;
-                    //}
+            //        // ---- Groove ----
+            //        //if (((resultsWithStatus.ContainsKey("Groove Diameter") &&
+            //        //      !resultsWithStatus["Groove Diameter"].IsOk) ||
+            //        //     (resultsWithStatus.ContainsKey("Groove Position") &&
+            //        //      !resultsWithStatus["Groove Position"].IsOk)) &&
+            //        //    gdControl != null && gdControl.Bit == 1)
+            //        //{
+            //        //    SetPlcDevice("M307", 1); // Groove rejection
+            //        //    anyReject = true;
+            //        //}
 
-                    // ---- Final decision ----
-                    if (anyReject)
-                    {
-                        SetPlcDevice("M302", 1); // General rejection (any single failure)
-                    }
-                    else
-                    {
-                        SetPlcDevice("M306", 1); // All OK
-                    }
-                }
-                else
-                {
-                    Debug.WriteLine("Manual mode active. Skipping PLC rejection logic.");
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Error setting PLC bits for rejection: {ex.Message}");
-            }
+            //        // ---- Final decision ----
+            //        if (anyReject)
+            //        {
+            //            SetPlcDevice("M302", 1); // General rejection (any single failure)
+            //        }
+            //        else
+            //        {
+            //            SetPlcDevice("M306", 1); // All OK
+            //        }
+            //    }
+            //    else
+            //    {
+            //        Debug.WriteLine("Manual mode active. Skipping PLC rejection logic.");
+            //    }
+            //}
+            //catch (Exception ex)
+            //{
+            //    Debug.WriteLine($"Error setting PLC bits for rejection: {ex.Message}");
+            //}
 
         }
 
@@ -1187,10 +1058,10 @@ namespace EVMS.Service
 
         // Calculation dispatcher adapted to accept both probeMeasurements and dbRefDict
         private double CalculateProbeValue(
-    ParameterInfo paramInfo,
-    Dictionary<string, ProbeMeasurement> probeMeasurements,
-    Dictionary<string, double> dbRefDict,
-    ProcedureMode mode)
+     ParameterInfo paramInfo,
+     Dictionary<string, ProbeMeasurement> probeMeasurements,
+     Dictionary<string, (double Min, double Max)> dbRefDict,
+     ProcedureMode mode)
         {
             if (paramInfo == null || string.IsNullOrWhiteSpace(paramInfo.Name))
                 return 0;
@@ -1201,461 +1072,453 @@ namespace EVMS.Service
 
             switch (paramName)
             {
-                case "datum to end":
-                    return CalculateDatumToEnd(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "overall length":
-                    return CalculateOverallLength(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "head diameter":
-                    return CalculateHeadDiameter(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "groove position":
-                    return CalculateGroovePosition(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "stem dia near groove":
-                    return CalculateStemDia1(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "stem dia near undercut":
-                    return CalculateStemDia2(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "groove diameter":
-                    return CalculateGrooveDia(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "straightness":
-                    return CalculateReducedDia(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "end face runout":
-                    return CalculateEFRO(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "seat height":
-                    return CalculateSeatHeight(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "seat runout":
-                    return CalculateSeatRunout(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "datum to groove":
-                    return CalculateDatumToGroove(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "ovality sdg":
-                    return CalculateOvalitySDG(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "ovality sdu":
-                    return CalculateOvalitySDU(probeMeasurements, dbRefDict, mode, signChange, compensation); 
-                case "ovality head":
-                    return CalculateOvalityHead(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "stem taper":
-                    return CalculateStemTaper(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "face runout":
-                    return CalculateFaceRunout(probeMeasurements, dbRefDict, mode, signChange, compensation);
-
-                default:
-                    throw new Exception($"Unknown probe DB name: {paramInfo.Name}");
+                case "step od1": return CalculateStepOD1(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                case "step od2": return CalculateStepOD2(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                case "od-1": return CalculateOD1(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                case "od-2": return CalculateOD2(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                case "od-3": return CalculateOD3(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                case "id-1": return CalculateID1(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                case "id-2": return CalculateID2(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                case "ol": return CalculateOverallLength(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                case "step runout-1": return CalculateStepRunout1(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                case "step runout-2": return CalculateStepRunout2(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                case "rn-1": return CalculateRN1(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                case "rn-2": return CalculateRN2(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                case "rn-3": return CalculateRN3(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                case "rn-4": return CalculateRN4(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                case "rn-5": return CalculateRN5(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                default: throw new Exception($"Unknown probe DB name: {paramInfo.Name}");
             }
         }
 
+        #region 🔥 MAIN PARAMETERS (Summing Live & Master from 2 Probes)
 
-        #region Calculation Methods
-        private double CalculateDatumToEnd(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
+        private double CalculateStepOD1(
+      Dictionary<string, ProbeMeasurement> probeMeasurements,
+      Dictionary<string, (double Min, double Max)> dbRefDict,
+      ProcedureMode mode,
+      int signChange,
+      double compensation)
         {
-            if (!probeMeasurements.TryGetValue("Datum to End", out var pm)) return double.NaN;
-            if (!dbRefDict.TryGetValue("Datum to End", out var dbRefValue)) dbRefValue = 0.0;
+            // Probe 1 + Probe 2
+            var p1 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 1" && p.Readings.Any());
+            var p2 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 2" && p.Readings.Any());
 
-            double current = pm.MaxValue;
-            double offset = current - dbRefValue;
-            double datumToEnd = Math.Abs(offset);
+            // Use stored reference Max values (or Min, depending on your spec)
+            double PM1 = dbRefDict.TryGetValue("STEP OD1", out var ref1) ? ref1.Max : 0.0;
+            double PM2 = dbRefDict.TryGetValue("STEP RUNOUT-1", out var ref2) ? ref2.Max : 0.0;
 
-            if (offset > 0)
-                datumToEnd += datumToEnd * 0.33;
-            else if (offset < 0)
-                datumToEnd += datumToEnd * 0.40;
+            if (p1 == null && p2 == null) return double.NaN;
 
+            double liveValue = 0, masterValue = 0;
+            if (p1 != null) liveValue += p1.Readings.Max();
+            if (p2 != null) liveValue += p2.Readings.Max();
+
+            double dbRefValue = PM1 + PM2;
+            double offset = liveValue - dbRefValue;
             double result;
 
             if (mode == ProcedureMode.Measurement)
             {
-                result = (signChange == 1)
-                    ? pm.MasterValue - datumToEnd
-                    : pm.MasterValue + datumToEnd;
-
-                if (compensation != 0)
-                    result += compensation;
+                result = (signChange == 1) ? masterValue - offset : masterValue + offset;
+                if (compensation != 0) result += compensation;
             }
             else
             {
-                result = pm.MasterValue + datumToEnd;
+                result = masterValue + offset;
             }
 
-            return Math.Round(result, 4);
+            return Math.Round(result, 3);
         }
 
-        private double CalculateOverallLength(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
+        private double CalculateStepOD2(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
         {
-            if (!probeMeasurements.TryGetValue("Overall Length", out var pm)) return double.NaN;
-            if (!dbRefDict.TryGetValue("Overall Length", out var dbRefValue)) dbRefValue = 0.0;
+            // Probe 9 + Probe 10
 
-            double offset = pm.MaxValue - dbRefValue;
+            var p1 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 9" && p.Readings.Any());
+            var p2 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 10" && p.Readings.Any());
+
+            double PM1 = dbRefDict.TryGetValue("STEP OD2", out var refValue) ? refValue.Max : 0.0;
+            double PM2 = dbRefDict.TryGetValue("STEP RUNOUT-2", out var refValue1) ? refValue.Max : 0.0;
+
+            double dbRefValue = PM1 + PM2;
+            if (p1 == null && p2 == null) return double.NaN;
+
+            double liveValue = 0, masterValue = 0;
+            if (p1 != null)
+            {
+                liveValue += p1.Readings.Max();
+            }
+            if (p2 != null)
+            {
+                liveValue += p2.Readings.Max();
+            }
+
+            double offset = liveValue - dbRefValue;
             double result;
 
             if (mode == ProcedureMode.Measurement)
             {
-                result = (signChange == 1)
-                    ? pm.MasterValue - offset
-                    : pm.MasterValue + offset;
-
-                if (compensation != 0)
-                    result += compensation;
+                result = (signChange == 1) ? masterValue - offset : masterValue + offset;
+                if (compensation != 0) result += compensation;
             }
             else
             {
-                result = pm.MasterValue + offset;
+                result = masterValue + offset;
             }
-
-            return Math.Round(result, 3);
+            return Math.Abs(Math.Round(result, 3));
         }
 
-        private double CalculateHeadDiameter(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
+        private double CalculateOD1(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
         {
-            if (!probeMeasurements.TryGetValue("Head Diameter", out var pm)) return double.NaN;
-            if (!dbRefDict.TryGetValue("Head Diameter", out var dbRefValue)) dbRefValue = 0.0;
+            // Probe 3 + Probe 4
+            var p1 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 3" && p.Readings.Any());
+            var p2 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 4" && p.Readings.Any());
 
-            double offset = pm.MaxValue - dbRefValue;
+            double PM1 = dbRefDict.TryGetValue("OD-1", out var refValue) ? refValue.Max : 0.0;
+            double PM2 = dbRefDict.TryGetValue("RN-1", out var refValue1) ? refValue.Max : 0.0;
+
+            if (p1 == null && p2 == null) return double.NaN;
+
+            double liveValue = 0, masterValue = 0;
+            if (p1 != null)
+            {
+                liveValue += p1.Readings.Max();
+            }
+            if (p2 != null)
+            {
+                liveValue += p2.Readings.Max();
+            }
+
+            double dbRefValue = PM1 + PM2;
+            double offset = liveValue - dbRefValue;
             double result;
 
             if (mode == ProcedureMode.Measurement)
             {
-                result = (signChange == 1)
-                    ? pm.MasterValue - offset
-                    : pm.MasterValue + offset;
-
-                if (compensation != 0)
-                    result += compensation;
+                result = (signChange == 1) ? masterValue - offset : masterValue + offset;
+                if (compensation != 0) result += compensation;
             }
             else
             {
-                result = pm.MasterValue + offset;
+                result = masterValue + offset;
             }
-
-            return Math.Round(result, 3);
+            return Math.Abs(Math.Round(result, 3));
         }
 
-        private double CalculateGroovePosition(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
+        private double CalculateOD2(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
         {
-            if (!probeMeasurements.TryGetValue("Groove Position", out var pm)) return double.NaN;
-            if (!dbRefDict.TryGetValue("Groove Position", out var dbRefValue)) dbRefValue = 0.0;
+            // Probe 5 + Probe 6
+            var p1 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 5" && p.Readings.Any());
+            var p2 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 6" && p.Readings.Any());
+            double MP1 = dbRefDict.TryGetValue("OD-2", out var refValue) ? refValue.Max : 0.0;
+            double MP2 = dbRefDict.TryGetValue("RN-2", out var refValue1) ? refValue.Max : 0.0;
 
-            double offset = pm.MaxValue - dbRefValue;
+            if (p1 == null && p2 == null) return double.NaN;
+
+            double liveValue = 0, masterValue = 0;
+            if (p1 != null) { liveValue += p1.Readings.Max(); }
+            if (p2 != null) { liveValue += p2.Readings.Max(); }
+
+            double dbRefValue = MP1 + MP2;
+            double offset = liveValue - dbRefValue;
             double result;
 
             if (mode == ProcedureMode.Measurement)
             {
-                result = (signChange == 1)
-                    ? pm.MasterValue - offset
-                    : pm.MasterValue + offset;
-
-                if (compensation != 0)
-                    result += compensation;
+                result = (signChange == 1) ? masterValue - offset : masterValue + offset;
+                if (compensation != 0) result += compensation;
             }
             else
             {
-                result = pm.MasterValue + offset;
+                result = masterValue + offset;
             }
-
-            return Math.Round(result, 3);
+            return Math.Abs(Math.Round(result, 3));
         }
 
-        private double CalculateStemDia1(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
+        private double CalculateOD3(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
         {
-            if (!probeMeasurements.TryGetValue("Stem Dia Near Groove", out var pm)) return double.NaN;
-            if (!dbRefDict.TryGetValue("Stem Dia Near Groove", out var dbRefValue)) dbRefValue = 0.0;
+            // Probe 7 + Probe 8
+            var p1 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 7" && p.Readings.Any());
+            var p2 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 8" && p.Readings.Any());
 
-            double offset = pm.MaxValue - dbRefValue;
+            double MP1 = dbRefDict.TryGetValue("OD-3", out var refValue) ? refValue.Max : 0.0;
+            double MP2 = dbRefDict.TryGetValue("RN-3", out var refValue1) ? refValue.Max : 0.0;
+
+            if (p1 == null && p2 == null) return double.NaN;
+
+            double liveValue = 0, masterValue = 0;
+            if (p1 != null) { liveValue += p1.Readings.Max(); }
+            if (p2 != null) { liveValue += p2.Readings.Max(); }
+
+            double dbRefValue = MP1 + MP2;
+            double offset = liveValue - dbRefValue;
             double result;
 
             if (mode == ProcedureMode.Measurement)
             {
-                result = (signChange == 1)
-                    ? pm.MasterValue - offset
-                    : pm.MasterValue + offset;
-
-                if (compensation != 0)
-                    result += compensation;
+                result = (signChange == 1) ? masterValue - offset : masterValue + offset;
+                if (compensation != 0) result += compensation;
             }
             else
             {
-                result = pm.MasterValue + offset;
+                result = masterValue + offset;
             }
-
-            return Math.Round(result, 3);
+            return Math.Abs(Math.Round(result, 3));
         }
 
-        private double CalculateStemDia2(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
+        private double CalculateID1(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
         {
-            if (!probeMeasurements.TryGetValue("Stem Dia Near Undercut", out var pm)) return double.NaN;
-            if (!dbRefDict.TryGetValue("Stem Dia Near Undercut", out var dbRefValue)) dbRefValue = 0.0;
+            // Probe 11 + Probe 12
+            var p1 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 11" && p.Readings.Any());
+            var p2 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 12" && p.Readings.Any());
 
-            double offset = pm.MaxValue - dbRefValue;
+            double MP1 = dbRefDict.TryGetValue("ID-1", out var refValue) ? refValue.Max : 0.0;
+            double MP2 = dbRefDict.TryGetValue("RN-4", out var refValue1) ? refValue.Max : 0.0;
+            if (p1 == null && p2 == null) return double.NaN;
+
+            double liveValue = 0, masterValue = 0;
+            if (p1 != null) { liveValue += p1.Readings.Max(); masterValue += p1.MasterValue; }
+            if (p2 != null) { liveValue += p2.Readings.Max(); masterValue += p2.MasterValue; }
+
+            double dbRefValue = MP1 + MP2;
+            double offset = liveValue - dbRefValue;
             double result;
 
             if (mode == ProcedureMode.Measurement)
             {
-                result = (signChange == 1)
-                    ? pm.MasterValue - offset
-                    : pm.MasterValue + offset;
-
-                if (compensation != 0)
-                    result += compensation;
+                result = (signChange == 1) ? masterValue - offset : masterValue + offset;
+                if (compensation != 0) result += compensation;
             }
             else
             {
-                result = pm.MasterValue + offset;
+                result = masterValue + offset;
             }
-
-            return Math.Round(result, 3);
+            return Math.Abs(Math.Round(result, 3));
         }
 
-        private double CalculateReducedDia(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
+        private double CalculateID2(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
         {
-            if (!probeMeasurements.TryGetValue("Straightness", out var pm)) return double.NaN;
-            if (!dbRefDict.TryGetValue("Straightness", out var dbRefValue)) dbRefValue = 0.0;
+            // Probe 13 + Probe 14
+            var p1 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 13" && p.Readings.Any());
+            var p2 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 14" && p.Readings.Any());
 
-            double offset = pm.MaxValue - dbRefValue;
-            if (offset < 0.001) offset = 0.001;
+            double MP1 = dbRefDict.TryGetValue("OD-2", out var refValue) ? refValue.Max : 0.0;
+            double MP2 = dbRefDict.TryGetValue("RN-5", out var refValue1) ? refValue.Max : 0.0;
+            if (p1 == null && p2 == null) return double.NaN;
 
+            double liveValue = 0, masterValue = 0;
+            if (p1 != null) { liveValue += p1.Readings.Max(); masterValue += p1.MasterValue; }
+            if (p2 != null) { liveValue += p2.Readings.Max(); masterValue += p2.MasterValue; }
+
+            double dbRefValue = MP1 + MP2;
+            double offset = liveValue - dbRefValue;
             double result;
 
             if (mode == ProcedureMode.Measurement)
             {
-                result = (signChange == 1)
-                    ? pm.MasterValue - offset
-                    : pm.MasterValue + offset;
-
-                if (compensation != 0)
-                    result += compensation;
+                result = (signChange == 1) ? masterValue - offset : masterValue + offset;
+                if (compensation != 0) result += compensation;
             }
             else
             {
-                result = pm.MasterValue + offset;
+                result = masterValue + offset;
             }
-
-            return Math.Round(result, 3);
+            return Math.Abs(Math.Round(result, 3));
         }
 
-        private double CalculateEFRO(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
+        private double CalculateOverallLength(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
         {
-            if (!probeMeasurements.TryGetValue("End Face Runout", out var pm)) return double.NaN;
-            if (!dbRefDict.TryGetValue("End Face Runout", out var dbRefValue)) dbRefValue = 0.0;
+            // Probe 15 (Single or + Probe 16 if needed, assumed single here as per list)
+            var p1 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 15" && p.Readings.Any());
+            // Assuming Probe 16 logic if applicable, otherwise just 15
 
-            double offset = pm.MaxValue - dbRefValue;
+            if (p1 == null) return double.NaN;
+
+            double liveValue = 0, masterValue = 0;
+            if (p1 != null) { liveValue += p1.Readings.Max(); masterValue += p1.MasterValue; }
+
+            double dbRefValue = dbRefDict.TryGetValue("OL", out var refValue) ? refValue.Max : 0.0;
+            double offset = liveValue - dbRefValue;
             double result;
 
             if (mode == ProcedureMode.Measurement)
             {
-                result = (signChange == 1)
-                    ? pm.MasterValue - offset
-                    : pm.MasterValue + offset;
-
-                if (compensation != 0)
-                    result += compensation;
+                result = (signChange == 1) ? masterValue - offset : masterValue + offset;
+                if (compensation != 0) result += compensation;
             }
             else
             {
-                result = pm.MasterValue + offset;
+                result = masterValue + offset;
             }
-
-            return Math.Round(result, 3);
+            return Math.Abs(Math.Round(result, 3));
         }
-
-        private double CalculateGrooveDia(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
-        {
-            if (!probeMeasurements.TryGetValue("Groove Diameter", out var pm)) return double.NaN;
-            if (!dbRefDict.TryGetValue("Groove Diameter", out var dbRefValue)) dbRefValue = 0.0;
-
-            double offset = pm.MaxValue - dbRefValue;
-            double result;
-
-            if (mode == ProcedureMode.Measurement)
-            {
-                result = (signChange == 1)
-                    ? pm.MasterValue - offset
-                    : pm.MasterValue + offset;
-
-                if (compensation != 0)
-                    result += compensation;
-            }
-            else
-            {
-                result = pm.MasterValue + offset;
-            }
-
-            return Math.Round(result, 3);
-        }
-
-        private double CalculateSeatHeight(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
-        {
-            double ol = CalculateOverallLength(probeMeasurements, dbRefDict, mode, signChange, compensation);
-            double de = CalculateDatumToEnd(probeMeasurements, dbRefDict, mode, signChange, compensation);
-
-            if (double.IsNaN(ol) || double.IsNaN(de)) return double.NaN;
-            return Math.Round(ol - de, 3);
-        }
-
-        private double CalculateSeatRunout(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
-        {
-            if (!probeMeasurements.TryGetValue("Datum to End", out var pm)) return double.NaN;
-
-            double seatRunout = pm.MaxValue - pm.MinValue;
-
-            if (mode == ProcedureMode.Measurement && compensation != 0)
-                seatRunout += compensation;
-
-            return Math.Round(seatRunout, 3);
-        }
-
-        private double CalculateDatumToGroove(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
-        {
-            double de = CalculateDatumToEnd(probeMeasurements, dbRefDict, mode, signChange, compensation);
-            double gp = CalculateGroovePosition(probeMeasurements, dbRefDict, mode, signChange, compensation);
-
-            if (double.IsNaN(de) || double.IsNaN(gp)) return double.NaN;
-            return Math.Round(de - gp, 3);
-        }
-
-        private double CalculateOvalitySDG(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
-        {
-            if (!probeMeasurements.TryGetValue("Stem Dia Near Groove", out var pm)) return double.NaN;
-
-            double result = pm.MaxValue - pm.MinValue;
-
-            if (mode == ProcedureMode.Measurement && compensation != 0)
-                result += compensation;
-
-            return Math.Round(result, 3);
-        }
-
-        private double CalculateOvalitySDU(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
-        {
-            if (!probeMeasurements.TryGetValue("Stem Dia Near Undercut", out var pm)) return double.NaN;
-
-            double result = pm.MaxValue - pm.MinValue;
-            if (result < 0.001) result = 0.001;
-
-            if (mode == ProcedureMode.Measurement && compensation != 0)
-                result += compensation;
-
-            return Math.Round(result, 3);
-        }
-
-        private double CalculateOvalityHead(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
-        {
-            if (!probeMeasurements.TryGetValue("Head Diameter", out var pm)) return double.NaN;
-
-            double ovality = pm.MaxValue - pm.MinValue;
-
-            if (mode == ProcedureMode.Measurement && compensation != 0)
-                ovality += compensation;
-
-            return Math.Round(ovality, 3);
-        }
-
-        private double CalculateStemTaper(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
-        {
-            double stemDia1 = CalculateStemDia1(probeMeasurements, dbRefDict, mode, signChange, compensation);
-            double stemDia2 = CalculateStemDia2(probeMeasurements, dbRefDict, mode, signChange, compensation);
-
-            if (double.IsNaN(stemDia1) || double.IsNaN(stemDia2))
-                return double.NaN;
-
-            double stemTaper = stemDia1 - stemDia2;
-            return Math.Round(stemTaper, 3);
-        }
-
-        private double CalculateFaceRunout(
-            Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, double> dbRefDict,
-            ProcedureMode mode,
-            int signChange,
-            double compensation)
-        {
-            if (!probeMeasurements.TryGetValue("Overall Length", out var pm)) return double.NaN;
-
-            double faceRunout = pm.MaxValue - pm.MinValue;
-
-            if (mode == ProcedureMode.Measurement && compensation != 0)
-                faceRunout += compensation;
-
-            return Math.Round(faceRunout, 3);
-        }
-
 
         #endregion
+
+        #region 🔥 RUNOUT PARAMETERS (Max - Min, uses individual probes)
+
+        private double CalculateStepRunout1(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
+        {
+            // Probe 2
+            var pm = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 2");
+            double PM2 = dbRefDict.TryGetValue("STEP RUNOUT-1", out var refValue1) ? refValue1.Min : 0.0;
+
+
+            if (pm?.Readings.Any() != true) return double.NaN;
+
+            double MaxReading = pm.Readings.Max();
+
+            double runout = MaxReading - PM2;
+
+            if (runout <= 0)
+            {
+                runout = 0.001;
+            }
+            if (mode == ProcedureMode.Measurement && compensation != 0) runout += compensation;
+            return Math.Abs(Math.Round(runout, 3));
+        }
+
+
+        private double CalculateStepRunout2(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
+        {
+            // Probe 2
+            var pm = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 10");
+            double PM2 = dbRefDict.TryGetValue("STEP RUNOUT-2", out var refValue1) ? refValue1.Min : 0.0;
+
+
+            if (pm?.Readings.Any() != true) return double.NaN;
+
+            double MaxReading = pm.Readings.Min();
+
+            double runout = MaxReading - PM2;
+
+            if (runout < 0)
+            {
+                runout = 0.001;
+            }
+            if (mode == ProcedureMode.Measurement && compensation != 0) runout += compensation;
+            return Math.Abs(Math.Round(runout, 3));
+
+        }
+
+        private double CalculateRN1(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
+        {
+            // Probe 4
+            var pm = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 4");
+            double PM2 = dbRefDict.TryGetValue("RN-1", out var refValue1) ? refValue1.Min : 0.0;
+
+
+            if (pm?.Readings.Any() != true) return double.NaN;
+
+            double MaxReading = pm.Readings.Min();
+
+            double runout = MaxReading - PM2;
+
+            if (runout < 0)
+            {
+                runout = 0.001;
+            }
+            if (mode == ProcedureMode.Measurement && compensation != 0) runout += compensation;
+            return Math.Abs(Math.Round(runout, 3));
+
+        }
+
+
+        private double CalculateRN2(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
+        {
+            // Probe 6
+            var pm = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 6");
+            double PM2 = dbRefDict.TryGetValue("RN-2", out var refValue1) ? refValue1.Min : 0.0;
+
+
+            if (pm?.Readings.Any() != true) return double.NaN;
+
+            double MaxReading = pm.Readings.Min();
+
+            double runout = MaxReading - PM2;
+
+            if (runout < 0)
+            {
+                runout = 0.001;
+            }
+            if (mode == ProcedureMode.Measurement && compensation != 0) runout += compensation;
+            return Math.Abs(Math.Round(runout, 3));
+
+        }
+
+        private double CalculateRN3(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
+        {
+            // Probe 8
+            var pm = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 8");
+            double PM2 = dbRefDict.TryGetValue("RN-3", out var refValue1) ? refValue1.Min : 0.0;
+
+
+            if (pm?.Readings.Any() != true) return double.NaN;
+
+            double MaxReading = pm.Readings.Min();
+
+            double runout = MaxReading - PM2;
+
+            if (runout < 0)
+            {
+                runout = 0.001;
+            }
+            if (mode == ProcedureMode.Measurement && compensation != 0) runout += compensation;
+            return Math.Abs(Math.Round(runout, 3));
+        }
+
+
+        private double CalculateRN4(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
+        {
+            // Probe 12
+            var pm = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 12");
+            double PM2 = dbRefDict.TryGetValue("RN-4", out var refValue1) ? refValue1.Min : 0.0;
+
+
+            if (pm?.Readings.Any() != true) return double.NaN;
+
+            double MaxReading = pm.Readings.Min();
+
+            double runout = MaxReading - PM2;
+
+            if (runout < 0)
+            {
+                runout = 0.001;
+            }
+            if (mode == ProcedureMode.Measurement && compensation != 0) runout += compensation;
+            return Math.Abs(Math.Round(runout, 3));
+
+        }
+
+        private double CalculateRN5(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
+        {
+            // Probe 14
+            var pm = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 14");
+            double PM2 = dbRefDict.TryGetValue("RN-5", out var refValue1) ? refValue1.Min : 0.0;
+
+
+            if (pm?.Readings.Any() != true) return double.NaN;
+
+            double MaxReading = pm.Readings.Min();
+
+            double runout = MaxReading - PM2;
+
+            if (runout < 0)
+            {
+                runout = 0.001;
+            }
+            if (mode == ProcedureMode.Measurement && compensation != 0) runout += compensation;
+            return Math.Abs(Math.Round(runout, 3));
+
+        }
+
+        #endregion
+
+
+
+
+
 
 
 
@@ -1666,78 +1529,72 @@ namespace EVMS.Service
             _orderedProbeMeasurements.Clear();
 
             var probeInstalls = _dataStorageService.GetProbeInstallByPartNumber(partCode);
-            var masterVals = _dataStorageService.GetPartConfig(partCode); // <-- Updated here
+            var masterVals = _dataStorageService.GetPartConfig(partCode);
 
             foreach (var probe in probeInstalls)
             {
-                var config = masterVals?
-                    .FirstOrDefault(m =>
-                        string.Equals(m.Para_No, probe.ProbeId, StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(m.Parameter, probe.Name, StringComparison.OrdinalIgnoreCase)
-                    );
+                // ✅ CHANGE: Use ParameterName as key (not ProbeId)
+                string parameterName = probe.ParameterName;  // "Head Diameter"
 
-                double masterVal = config?.Nominal ?? 0;
-                double tolPlus = config?.RTolPlus ?? 0;
-                double tolMinus = config?.RTolMinus ?? 0;
-                int Sign= config?.Sign_Change ?? 0;
-                double Comp=config?.Compensation ?? 0;
+                var config = masterVals?.FirstOrDefault(m =>
+                    string.Equals(m.Parameter, parameterName, StringComparison.OrdinalIgnoreCase));
 
                 var pm = new ProbeMeasurement
                 {
-                    ProbeId = probe.ProbeId,
-                    Name = probe.Name,
-                    MasterValue = masterVal,
-                    TolerancePlus = tolPlus,
-                    ToleranceMinus = tolMinus,
-                    SignChange= Sign,
-                    Compensation= Comp,
-                   
+                    ProbeId = parameterName,        // ✅ "Head Diameter"
+                    MasterValue = config?.Nominal ?? 0,
+                    TolerancePlus = config?.RTolPlus ?? 0,
+                    ToleranceMinus = config?.RTolMinus ?? 0,
+                    SignChange = config?.Sign_Change ?? 0,
+                    Compensation = config?.Compensation ?? 0
                 };
 
-                _probeMeasurements[probe.ProbeId] = pm;
-                _orderedProbeMeasurements.Add(pm); // Keep ordered list in database order
-            }
-
-            System.Diagnostics.Debug.WriteLine($"[DEBUG] Loaded {_probeMeasurements.Count} probe configs for part {partCode}");
-            foreach (var pm in _orderedProbeMeasurements)
-            {
-                System.Diagnostics.Debug.WriteLine($"  Probe {pm.ProbeId} ({pm.Name}): Master={pm.MasterValue}, Tol±={pm.TolerancePlus}/{pm.ToleranceMinus}");
+                _probeMeasurements[parameterName] = pm;  // ✅ Key = "Head Diameter"
+                _orderedProbeMeasurements.Add(pm);
             }
         }
 
 
-        private void LoadProbeConfigurationsforMasterInspection(string partCode)
+
+        private async void LoadProbeConfigurationsforMasterInspection(string partCode)
         {
             _probeMeasurements.Clear();
             _orderedProbeMeasurements.Clear();
 
             var probeInstalls = _dataStorageService.GetProbeInstallByPartNumber(partCode);
-            var masterVals = _dataStorageService.GetMasterReadingByPart(partCode); // <-- Updated here
+            var masterVals = _dataStorageService.GetPartConfig(partCode);
 
             foreach (var probe in probeInstalls)
             {
                 var config = masterVals?
                     .FirstOrDefault(m =>
-                        string.Equals(m.Para_No, probe.ProbeId, StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(m.Parameter, probe.Name, StringComparison.OrdinalIgnoreCase)
+                        string.Equals(m.Para_No, probe.ProbeName, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(m.Parameter, probe.ProbeName, StringComparison.OrdinalIgnoreCase)
                     );
 
                 double masterVal = config?.Nominal ?? 0;
                 double tolPlus = config?.RTolPlus ?? 0;
                 double tolMinus = config?.RTolMinus ?? 0;
-                
+                int Sign = config?.Sign_Change ?? 0;
+                double Comp = config?.Compensation ?? 0;
+
+                // ✅ Use ProbeName as unique ID (no channel concatenation)
+                var uniqueId = probe.ProbeName;
 
                 var pm = new ProbeMeasurement
                 {
-                    ProbeId = probe.ProbeId,
-                    Name = probe.Name,
+                    ProbeId = uniqueId,                  // ProbeName (unique from DB)
+                    Name = probe.ParameterName,         // Human readable display name
+                    Readings = new List<double>(),
                     MasterValue = masterVal,
                     TolerancePlus = tolPlus,
                     ToleranceMinus = tolMinus,
+                    SignChange = Sign,
+                    Compensation = Comp,
                 };
 
-                _probeMeasurements[probe.ProbeId] = pm;
-                _orderedProbeMeasurements.Add(pm); // Keep ordered list in database order
+                _probeMeasurements[uniqueId] = pm;
+                _orderedProbeMeasurements.Add(pm);
             }
 
             System.Diagnostics.Debug.WriteLine($"[DEBUG] Loaded {_probeMeasurements.Count} probe configs for part {partCode}");
@@ -1745,7 +1602,45 @@ namespace EVMS.Service
             {
                 System.Diagnostics.Debug.WriteLine($"  Probe {pm.ProbeId} ({pm.Name}): Master={pm.MasterValue}, Tol±={pm.TolerancePlus}/{pm.ToleranceMinus}");
             }
+
+            await StartMeasurementProcessAsync();
         }
+
+
+        private async Task StartMeasurementProcessAsync()
+        {
+            try
+            {
+                NotifyStatus("Initializing measurement...");
+
+                // 1️⃣ Connect PLC + Serial
+                //if (!_plcProbeService.IsConnected)
+                //    await _plcProbeService.ConnectAsync();
+
+                // 2️⃣ Load probes for this part
+                await _plcProbeService.LoadProbesAsync(_currentPartCode);
+
+                // ❗ Ensure probes loaded
+                if (_plcProbeService.ProbeReadings.Count == 0)
+                {
+                    MessageBox.Show("No probes found for this Part No.", "Error");
+                    return;
+                }
+
+                // 3️⃣ Prepare measurement list
+                _orderedProbeMeasurements = _probeMeasurements.Values.ToList();
+
+                // 4️⃣ Call your main function
+                await RunMotorAndCollectReadingsAsync(_orderedProbeMeasurements, ProcedureMode.Measurement);
+
+                NotifyStatus("Measurement complete.");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error");
+            }
+        }
+
 
 
 
@@ -1753,7 +1648,10 @@ namespace EVMS.Service
         {
             Cleanup();
             _dataStorageService?.Dispose();
+
+            GC.SuppressFinalize(this);  // ✅ Suppress finalizer
         }
+
 
         public class MasterCompletedEventArgs : EventArgs
         {
@@ -1771,60 +1669,59 @@ namespace EVMS.Service
         {
             MasterCompleted?.Invoke(this, new MasterCompletedEventArgs(values, success));
         }
-        //        
-        //public async Task WaitForValidProbeReadingAsync(string targetProbeId, bool suppressDetectedMessage = false)
-        //{
-        //    await NotifyOnUIAsync("Initializing probe readings...");
+        // For parameters that have 2 probes: build a virtual probe = max of both
+        private Dictionary<string, ProbeMeasurement> BuildEffectiveProbesByName(
+            List<ProbeMeasurement> probes)
+        {
+            // group by Name (STEP OD 1, OD-1, etc.)
+            var result = new Dictionary<string, ProbeMeasurement>();
 
-        //    _plcProbeService.StartLiveReading(100);
+            foreach (var group in probes.Where(p => !string.IsNullOrEmpty(p.Name))
+                                        .GroupBy(p => p.Name))
+            {
+                var list = group.ToList();
 
-        //    bool partDetected = false;
-        //    bool messageFired = false;
+                // only one probe for this parameter -> use as is
+                if (list.Count == 1)
+                {
+                    var single = list[0];
+                    result[group.Key] = single;
+                    continue;
+                }
 
-        //    if (!suppressDetectedMessage)
-        //        if (GetPlcDeviceBit("X14") == 1)
-        //            await NotifyOnUIAsync("Waiting the robo to load part");
-        //        else
-        //            await NotifyOnUIAsync("Load the part");
-        //    while (!partDetected)
-        //    {
-        //        await Task.Delay(100);
+                // two probes (or more) -> element-wise max
+                var p1 = list[0];
+                var p2 = list[1];
 
-        //        var probeVal = _collectedReadings
-        //            .Where(r => r.ProbeId == targetProbeId)
-        //            .Select(r => r.Value)
-        //            .LastOrDefault();
+                int count = Math.Min(p1.Readings.Count, p2.Readings.Count);
+                var merged = new ProbeMeasurement
+                {
+                    ProbeId = $"{p1.Name}_MERGED",
+                    Name = p1.Name,
+                    Readings = new List<double>(count),
+                    MasterValue = p1.MasterValue,       // same master for that parameter
+                    TolerancePlus = p1.TolerancePlus,
+                    ToleranceMinus = p1.ToleranceMinus,
+                    SignChange = p1.SignChange,
+                    Compensation = p1.Compensation
+                };
 
-        //        bool partPresent = Math.Abs(probeVal) > 0.100;
+                for (int i = 0; i < count; i++)
+                {
+                    double v = Math.Max(p1.Readings[i], p2.Readings[i]);
+                    merged.Readings.Add(v);
+                }
 
-        //        if (partPresent && !messageFired)
-        //        {
-        //            messageFired = true;
-        //            partDetected = true;
-        //            if (!suppressDetectedMessage)
-        //                await NotifyOnUIAsync("Part detected. Proceeding...");
-        //        }
-        //        else if (!partPresent && messageFired)
-        //        {
-        //            messageFired = false;
-        //            if (!suppressDetectedMessage)
-        //                await NotifyOnUIAsync("Part removed. Waiting for new part...");
-        //        }
-        //        else if (!partPresent && !messageFired)
-        //        {
-        //            if (!suppressDetectedMessage)
-        //                if (GetPlcDeviceBit("X14") == 1)
-        //                    await NotifyOnUIAsync("Waiting the robo to load part");
-        //                else
-        //                    await NotifyOnUIAsync("Load the part");
-        //        }
-        //    }
+                var clean = merged.Readings.Where(x => !double.IsNaN(x)).ToList();
+                merged.MaxValue = clean.Count > 0 ? clean.Max() : 0;
+                merged.MinValue = clean.Count > 0 ? clean.Min() : 0;
 
-        //    _plcProbeService.StopLiveReading();
+                result[group.Key] = merged;
+            }
 
-        //    if (!suppressDetectedMessage)
-        //        await NotifyOnUIAsync("Values updated...");
-        //}
+            return result;
+        }
+
 
 
         private void NotifyStatus(string message)
@@ -1843,6 +1740,18 @@ namespace EVMS.Service
                 await Application.Current.Dispatcher.InvokeAsync(() => NotifyStatus(message));
         }
 
+
+        public class ProbeReadingEventArgs : EventArgs
+        {
+            public string ModuleId { get; set; } = "";
+            public double Value { get; set; }
+
+            public ProbeReadingEventArgs(string moduleId, double value)
+            {
+                ModuleId = moduleId;
+                Value = value;
+            }
+        }
 
 
 

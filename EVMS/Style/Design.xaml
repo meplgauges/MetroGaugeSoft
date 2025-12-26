@@ -8,6 +8,16 @@
         <Setter Property="Foreground" Value="Black"/>
         <Setter Property="Margin" Value="30,10,0,4"/>
     </Style>
+
+    <SolidColorBrush x:Key="PrimaryColor" Color="#2563EB"/>
+    <SolidColorBrush x:Key="PrimaryDark" Color="#1D4ED8"/>
+    <SolidColorBrush x:Key="AccentColor" Color="#DC2626"/>
+    <SolidColorBrush x:Key="SurfaceColor" Color="#F8FAFC"/>
+    <SolidColorBrush x:Key="CardColor" Color="White"/>
+    <SolidColorBrush x:Key="TextPrimary" Color="#0F172A"/>
+    <SolidColorBrush x:Key="TextSecondary" Color="#64748B"/>
+    <SolidColorBrush x:Key="SuccessColor" Color="#059669"/>
+    
     <Style x:Key="ModernButtonStyle" TargetType="Button">
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Padding" Value="6"/>

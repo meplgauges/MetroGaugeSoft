@@ -61,14 +61,14 @@ Margin="12">
                 </StackPanel>
                 <!-- Main Content -->
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="38,0,34,0" >
-                    <TextBlock Text="Engine Valve Measurement System"
+                    <TextBlock Text="Valve Measurement System"
                                FontSize="24"
                                FontWeight="Bold"
                                Foreground="#282D4F"
                                FontFamily="Segoe UI"
                                Margin="0,0,0,5" Width="414"/>
 
-                    <TextBlock Text="A precise and efficient system for measuring multiple parameters of engine valves using advanced digital probes and automated control."
+                    <TextBlock Text="A precise and efficient system for measuring multiple parameters of valves using advanced Analog probes and automated control."
                                FontSize="15"
                                Foreground="#39355B"
                                Margin="0,0,0,2"

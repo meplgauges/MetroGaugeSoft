@@ -1,8 +1,7 @@
 ﻿using EVMS.Service;
 using Microsoft.Data.SqlClient;
-using System;
-using System.Collections.Generic;
 using System.Configuration;
+using System.IO.Ports;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -14,6 +13,8 @@ namespace EVMS
     public partial class SettingsPage : UserControl
     {
         private string? connectionString;
+        private string? _savedComPort;
+
         private readonly DataStorageService _dataStorageService;
 
         private Dictionary<int, ToggleButton> outputButtons = new Dictionary<int, ToggleButton>();
@@ -74,6 +75,20 @@ namespace EVMS
             catch (Exception ex)
             {
                 MessageBox.Show($"Error loading Reading Count: {ex.Message}");
+            }
+
+            // NEW: Find UI elements and wire up COM port detection
+            ComPortComboBox = this.FindName("ComPortComboBox") as ComboBox;
+            PortStatusText = this.FindName("PortStatusText") as TextBlock;
+            SaveComPortButton = this.FindName("SaveComPortButton") as Button;
+
+            if (ComPortComboBox != null && SaveComPortButton != null)
+            {
+                SaveComPortButton.Click += SaveComPortButton_Click;
+                ComPortComboBox.SelectionChanged += ComPortComboBox_SelectionChanged;
+
+                // Detect ports ONLY (NO connection)
+                LoadAvailableComPorts();
             }
         }
         // ✅ Handles ESC key press to go back to HomePage
@@ -150,7 +165,7 @@ namespace EVMS
                             list.Add(new ControlItem
                             {
                                 Description = reader.GetString(0),
-                                Bit = bitValue ? 1 : 0 , // ✅ convert bool → int
+                                Bit = bitValue ? 1 : 0, // ✅ convert bool → int
                                 Code = reader.GetString(2)
                             });
                         }
@@ -422,6 +437,134 @@ namespace EVMS
             {
                 MessageBox.Show("Error deleting record: " + ex.Message, "Database Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+
+
+
+        private void LoadAvailableComPorts()
+        {
+            try
+            {
+                // 1. Detect ONLY currently connected COM ports
+                var comPorts = SerialPort.GetPortNames()
+                    .Where(p => p.StartsWith("COM"))
+                    .OrderBy(p => p)
+                    .ToList();
+
+                if (ComPortComboBox != null)
+                {
+                    ComPortComboBox.ItemsSource = comPorts;
+                    ComPortComboBox.IsEnabled = comPorts.Count > 0;
+                }
+
+                if (comPorts.Count == 0)
+                {
+                    if (PortStatusText != null)
+                    {
+                        PortStatusText.Text = "❌ No COM ports connected";
+                        PortStatusText.Foreground = Brushes.Red;
+                    }
+                    if (SaveComPortButton != null)
+                        SaveComPortButton.IsEnabled = false;
+                    return;
+                }
+
+                // 2. Auto-select FIRST available port
+                if (ComPortComboBox != null)
+                    ComPortComboBox.SelectedIndex = 0;
+
+                // 3. Update status
+                if (PortStatusText != null)
+                {
+                    PortStatusText.Text = $"✅ {comPorts.Count} port(s) connected";
+                    PortStatusText.Foreground = Brushes.Green;
+                }
+
+                if (SaveComPortButton != null)
+                    SaveComPortButton.IsEnabled = true;
+
+                // Show detected ports
+                System.Diagnostics.Debug.WriteLine($"🔍 Detected: {string.Join(", ", comPorts)}");
+            }
+            catch (Exception ex)
+            {
+                if (PortStatusText != null)
+                {
+                    PortStatusText.Text = $"❌ Error: {ex.Message}";
+                    PortStatusText.Foreground = Brushes.Red;
+                }
+                if (SaveComPortButton != null)
+                    SaveComPortButton.IsEnabled = false;
+            }
+        }
+
+        // Save button - save selected port to DB
+        private async void SaveComPortButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string? selectedPort = ComPortComboBox?.SelectedItem?.ToString();
+                if (string.IsNullOrEmpty(selectedPort))
+                {
+                    MessageBox.Show("No ports available!");
+                    return;
+                }
+
+                using var conn = new SqlConnection(connectionString);
+                await conn.OpenAsync();
+
+                // Create table
+                string createTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='SerialSettings' AND xtype='U')
+            CREATE TABLE SerialSettings (ID int PRIMARY KEY, ComPort nvarchar(10), BaudRate int DEFAULT 115200);";
+
+                using (var cmd = new SqlCommand(createTable, conn))
+                    await cmd.ExecuteNonQueryAsync();
+
+                // ✅ FIXED: Added semicolon ;
+                string upsert = @"
+            MERGE SerialSettings AS target
+            USING (VALUES(1, @ComPort, 115200)) AS source(ID, ComPort, BaudRate)
+            ON target.ID = source.ID
+            WHEN MATCHED THEN 
+                UPDATE SET ComPort = source.ComPort
+            WHEN NOT MATCHED THEN 
+                INSERT (ID, ComPort, BaudRate) VALUES (1, @ComPort, 115200);";  // ← SEMICOLON HERE
+
+                using (var cmd = new SqlCommand(upsert, conn))
+                {
+                    cmd.Parameters.AddWithValue("@ComPort", selectedPort);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                if (PortStatusText != null)
+                {
+                    PortStatusText.Text = $"✅ {selectedPort} SAVED";
+                    PortStatusText.Foreground = Brushes.DarkGreen;
+                }
+
+                MessageBox.Show($"✅ {selectedPort} saved to database!", "Success");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"❌ Save failed: {ex.Message}");
+            }
+        }
+
+
+        // Dropdown selection changed
+        private void ComPortComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ComPortComboBox?.SelectedItem != null && SaveComPortButton != null)
+            {
+                SaveComPortButton.IsEnabled = true;
+                if (PortStatusText != null)
+                {
+                    PortStatusText.Text = $"➤ Selected: {ComPortComboBox.SelectedItem}";
+                    PortStatusText.Foreground = Brushes.DodgerBlue;
+                }
             }
         }
 

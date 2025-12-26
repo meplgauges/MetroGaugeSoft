@@ -1,0 +1,93 @@
+﻿<UserControl x:Class="EVMS.ProbeTestPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:local="clr-namespace:EVMS"
+             mc:Ignorable="d" Background="#0F141A">
+
+    <UserControl.Resources>
+        <local:BoolToColorConverter x:Key="BoolToColor"/>
+    </UserControl.Resources>
+
+    <Grid Margin="20">
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- HEADER -->
+        <TextBlock Text="Probe Testing Screen (Auto Live Mode)"
+                   FontSize="24" FontWeight="Bold" Foreground="White" Margin="0 0 0 10"/>
+
+        <!-- PART NUMBER SELECTION -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0 10 0 10">
+            <TextBlock Text="Part Number:" VerticalAlignment="Center"
+                       FontSize="18" Foreground="White"/>
+            <ComboBox x:Name="PartNumbersCombo"
+                      ItemsSource="{Binding PartNumbers}"
+                      SelectedItem="{Binding SelectedPartNo}"
+                      Width="260" Margin="10 0"
+                      FontSize="18"/>
+        </StackPanel>
+
+        <!-- PROBE TABLE -->
+        <DataGrid Grid.Row="2" x:Name="DG_Probes"
+                  ItemsSource="{Binding Probes}"
+                  AutoGenerateColumns="False"
+                  FontSize="18" RowHeight="35"
+                  CanUserAddRows="False" CanUserDeleteRows="False"
+                  AlternatingRowBackground="#1E2A34"
+                  RowBackground="#162027"
+                  Foreground="White" BorderBrush="#2C3947">
+
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Parameter" Binding="{Binding Title}" Width="250"/>
+                <DataGridTextColumn Header="Box" Binding="{Binding BoxId}" Width="80"/>
+                <DataGridTextColumn Header="CH" Binding="{Binding Channel}" Width="80"/>
+                <DataGridTextColumn Header="Live" Binding="{Binding LiveValue, StringFormat=0.000}" Width="120"/>
+                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="120"/>
+
+                <DataGridTemplateColumn Header="In Range" Width="120">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Border CornerRadius="5" Padding="4"
+                                    Background="{Binding InRange, Converter={StaticResource BoolToColor}}">
+                                <TextBlock Text="{Binding InRange}" 
+                                           HorizontalAlignment="Center" Foreground="Black"/>
+                            </Border>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTextColumn Header="Readings" Binding="{Binding ReadingsCount}" Width="120"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- FOOTER STATS -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0 15" >
+
+            <StackPanel HorizontalAlignment="Center">
+                <TextBlock Text="Total Probes" Foreground="#9EC8FF" FontSize="16"/>
+                <TextBlock x:Name="TotalProbesText" FontSize="26" FontWeight="Bold" Foreground="White"/>
+            </StackPanel>
+
+            <StackPanel HorizontalAlignment="Center">
+                <TextBlock Text="Total Readings" Foreground="#9EC8FF" FontSize="16"/>
+                <TextBlock x:Name="TotalReadingsText" FontSize="26" FontWeight="Bold" Foreground="White"/>
+            </StackPanel>
+
+        </StackPanel>
+
+        <!-- STATUS -->
+        <Border Grid.Row="4" Background="#1B242C" Padding="10" CornerRadius="6" Margin="0 10 0 0">
+            <TextBlock x:Name="StatusText" Text="Ready..."
+                       Foreground="LightGreen" FontSize="20" FontWeight="SemiBold"/>
+        </Border>
+
+    </Grid>
+</UserControl>

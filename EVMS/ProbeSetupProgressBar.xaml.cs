@@ -1,5 +1,4 @@
-﻿using System;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
@@ -144,8 +143,8 @@ namespace EVMS
             double shifted = rawValue - mid;
 
             // Half of total bar height = 125px
-            double scaled = (shifted / fullRange) * 320;
-            scaled = Math.Clamp(scaled, -125, 125);
+            double scaled = (shifted / fullRange) * 370;
+            scaled = Math.Clamp(scaled, -140, 140);
 
             if (scaled < 0)
             {
@@ -165,7 +164,7 @@ namespace EVMS
         {
             double fromHeight = rect.Height;
             double fromTop = Canvas.GetTop(rect);
-            double midY = 125;
+            double midY = 140;
 
             double toTop = growDown ? midY : midY - targetHeight;
 

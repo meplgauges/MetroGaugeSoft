@@ -1,11 +1,7 @@
 ﻿
 using ClosedXML.Excel;
 using EVMS.Service;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Configuration;
 using System.Data;
 using System.Diagnostics;
 using System.IO;
@@ -254,24 +250,45 @@ namespace EVMS
                         if (_currentMode == ProcedureMode.MasterInspection)
                         {
                             await dataStorageService.InsertMasterInspectionAsync(
-                                _model, _userId, _lotNo,
-                                GetValue("Overall Length"), GetValue("Datum to End"), GetValue("Head Diameter"),
-                                GetValue("Groove Position"), GetValue("Stem Dia Near Groove"), GetValue("Stem Dia Near Undercut"),
-                                GetValue("Groove Diameter"), GetValue("Straightness"), GetValue("Ovality SDG"),
-                                GetValue("Ovality SDU"), GetValue("Ovality Head"), GetValue("Stem Taper"),
-                                GetValue("End Face Runout"), GetValue("Face Runout"), GetValue("Seat Height"),
-                                GetValue("Seat Runout"), GetValue("Datum to Groove"), status);
+                                                     _model, _userId, _lotNo,
+                                                     Convert.ToDecimal(GetValue("STEP OD1")),
+                                                     Convert.ToDecimal(GetValue("STEP RUNOUT-1")),
+                                                     Convert.ToDecimal(GetValue("OD-1")),
+                                                     Convert.ToDecimal(GetValue("RN-1")),
+                                                     Convert.ToDecimal(GetValue("OD-2")),
+                                                     Convert.ToDecimal(GetValue("RN-2")),
+                                                     Convert.ToDecimal(GetValue("OD-3")),
+                                                     Convert.ToDecimal(GetValue("RN-3")),
+                                                     Convert.ToDecimal(GetValue("STEP OD2")),
+                                                     Convert.ToDecimal(GetValue("STEP RUNOUT-2")),
+                                                     Convert.ToDecimal(GetValue("ID-1")),
+                                                     Convert.ToDecimal(GetValue("RN-4")),
+                                                     Convert.ToDecimal(GetValue("ID-2")),
+                                                     Convert.ToDecimal(GetValue("RN-5")),
+                                                     Convert.ToDecimal(GetValue("OL")),
+                                                     status);
+
                         }
-                        else if (_currentMode == ProcedureMode.Measurement)
+                        else if (_currentMode == ProcedureMode.Mastering)
                         {
                             await dataStorageService.InsertMeasurementReadingAsync(
-                                _model, _userId, _lotNo,
-                                GetValue("Overall Length"), GetValue("Datum to End"), GetValue("Head Diameter"),
-                                GetValue("Groove Position"), GetValue("Stem Dia Near Groove"), GetValue("Stem Dia Near Undercut"),
-                                GetValue("Groove Diameter"), GetValue("Straightness"), GetValue("Ovality SDG"),
-                                GetValue("Ovality SDU"), GetValue("Ovality Head"), GetValue("Stem Taper"),
-                                GetValue("End Face Runout"), GetValue("Face Runout"), GetValue("Seat Height"),
-                                GetValue("Seat Runout"), GetValue("Datum to Groove"), status);
+                                                     _model, _userId, _lotNo,
+                                                     Convert.ToDecimal(GetValue("STEP OD1")),
+                                                     Convert.ToDecimal(GetValue("STEP RUNOUT-1")),
+                                                     Convert.ToDecimal(GetValue("OD-1")),
+                                                     Convert.ToDecimal(GetValue("RN-1")),
+                                                     Convert.ToDecimal(GetValue("OD-2")),
+                                                     Convert.ToDecimal(GetValue("RN-2")),
+                                                     Convert.ToDecimal(GetValue("OD-3")),
+                                                     Convert.ToDecimal(GetValue("RN-3")),
+                                                     Convert.ToDecimal(GetValue("STEP OD2")),
+                                                     Convert.ToDecimal(GetValue("STEP RUNOUT-2")),
+                                                     Convert.ToDecimal(GetValue("ID-1")),
+                                                     Convert.ToDecimal(GetValue("RN-4")),
+                                                     Convert.ToDecimal(GetValue("ID-2")),
+                                                     Convert.ToDecimal(GetValue("RN-5")),
+                                                     Convert.ToDecimal(GetValue("OL")),
+                                                     status);
                         }
                     }
                     catch (Exception ex)
@@ -297,7 +314,7 @@ namespace EVMS
             if (_currentMode != ProcedureMode.Measurement)
                 return;
 
-                string baseFolder = @"E:\MEPL\Excel Report\Ok Parts";
+            string baseFolder = @"E:\MEPL\Excel Report\Ok Parts";
 
             //string baseFolder = Path.Combine(
             //        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
@@ -359,7 +376,7 @@ namespace EVMS
                     for (int i = 0; i < partConfig.Count; i++)
                     {
                         var cell = ws.Cell(5, headerStartCol + i);
-                        string shortName = string.IsNullOrWhiteSpace(partConfig[i].ShortName)
+                        string? shortName = string.IsNullOrWhiteSpace(partConfig[i].ShortName)
                             ? partConfig[i].Parameter
                             : partConfig[i].ShortName;
                         cell.Value = shortName;
@@ -408,7 +425,7 @@ namespace EVMS
                     var borderRange = ws.Range(5, 3, 8, lastCol);
                     borderRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
                     borderRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
-                     
+
                     // Measurement table headers
                     int startTableRow = 10;
                     int col = 1;
@@ -487,8 +504,8 @@ namespace EVMS
         {
             if (_currentMode != ProcedureMode.Measurement)
                 return;
-            
-               // Skip incrementing counts during Master Inspection
+
+            // Skip incrementing counts during Master Inspection
             Dispatcher.Invoke(() =>
             {
                 // Increment InspectionQty correctly
@@ -505,7 +522,7 @@ namespace EVMS
                 {
                     int okCount;
                     if (!int.TryParse(txtOkCount.Text, out okCount))
-                    okCount = 0;
+                        okCount = 0;
                     okCount++;
                     OkCount = okCount;
                     txtOkCount.Text = okCount.ToString();
@@ -527,7 +544,7 @@ namespace EVMS
                 CheckMasterExpirationDuringMeasurement();
             });
 
-           
+
         }
 
 
@@ -554,8 +571,8 @@ namespace EVMS
                     Nominal = m.Nominal,
                     RTolPlus = m.RTolPlus,
                     RTolMinus = m.RTolMinus,
-                    D_Name=m.D_Name
-                    
+                    D_Name = m.D_Name
+
                 }).ToList();
 
                 // 3️⃣ Call your existing progress bar loader
@@ -668,7 +685,7 @@ namespace EVMS
             // Assuming parameterData contains the list from the DB with parameter and ShortName info
             foreach (var param in parameterData)
             {
-                string columnName = param.ShortName;  // use ShortName
+                string? columnName = param.ShortName;  // use ShortName
                 _measurementDataTable.Columns.Add(columnName, typeof(string));
             }
 
@@ -683,18 +700,16 @@ namespace EVMS
 
         private void DataGridColumnHeader_Click(object sender, RoutedEventArgs e)
         {
-            if (e.OriginalSource is DataGridColumnHeader header && header.Column != null)
+            if (e.OriginalSource is DataGridColumnHeader header &&
+                header.Column != null)
             {
-                string parameterName = header.Column.Header.ToString();
-                if (parameterName == "No") return;
+                string? parameterName = header.Column.Header?.ToString();
+
+                // Skip if header is null or "No" column
+                if (string.IsNullOrEmpty(parameterName) || parameterName == "No")
+                    return;
 
                 var values = GetLast10NumericValues(parameterName);
-                //if (values.Count == 0)
-                //{
-                //    MessageBox.Show($"No readings available for {parameterName}.",
-                //        "No Data", MessageBoxButton.OK, MessageBoxImage.Information);
-                //    return;
-                //}
 
                 // Show big custom window
                 var win = new VariationWindow(parameterName, values)
@@ -741,7 +756,7 @@ namespace EVMS
                 // Assign data using full-to-short name map to ensure values map to correct short-named columns
                 foreach (var kvp in latestValues) // kvp.Key = full parameter name
                 {
-                    if (fullToShortMap.TryGetValue(kvp.Key, out string shortName) &&
+                    if (fullToShortMap.TryGetValue(kvp.Key, out string? shortName) &&
                         _measurementDataTable.Columns.Contains(shortName))
                     {
                         row[shortName] = kvp.Value.ToString("F3");
@@ -832,7 +847,7 @@ namespace EVMS
             }
             else
             {
-                ProgressBarContainer.Columns = 7;    // DESIGN 2 (set your value)
+                ProgressBarContainer.Columns = 8;    // DESIGN 2 (set your value)
             }
 
             foreach (var param in parameterData)
@@ -848,8 +863,8 @@ namespace EVMS
                     // ---- DESIGN 1 ----
                     var pb = new ResultProgressBar();
                     pb.Margin = new Thickness(5);
-                    pb.Width = 350;
-                    pb.Height = 200;
+                    pb.Width = 380;
+                    pb.Height = 232;
 
                     pb.ParameterName = param.D_Name;
                     pb.MinValue = min;
@@ -865,7 +880,7 @@ namespace EVMS
                     var pb = new ProgresBarControl();
                     pb.Margin = new Thickness(5);
                     pb.Width = 200;
-                    pb.Height = 160;
+                    pb.Height = 300;
 
                     pb.Min = min;
                     pb.Mean = mean;
@@ -1093,7 +1108,7 @@ namespace EVMS
                 {
                     _measurementDataTable?.Clear();
                     _globalSerialCounter = 1;
-                    
+
                 });
 
                 _currentMode = ProcedureMode.Measurement;
@@ -1134,7 +1149,7 @@ namespace EVMS
                 //ResetAllPlcBits();
             }
 
-    bitMatchCheckTimer?.Stop();
+            bitMatchCheckTimer?.Stop();
 
             try
             {
@@ -1473,7 +1488,7 @@ namespace EVMS
             var (mode, masterCount, _) = dataStorageService.GetMasterExpiration();
 
             // Only check for count mode expiration
-            if (mode == 1 )
+            if (mode == 1)
             {
                 if (currentMasterCount >= masterCount)
                 {
@@ -1502,8 +1517,8 @@ namespace EVMS
 
 
         private DispatcherTimer bitMatchCheckTimer;
-        private int? lastSoftwareBitValue = null;
-        private int? lastPlcBitValue = null;
+        //private int? lastSoftwareBitValue = null;
+        //private int? lastPlcBitValue = null;
         private bool wasPreviousMismatch = false;
 
         private void StartBitMatchCheck()
@@ -1567,7 +1582,7 @@ namespace EVMS
             if (_measurementDataTable == null || _measurementDataTable.Rows.Count == 0) return;
 
             var latestRow = _measurementDataTable.Rows[0]; // Top row is latest
-            string status = latestRow["No"]?.ToString();
+            string? status = latestRow["No"]?.ToString();
 
             // 2. Delete row from DB using DataStorageService
             bool deleted = await dataStorageService.DeleteLatestMeasurementReadingAsync(_model, _lotNo, int.Parse(_userId));

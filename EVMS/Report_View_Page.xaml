@@ -15,29 +15,27 @@
                 <ResourceDictionary Source="/EVMS;component/Style/ReportPageDesign.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
+        
     </UserControl.Resources>
     <Grid Margin="10">
         <Grid.RowDefinitions>
-            <RowDefinition Height="50"/>
             <RowDefinition Height="100"/>
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="*"/> 
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <Border Grid.Row="0" Background="#2C3E50" CornerRadius="12" Padding="12" VerticalAlignment="Center">
-            <TextBlock Text="Report Table View" Foreground="White" FontSize="20" FontWeight="DemiBold" HorizontalAlignment="Center" />
-        </Border>
+
 
         <Border 
-    Grid.Row="1" 
-    Background="{StaticResource PageBackgroundBrush}"
-    CornerRadius="12" 
-    Padding="10" 
-    Margin="0,15,0,0" 
-    BorderBrush="#D1D9E6" 
-    BorderThickness="1"
-    HorizontalAlignment="Stretch"
-    VerticalAlignment="Top">
+        Grid.Row="0" 
+        Background="{StaticResource PageBackgroundBrush}"
+        CornerRadius="12" 
+        Padding="10" 
+        Margin="0,2,0,0" 
+        BorderBrush="#D1D9E6" 
+        BorderThickness="1"
+        HorizontalAlignment="Stretch"
+        VerticalAlignment="Top">    
 
             <Grid HorizontalAlignment="Stretch" VerticalAlignment="Center">
                 <Grid.ColumnDefinitions>
@@ -155,126 +153,162 @@
 
 
         <!-- Table and Actions -->
-        <Border Grid.Row="2" Background="{StaticResource PageBackgroundBrush}"  CornerRadius="12" Padding="15" Margin="0,15,0,0" BorderBrush="#D1D9E6" BorderThickness="1">
+        <Border Grid.Row="2"
+        Background="{StaticResource PageBackgroundBrush}"
+        CornerRadius="14"
+        Padding="18"
+        Margin="0,1,0,0"
+        BorderBrush="#D7DDE7"
+        BorderThickness="1">
+
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,10" HorizontalAlignment="Right">
+
+                <!-- Action Buttons (UNCHANGED LOGIC) -->
+                <StackPanel Orientation="Horizontal"
+                    Margin="0,0,0,12"
+                    HorizontalAlignment="Right" >
+
                     <Button Content="Delete Selected Row"
-                            Width="140"
-                            Margin="4"
-                            Background="#D7282F"
-                            Foreground="White"
-                            FontWeight="Bold"
-                            Click="DeleteSelectedRow_Click"
-                            Style="{DynamicResource ModernButtonStyle1}" />
+                    Width="160"
+                    Height="38"
+                    Margin="4"
+                    Background="#E53935"
+                    Foreground="White"
+                    FontSize="14"
+                    FontWeight="SemiBold"
+                    Click="DeleteSelectedRow_Click"
+                    Style="{DynamicResource ModernButtonStyle1}" />
+
                     <Button Content="Export PDF"
-                            Width="100"
-                            Margin="4"
-                            Background="#1976D2"
-                            Foreground="White"
-                            FontWeight="Bold"
-                            Click="ExportPdf_Click"
-                            Style="{DynamicResource ModernButtonStyle1}" />
+                    Width="120"
+                    Height="38"
+                    Margin="4"
+                    Background="#1E88E5"
+                    Foreground="White"
+                    FontSize="14"
+                    FontWeight="SemiBold"
+                    Click="ExportPdf_Click"
+                    Style="{DynamicResource ModernButtonStyle1}" />
+
                     <Button Content="Export Excel"
-                            Width="110"
-                            Margin="4"
-                            Background="#388E3C"
-                            Foreground="White"
-                            FontWeight="Bold"
-                            Click="ExportExcel_Click"
-                            Style="{DynamicResource ModernButtonStyle1}" />
+                    Width="130"
+                    Height="38"
+                    Margin="4"
+                    Background="#43A047"
+                    Foreground="White"
+                    FontSize="14"
+                    FontWeight="SemiBold"
+                    Click="ExportExcel_Click"
+                    Style="{DynamicResource ModernButtonStyle1}" />
                 </StackPanel>
+
                 <DataGrid x:Name="ReportDataGrid"
-          Grid.Row="1"
-          HorizontalContentAlignment="Stretch"
-          HorizontalAlignment="Stretch"
-          VerticalAlignment="Stretch"
-          PreviewKeyDown="ReportDataGrid_PreviewKeyDown"
-          LoadingRow="ReportDataGrid_LoadingRow"
-          AutoGenerateColumns="False"
-          IsReadOnly="True"  
-                    SelectionMode="Extended"
-                   
-                    Margin="5"
-          ColumnHeaderHeight="36"
-          SelectionUnit="FullRow"
-          Background="White"
-          Foreground="#333333"
-                  
-                    RowHeaderWidth="0"
-          HeadersVisibility="Column"
-          CanUserAddRows="False"
-          CanUserDeleteRows="False"
-          BorderBrush="#E1E8F0"
-          BorderThickness="1"
-          GridLinesVisibility="All"
-                    >
+                  Grid.Row="1"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  SelectionMode="Extended"
+                  SelectionUnit="FullRow"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  HeadersVisibility="Column"
+                  GridLinesVisibility="All"
+                  RowHeaderWidth="0"
+                  RowHeight="40"
+                  FontSize="14"
+                  ColumnHeaderHeight="40"
+                  Background="White"
+                  Foreground="#263238"
+                  BorderBrush="#D7DDE7"
+                  BorderThickness="1"
+                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                  PreviewKeyDown="ReportDataGrid_PreviewKeyDown"
+                  LoadingRow="ReportDataGrid_LoadingRow">       
 
                     <DataGrid.Resources>
-                        <!-- Center-align column headers with modern font -->
+
+                        <!-- HEADER STYLE (BIGGER & CENTERED) -->
                         <Style TargetType="DataGridColumnHeader">
                             <Setter Property="HorizontalContentAlignment" Value="Center"/>
                             <Setter Property="VerticalContentAlignment" Value="Center"/>
-                            <Setter Property="FontWeight" Value="SemiBold"/>
-                            <Setter Property="Background" Value="#F7F9FC"/>
-                            <Setter Property="Foreground" Value="#555555"/>
-                            <Setter Property="Padding" Value="8,6"/>
-                            <Setter Property="BorderThickness" Value="0,0,0,1"/>
-                            <Setter Property="BorderBrush" Value="#D3D9E5"/>
+                            <Setter Property="FontWeight" Value="Bold"/>
+                            <Setter Property="FontSize" Value="15"/>
+                            <Setter Property="Background" Value="#007BFF"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="Padding" Value="10,10"/>
+                            <Setter Property="BorderBrush" Value="Black"/>
+                            <Setter Property="BorderThickness" Value="1"/>
+                            <Setter Property="Height" Value="40"/>
                         </Style>
 
-                        <!-- Center-align all text cells -->
+                        <!-- CELL STYLE (PERFECT CENTER) -->
                         <Style TargetType="DataGridCell">
                             <Setter Property="TextBlock.TextAlignment" Value="Center"/>
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="HorizontalContentAlignment" Value="Center"/>
                             <Setter Property="VerticalContentAlignment" Value="Center"/>
-                            <Setter Property="Padding" Value="4,2"/>
-                            <Setter Property="BorderThickness" Value="0"/>
-                            <Setter Property="BorderBrush" Value="Transparent"/>
-                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="Padding" Value="6"/>
+                            <Setter Property="BorderBrush" Value="#D7DDE7"/>
+                            <Setter Property="BorderThickness" Value="1"/>
+                            <Setter Property="FontWeight" Value="Medium"/>
+
                             <Style.Triggers>
-                                <Trigger Property="IsSelected" Value="True">
-                                    <Setter Property="Background" Value="#D0E3FF"/>
-                                    <Setter Property="Foreground" Value="#1A237E"/>
-                                </Trigger>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#E8F0FE"/>
+                                    <Setter Property="Background" Value="#F1F5FF"/>
+                                </Trigger>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter Property="Background" Value="#DCE4FF"/>
+                                    <Setter Property="Foreground" Value="#1A237E"/>
                                 </Trigger>
                             </Style.Triggers>
                         </Style>
+                        <!-- PERFECT CENTER TEXT FOR DATAGRID TEXT COLUMNS -->
+                        <Style x:Key="CenteredTextBlockStyle" TargetType="TextBlock">
+                            <Setter Property="TextAlignment" Value="Center"/>
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                            <Setter Property="HorizontalAlignment" Value="Center"/>
+                            <Setter Property="Padding" Value="0"/>
+                        </Style>
+
                     </DataGrid.Resources>
 
-                    <!-- Fixed Columns -->
+                    <!-- Columns -->
                     <DataGrid.Columns>
+
                         <DataGridTextColumn Header="No"
-                            Binding="{Binding SerialNo}"
-                            Width="50"
-                            ElementStyle="{StaticResource CenteredTextStyle}"/>
+                    Binding="{Binding SerialNo}"
+                    Width="0.6*"
+                    ElementStyle="{StaticResource CenteredTextBlockStyle}" />
+
                         <DataGridTextColumn Header="Part No"
-                            Binding="{Binding PartNo}"
-                            Width="70"
-                            ElementStyle="{StaticResource CenteredTextStyle}"/>
+                    Binding="{Binding PartNo}"
+                    Width="1*"
+                    ElementStyle="{StaticResource CenteredTextBlockStyle}" />
+
                         <DataGridTextColumn Header="Lot No"
-                            Binding="{Binding LotNo}"
-                            Width="80"
-                            ElementStyle="{StaticResource CenteredTextStyle}"/>
+                    Binding="{Binding LotNo}"
+                    Width="1*"
+                    ElementStyle="{StaticResource CenteredTextBlockStyle}" />
+
                         <DataGridTextColumn Header="Operator"
-                            Binding="{Binding Operator}"
-                            Width="80"
-                            ElementStyle="{StaticResource CenteredTextStyle}"/>
+                    Binding="{Binding Operator}"
+                    Width="1*"
+                    ElementStyle="{StaticResource CenteredTextBlockStyle}" />
+
                         <DataGridTextColumn Header="Date"
-                            Binding="{Binding Date}"
-                            Width="140"
-                            ElementStyle="{StaticResource CenteredTextStyle}"/>
-                        <!-- Add other columns as necessary -->
+                    Binding="{Binding Date}"
+                    Width="1.4*"
+                    ElementStyle="{StaticResource CenteredTextBlockStyle}" />
+
+
                     </DataGrid.Columns>
                 </DataGrid>
 
-
             </Grid>
         </Border>
+
     </Grid>
 </UserControl>

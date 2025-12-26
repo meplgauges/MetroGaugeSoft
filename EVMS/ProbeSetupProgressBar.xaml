@@ -12,10 +12,10 @@
 
                 <!-- Vertical Bar Grid -->
                 <Grid>
-                    <Border Width="24" Height="250" CornerRadius="8"
+                    <Border Width="24" Height="280" CornerRadius="8"
                             Background="#1E2733" 
                             SnapsToDevicePixels="True">
-                        <Canvas x:Name="BarCanvas" Width="24" Height="250" ClipToBounds="True">
+                        <Canvas x:Name="BarCanvas" Width="24" Height="280" ClipToBounds="True">
                             <!-- MID LINE (0) -->
                             <Line x:Name="MidLine" X1="0" X2="24" Y1="130" Y2="130" Stroke="#B0D6D6" StrokeThickness="2" StrokeDashArray="3,5"/>
 
@@ -29,51 +29,44 @@
 
                     <!-- Scale markers -->
                     <Canvas Margin="0,0,60,-6" Width="36" Height="268" IsHitTestVisible="False">
-                        <Line X1="0" X2="36" Y1="260" Y2="260" Stroke="#C0D9D9" StrokeThickness="1" StrokeDashArray="5,3"/>
-                        <TextBlock Text="Low" Foreground="#C0D9D9" FontSize="12" FontWeight="SemiBold" Canvas.Left="0" Canvas.Top="240"/>
+                        <Line X1="0" X2="36" Y1="270" Y2="270" Stroke="#C0D9D9" StrokeThickness="1" StrokeDashArray="5,3"/>
+                        <TextBlock Text="Low" Foreground="White" FontSize="16" FontWeight="SemiBold" Canvas.Left="-12" Canvas.Top="240"/>
 
-                        <Line X1="0" X2="36" Y1="0" Y2="0" Stroke="#C0D9D9" StrokeThickness="1" StrokeDashArray="5,3"/>
-                        <TextBlock Text="High" Foreground="#C0D9D9" FontSize="12" FontWeight="SemiBold" Canvas.Left="0" Canvas.Top="-1"/>
+                        <Line X1="0" X2="36" Y1="-5" Y2="-5" Stroke="#C0D9D9" StrokeThickness="1" StrokeDashArray="5,3"/>
+                        <TextBlock Text="High" Foreground="White" FontSize="16" FontWeight="SemiBold" Canvas.Left="-12" Canvas.Top="-1"/>
                     </Canvas>
                 </Grid>
 
                 <!-- Percentage / Status display -->
                 <TextBlock HorizontalAlignment="Center"
-                           Foreground="#A1E3E3"
-                           FontSize="20"
+                           Foreground="White"
+                           FontSize="23"
                            FontWeight="Bold"
-                           Margin="0,12,0,6"
+                           Margin="0,5,0,6"
                            FontFamily="Segoe UI Semibold"
                            Text="{Binding Status, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
 
                 <!-- Probe info -->
                 <TextBox Text="{Binding Title, RelativeSource={RelativeSource AncestorType=UserControl}}" 
                          Height="32" Width="140" 
-                         FontSize="15"
-                         Background="#1E2733" Foreground="#BEE9E9"
+                         FontSize="20" FontWeight="SemiBold"
+                         Background="#1E2733" Foreground="White"
                          BorderBrush="#3A4F54" BorderThickness="1"
-                         Padding="6" HorizontalAlignment="Center"
+                         Padding="1" HorizontalAlignment="Center"
                          TextAlignment="Center"
                          Focusable="False" Margin="0,0,0,6"
                          FontFamily="Segoe UI"/>
 
                 <TextBox Text="{Binding ID, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                         Height="28" Width="100" 
-                         Background="#1E2733" Foreground="#BEE9E9"
+                         Height="32" Width="100" FontSize="16" FontWeight="SemiBold"
+                         Background="#1E2733" Foreground="White"
                          BorderBrush="#3A4F54" BorderThickness="1"
-                         Padding="6" HorizontalAlignment="Center"
-                         TextAlignment="Center" IsReadOnly="True"
-                         Focusable="False" Margin="0,0,0,6"
-                         FontFamily="Segoe UI"/>
-
-                <TextBox Text="{Binding Stroke, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                         Height="28" Width="100" 
-                         Background="#1E2733" Foreground="#BEE9E9"
-                         BorderBrush="#3A4F54" BorderThickness="1"
-                         Padding="6" HorizontalAlignment="Center"
+                         Padding="4" HorizontalAlignment="Center"
                          TextAlignment="Center" IsReadOnly="True"
                          Focusable="False" Margin="0,0,0,0"
                          FontFamily="Segoe UI"/>
+
+               
             </StackPanel>
         </Border>
     </Viewbox>

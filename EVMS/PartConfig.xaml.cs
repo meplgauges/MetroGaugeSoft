@@ -1,7 +1,4 @@
-﻿using DocumentFormat.OpenXml.VariantTypes;
-using EVMS.Service;
-using Microsoft.Data.SqlClient;
-using System;
+﻿using Microsoft.Data.SqlClient;
 using System.Configuration;
 using System.Data;
 using System.Windows;
@@ -302,7 +299,7 @@ namespace EVMS
                 string Para_No = cmbPartNo.SelectedItem?.ToString() ?? "";
                 string parameter = txtParameter.Text.Trim();
                 string? ShortName = txtShort.Text.Trim();
-                string? ShowPara  = txtViewPara.Text.Trim();
+                string? ShowPara = txtViewPara.Text.Trim();
 
                 decimal nominal = ParseDecimal(txtNominal.Text);
                 decimal rTolPlus = ParseDecimal(txtRTolPlus.Text);
@@ -443,9 +440,9 @@ namespace EVMS
             return true;
         }
         private void dataGrid_LoadingRow(object sender, DataGridRowEventArgs e)
-            {
-                e.Row.Header = (e.Row.GetIndex() + 1).ToString();
-            }
+        {
+            e.Row.Header = (e.Row.GetIndex() + 1).ToString();
+        }
 
         private void dataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {

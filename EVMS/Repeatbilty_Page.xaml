@@ -10,7 +10,7 @@
                 <ResourceDictionary Source="/EVMS;component/Style/ReportPageDesign.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
-        
+
     </UserControl.Resources>
 
     <Grid Margin="20">
@@ -47,13 +47,14 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
                 <!-- Part No -->
                 <StackPanel Orientation="Vertical"
                     Grid.Column="1"
-                    Margin="0,0,40,0"
                     HorizontalAlignment="Center">
                     <TextBlock Text="Part Number"
                        FontWeight="Bold"
@@ -68,13 +69,13 @@
                       FontSize="14"
                       Padding="4" />
                 </StackPanel>
-                
+
 
                 <!-- Parameter -->
                 <StackPanel Orientation="Vertical"
                     Grid.Column="2"
                     HorizontalAlignment="Center">
-                    <TextBlock Text="Parameter"
+                    <TextBlock Text="Select Parameter"
                        FontWeight="Bold"
                        FontSize="14"
                        Margin="0,0,0,6"
@@ -85,6 +86,22 @@
                       Width="220"
                       FontSize="14"
                       Padding="4"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Vertical"
+                         Grid.Column="3"
+                         HorizontalAlignment="Center">
+                    <TextBlock Text="Select Count"
+                        FontWeight="Bold"
+                        FontSize="14"
+                        Margin="0,0,0,6"
+                        HorizontalAlignment="Center"/>
+                    <ComboBox
+                        x:Name="RecordsCountCombo"
+                        Margin="5"
+                         Style="{DynamicResource ModernComboBoxStyle}"
+                        ItemsSource="{Binding RecordsCountOptions}"
+                        SelectedItem="{Binding SelectedRecordsCount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -112,7 +129,7 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                   
+
 
                     <!-- DataGrid -->
                     <DataGrid x:Name="RepeatabilityGrid"
@@ -189,7 +206,7 @@
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
-                            
+
                             <DataGridTextColumn Header="Date Time" Binding="{Binding DateTime}" Width="400">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
@@ -199,7 +216,7 @@
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
-                            
+
                             <DataGridTextColumn Header="Reading" Binding="{Binding Reading, StringFormat=F3}" Width="360">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
@@ -211,7 +228,7 @@
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
 
-                            
+
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>

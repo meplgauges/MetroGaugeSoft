@@ -1,20 +1,13 @@
 ﻿using EVMS.Service;
 using PdfSharpCore.Drawing;
+using PdfSharpCore.Pdf;
 using ScottPlot;
-using ScottPlot.WPF;
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Drawing;
 using System.IO;
-using MathNet.Numerics.Statistics;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Linq;
-using PdfSharpCore.Pdf;
-using System.Windows.Media.Imaging;
 
 namespace EVMS
 {
@@ -40,30 +33,34 @@ namespace EVMS
 
         private DateTime? _selectedDateTimeFrom = DateTime.Now.AddDays(-7);
         private DateTime? _selectedDateTimeTo = DateTime.Now;
-        private bool _isPrinting = false; // flag to prevent multiple dialogs
+        // private bool _isPrinting = false; // flag to prevent multiple dialogs
 
 
         public event PropertyChangedEventHandler PropertyChanged;
 
         // Mapping UI parameter name -> model property name (exact)
-        private static readonly Dictionary<string, string> ParameterToColumn = new()
-        {
-            ["Overall Length"] = "OL",
-            ["Datum to End"] = "DE",
-            ["Head Diameter"] = "HD",
-            ["Groove Position"] = "GP",
-            ["Stem Dia Near Groove"] = "STDG",
-            ["Stem Dia Near Undercut"] = "STDU",
-            ["Groove Diameter"] = "GIR_DIA",
-            ["Straightness"] = "STN",
-            ["Ovality SDG"] = "Ovality_SDG",
-            ["Ovality SDU"] = "Ovality_SDU",
-            ["Ovality Head"] = "Ovality_Head",
-            ["Stem Taper"] = "Stem_Taper",
-            ["End Face Runout"] = "EFRO",
-            ["Face Runout"] = "Face_Runout",
-            ["Seat Height"] = "SH"
-        };
+        // maps UI parameter text -> MeasurementReading property name
+        private static readonly Dictionary<string, string> ParameterToColumn =
+     new(StringComparer.OrdinalIgnoreCase)
+     {
+         ["STEP OD1"] = nameof(MeasurementReading.StepOd1),
+         ["STEP RUNOUT-1"] = nameof(MeasurementReading.StepRunout1),
+         ["OD-1"] = nameof(MeasurementReading.Od1),
+         ["RN-1"] = nameof(MeasurementReading.Rn1),
+         ["OD-2"] = nameof(MeasurementReading.Od2),
+         ["RN-2"] = nameof(MeasurementReading.Rn2),
+         ["OD-3"] = nameof(MeasurementReading.Od3),
+         ["RN-3"] = nameof(MeasurementReading.Rn3),
+         ["STEP OD2"] = nameof(MeasurementReading.StepOd2),
+         ["STEP RUNOUT-2"] = nameof(MeasurementReading.StepRunout2),
+         ["ID-1"] = nameof(MeasurementReading.Id1),
+         ["RN-4"] = nameof(MeasurementReading.Rn4),
+         ["ID-2"] = nameof(MeasurementReading.Id2),
+         ["RN-5"] = nameof(MeasurementReading.Rn5),
+         ["OL"] = nameof(MeasurementReading.Ol)
+     };
+
+
 
         public Report_GraphPage()
         {
@@ -194,7 +191,6 @@ namespace EVMS
             // NEW GRAPH TYPES
             DesignOptions.Add("Normal Distribution");             // Histogram with Normal Curve
             DesignOptions.Add("Run Chart");     // I-Chart / X-Chart
-            DesignOptions.Add("Gage R&R");             // Trend / Run Chart
 
             // Default selected
             //SelectedDesign = DesignOptions.FirstOrDefault();
@@ -391,14 +387,6 @@ namespace EVMS
             await LoadGraphAsync();
         }
 
-        // --------------------------------------------------------------------
-        // NOTE:
-        // - Your original implementation is preserved below as LoadGraphAsync_Old.
-        // - The new active method is LoadGraphAsync which implements the unified
-        //   X = measurement, Y = count logic for Line, Bar, Histogram, while
-        //   preserving Gage R&R behavior.
-        // --------------------------------------------------------------------
-
 
 
 
@@ -412,8 +400,8 @@ namespace EVMS
             var rAndRData = list
                 .Select(m => new
                 {
-                    Part = (string)m.GetType().GetProperty("PartNo")?.GetValue(m),
-                    Operator = (string)m.GetType().GetProperty("Operator_ID")?.GetValue(m),
+                    Part = (string?)m.GetType().GetProperty("PartNo")?.GetValue(m),
+                    Operator = (string?)m.GetType().GetProperty("Operator_ID")?.GetValue(m),
                     Trial = (int?)m.GetType().GetProperty("TrialNo")?.GetValue(m),
                     Measurement = Convert.ToDouble(m.GetType().GetProperty(col)?.GetValue(m) ?? 0)
                 }).ToList();
@@ -482,24 +470,24 @@ namespace EVMS
         // NEW: Unified LoadGraphAsync
         // --------------------------
         private async Task LoadGraphAsync()
-    {
-    try
         {
-            if (string.IsNullOrEmpty(SelectedParameter) || string.IsNullOrEmpty(SelectedPartNo))
-                return;
+            try
+            {
+                if (string.IsNullOrEmpty(SelectedParameter) || string.IsNullOrEmpty(SelectedPartNo))
+                    return;
 
-            string part = SelectedPartNo == "All" ? null : SelectedPartNo;
-        string lot = SelectedLotNo == "All" ? null : SelectedLotNo;
-        string oper = SelectedOperator == "All" ? null : SelectedOperator;
+                string? part = SelectedPartNo == "All" ? null : SelectedPartNo;
+                string? lot = SelectedLotNo == "All" ? null : SelectedLotNo;
+                string? oper = SelectedOperator == "All" ? null : SelectedOperator;
 
-        var config = _dataService.GetPartConfig(part)?.FirstOrDefault(c => c.Parameter == SelectedParameter);
-        if (config == null) return;
+                var config = _dataService.GetPartConfig(part)?.FirstOrDefault(c => c.Parameter == SelectedParameter);
+                if (config == null) return;
 
-        var list = await _data_service_safe_getops(part, SelectedDateTimeFrom, SelectedDateTimeTo) == null
-            ? await _dataService.GetMeasurementReadingsAsync(part, lot, oper, SelectedDateTimeFrom, SelectedDateTimeTo)
-            : await _dataService.GetMeasurementReadingsAsync(part, lot, oper, SelectedDateTimeFrom, SelectedDateTimeTo);
-        // (Above: kept your existing call; you may replace with direct call if needed)
-        if (list == null) return;
+                var list = await _data_service_safe_getops(part, SelectedDateTimeFrom, SelectedDateTimeTo) == null
+                    ? await _dataService.GetMeasurementReadingsAsync(part, lot, oper, SelectedDateTimeFrom, SelectedDateTimeTo)
+                    : await _dataService.GetMeasurementReadingsAsync(part, lot, oper, SelectedDateTimeFrom, SelectedDateTimeTo);
+                // (Above: kept your existing call; you may replace with direct call if needed)
+                if (list == null) return;
 
                 if (SelectedReportType == "NG")
                 {
@@ -512,150 +500,164 @@ namespace EVMS
                 // else "All" → Do nothing (keep full list)
 
                 // If no data after filtering
+                // If no data after filtering
                 if (!list.Any())
                 {
                     MessageBox.Show("No data found for the selected Report Type.");
                     return;
                 }
 
+                // 🔹 ADD / KEEP THIS BLOCK HERE
+                string? col = null;
 
-                string col = ParameterToColumn.ContainsKey(SelectedParameter) ? ParameterToColumn[SelectedParameter] : null;
-        if (col == null) return;
+                if (!string.IsNullOrEmpty(SelectedParameter) &&
+                    ParameterToColumn.TryGetValue(SelectedParameter, out var mapped))
+                {
+                    col = mapped;
+                }
+                if (col == null)
+                {
+                    MessageBox.Show($"No mapping found for parameter '{SelectedParameter}'.");
+                    return;
+                }
 
-        // Collect numeric values
-        List<double> valuesList = new();
-        foreach (var m in list)
-        {
-            var p = m.GetType().GetProperty(col);
-            if (p != null && double.TryParse(p.GetValue(m)?.ToString(), out double val))
-                valuesList.Add(val);
-        }
+                // Collect numeric values
+                var valuesList = list
+                    .Select(r => r.GetType().GetProperty(col)?.GetValue(r))
+                    .Where(v => v != null)
+                    .Select(v => Convert.ToDouble(v))
+                    .ToList();
 
-        if (valuesList.Count == 0) return;
+                if (!valuesList.Any())
+                {
+                    MessageBox.Show($"No numeric values found for '{col}'.");
+                    return;
+                }
 
-        // Tolerances
-        double nominal = config.Nominal;
-        double LSL = config.Nominal - config.RTolMinus;
-        double USL = config.Nominal + config.RTolPlus;
 
-        var plt = ScottPlotControl.Plot;
-        plt.Clear();
+                // Tolerances
+                double nominal = config.Nominal;
+                double LSL = config.Nominal - config.RTolMinus;
+                double USL = config.Nominal + config.RTolPlus;
 
-        // -------------------------
-        // Prepare histogram bins
-        // -------------------------
-        double dataMin = valuesList.Min();
-        double dataMax = valuesList.Max();
+                var plt = ScottPlotControl.Plot;
+                plt.Clear();
 
-        // Determine min/max to cover both data and tolerance band
-        double minX = Math.Min(LSL, dataMin);
-        double maxX = Math.Max(USL, dataMax);
+                // -------------------------
+                // Prepare histogram bins
+                // -------------------------
+                double dataMin = valuesList.Min();
+                double dataMax = valuesList.Max();
 
-        // Protect against degenerate range
-        if (Math.Abs(maxX - minX) < 1e-12)
-        {
-            minX -= 1.0;
-            maxX += 1.0;
-        }
+                // Determine min/max to cover both data and tolerance band
+                double minX = Math.Min(LSL, dataMin);
+                double maxX = Math.Max(USL, dataMax);
 
-        // Bin count heuristic
-        int binCount = 20;
-        binCount = Math.Min(binCount, Math.Max(5, valuesList.Count)); // at least 5 bins, no more than sample count
+                // Protect against degenerate range
+                if (Math.Abs(maxX - minX) < 1e-12)
+                {
+                    minX -= 1.0;
+                    maxX += 1.0;
+                }
 
-        double binSize = (maxX - minX) / binCount;
+                // Bin count heuristic
+                int binCount = 20;
+                binCount = Math.Min(binCount, Math.Max(5, valuesList.Count)); // at least 5 bins, no more than sample count
 
-        double[] binCenters = new double[binCount];
-        double[] counts = new double[binCount];
-        for (int i = 0; i < binCount; i++)
-            binCenters[i] = minX + (i * binSize) + binSize / 2.0;
+                double binSize = (maxX - minX) / binCount;
 
-        // Tally counts into manual bins
-        foreach (double v in valuesList)
-        {
-            int binIndex = (int)((v - minX) / binSize);
-            if (binIndex < 0) binIndex = 0;
-            if (binIndex >= binCount) binIndex = binCount - 1;
-            counts[binIndex]++;
-        }
+                double[] binCenters = new double[binCount];
+                double[] counts = new double[binCount];
+                for (int i = 0; i < binCount; i++)
+                    binCenters[i] = minX + (i * binSize) + binSize / 2.0;
 
-        // -------------------------
-        // Compute statistics (full formulas)
-        // -------------------------
-        double mean = valuesList.Average();
+                // Tally counts into manual bins
+                foreach (double v in valuesList)
+                {
+                    int binIndex = (int)((v - minX) / binSize);
+                    if (binIndex < 0) binIndex = 0;
+                    if (binIndex >= binCount) binIndex = binCount - 1;
+                    counts[binIndex]++;
+                }
 
-        // Population sigma (divide by N) — matches screenshot style
-        double sigma = 0;
-        if (valuesList.Count > 0)
-            sigma = Math.Sqrt(valuesList.Sum(v => Math.Pow(v - mean, 2)) / valuesList.Count);
+                // -------------------------
+                // Compute statistics (full formulas)
+                // -------------------------
+                double mean = valuesList.Average();
 
-        double sixSigma = 6.0 * sigma;
+                // Population sigma (divide by N) — matches screenshot style
+                double sigma = 0;
+                if (valuesList.Count > 0)
+                    sigma = Math.Sqrt(valuesList.Sum(v => Math.Pow(v - mean, 2)) / valuesList.Count);
 
-        double minValue = dataMin;
-        double maxValue = dataMax;
+                double sixSigma = 6.0 * sigma;
 
-        double classInterval = binSize;
+                double minValue = dataMin;
+                double maxValue = dataMax;
 
-        // Cp: (USL - LSL) / (6 * sigma) — handle sigma==0
-        double cp = double.NaN;
-        if (sigma > 0)
-            cp = (USL - LSL) / (6.0 * sigma);
+                double classInterval = binSize;
 
-        // Cpk:
-        double cpu = double.NaN;
-        double cpl = double.NaN;
-        double cpk = double.NaN;
-        if (sigma > 0)
-        {
-            cpu = (USL - mean) / (3.0 * sigma);
-            cpl = (mean - LSL) / (3.0 * sigma);
-            cpk = Math.Min(cpu, cpl);
-        }
+                // Cp: (USL - LSL) / (6 * sigma) — handle sigma==0
+                double cp = double.NaN;
+                if (sigma > 0)
+                    cp = (USL - LSL) / (6.0 * sigma);
 
-        // Pp / Ppk (use sample sigma: divide by N-1)
-        double sigma_p = double.NaN;
-        if (valuesList.Count > 1)
-            sigma_p = Math.Sqrt(valuesList.Sum(v => Math.Pow(v - mean, 2)) / (valuesList.Count - 1));
+                // Cpk:
+                double cpu = double.NaN;
+                double cpl = double.NaN;
+                double cpk = double.NaN;
+                if (sigma > 0)
+                {
+                    cpu = (USL - mean) / (3.0 * sigma);
+                    cpl = (mean - LSL) / (3.0 * sigma);
+                    cpk = Math.Min(cpu, cpl);
+                }
 
-        double pp = double.NaN;
-        if (!double.IsNaN(sigma_p) && sigma_p > 0)
-            pp = (USL - LSL) / (6.0 * sigma_p);
+                // Pp / Ppk (use sample sigma: divide by N-1)
+                double sigma_p = double.NaN;
+                if (valuesList.Count > 1)
+                    sigma_p = Math.Sqrt(valuesList.Sum(v => Math.Pow(v - mean, 2)) / (valuesList.Count - 1));
 
-        double ppu = double.NaN, ppl = double.NaN, ppk = double.NaN;
-        if (!double.IsNaN(sigma_p) && sigma_p > 0)
-        {
-            ppu = (USL - mean) / (3.0 * sigma_p);
-            ppl = (mean - LSL) / (3.0 * sigma_p);
-            ppk = Math.Min(ppu, ppl);
-        }
+                double pp = double.NaN;
+                if (!double.IsNaN(sigma_p) && sigma_p > 0)
+                    pp = (USL - LSL) / (6.0 * sigma_p);
 
-        // Format values safely
-        string fmtD(double d) => double.IsNaN(d) ? "-" : d.ToString("0.###");
+                double ppu = double.NaN, ppl = double.NaN, ppk = double.NaN;
+                if (!double.IsNaN(sigma_p) && sigma_p > 0)
+                {
+                    ppu = (USL - mean) / (3.0 * sigma_p);
+                    ppl = (mean - LSL) / (3.0 * sigma_p);
+                    ppk = Math.Min(ppu, ppl);
+                }
 
-        // -------------------------
-        // Draw charts based on SelectedDesign
-        // -------------------------
+                // Format values safely
+                string? fmtD(double d) => double.IsNaN(d) ? "-" : d.ToString("0.###");
 
-        // LINE CHART: counts vs bin centers (distribution line)
-        if (SelectedDesign == "Line Chart")
-        {
-            var scatter = plt.AddScatter(binCenters, counts, lineWidth: 2);
-            scatter.Color = System.Drawing.Color.Blue;
+                // -------------------------
+                // Draw charts based on SelectedDesign
+                // -------------------------
 
-            plt.Title($"{SelectedParameter} - Distribution (Line)");
-            plt.XLabel("Measurement Value");
-            plt.YLabel("Count");
-        }
-        // BAR CHART: bar histogram
-        else if (SelectedDesign == "Histogram")
-        {
-            var bar = plt.AddBar(counts, binCenters);
-            bar.BarWidth = binSize * 0.9;
-            bar.FillColor = System.Drawing.Color.SteelBlue;
+                // LINE CHART: counts vs bin centers (distribution line)
+                if (SelectedDesign == "Line Chart")
+                {
+                    var scatter = plt.AddScatter(binCenters, counts, lineWidth: 2);
+                    scatter.Color = System.Drawing.Color.Blue;
 
-            plt.Title($"{SelectedParameter} - Histogram (Bar Chart)");
-            plt.XLabel("Measurement Value");
-            plt.YLabel("Count");
-        }
+                    plt.Title($"{SelectedParameter} - Distribution (Line)");
+                    plt.XLabel("Measurement Value");
+                    plt.YLabel("Count");
+                }
+                // BAR CHART: bar histogram
+                else if (SelectedDesign == "Histogram")
+                {
+                    var bar = plt.AddBar(counts, binCenters);
+                    bar.BarWidth = binSize * 0.9;
+                    bar.FillColor = System.Drawing.Color.SteelBlue;
+
+                    plt.Title($"{SelectedParameter} - Histogram (Bar Chart)");
+                    plt.XLabel("Measurement Value");
+                    plt.YLabel("Count");
+                }
                 else if (SelectedDesign == "Normal Distribution")
                 {
                     var bar = plt.AddBar(counts, binCenters);
@@ -695,20 +697,13 @@ namespace EVMS
                            .Label = "Normal Curve";
                     }
 
-                    
-                    
+
+
 
                     plt.Legend(true);
 
                     // adjust view
                     plt.SetAxisLimits(minX, maxX, 0, counts.Max() * 1.20);
-                }
-
-                // Gage R&R: keep your original implementation (copied in)
-                else if (SelectedDesign == "Gage R&R")
-                {
-                    PlotGageRR(list.Cast<object>().ToList(), col);
-                    return;   // ⬅ Important: stop histogram drawing
                 }
                 else if (SelectedDesign == "Run Chart")
                 {
@@ -762,24 +757,24 @@ namespace EVMS
                 // -------------------------
                 try
                 {
-            var lslLine = plt.AddVerticalLine(LSL, System.Drawing.Color.Red, 2);
-            lslLine.Label = $"LSL {LSL:0.###}";
-            var uslLine = plt.AddVerticalLine(USL, System.Drawing.Color.Red, 2);
-            uslLine.Label = $"USL {USL:0.###}";
-            var nominalLine = plt.AddVerticalLine(nominal, System.Drawing.Color.Green, 2);
-            nominalLine.Label = $"Nominal {nominal:0.###}";
+                    var lslLine = plt.AddVerticalLine(LSL, System.Drawing.Color.Red, 2);
+                    lslLine.Label = $"LSL {LSL:0.###}";
+                    var uslLine = plt.AddVerticalLine(USL, System.Drawing.Color.Red, 2);
+                    uslLine.Label = $"USL {USL:0.###}";
+                    var nominalLine = plt.AddVerticalLine(nominal, System.Drawing.Color.Green, 2);
+                    nominalLine.Label = $"Nominal {nominal:0.###}";
 
-            plt.Legend(true);
-        }
-        catch
-        {
-            // ignore legend errors
-        }
+                    plt.Legend(true);
+                }
+                catch
+                {
+                    // ignore legend errors
+                }
 
                 // -------------------------
                 // Compose statistics text
                 // -------------------------
-                string statsText =
+                string? statsText =
       $"USL: {fmtD(USL)}    LSL: {fmtD(LSL)}    Tol: {fmtD(USL - LSL)}\n" +
       $"Min: {fmtD(minValue)}    Max: {fmtD(maxValue)}\n" +
       $"Sigma: {fmtD(sigma)}    6 Sigma: {fmtD(sixSigma)}\n" +
@@ -809,13 +804,13 @@ namespace EVMS
             yMin: 0
         );
 
-        ScottPlotControl.Refresh();
-    }
-    catch (Exception ex)
-    {
-        MessageBox.Show(ex.Message, "Graph Error");
-    }
-}
+                ScottPlotControl.Refresh();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Graph Error");
+            }
+        }
 
 
 
@@ -829,9 +824,9 @@ namespace EVMS
                 if (string.IsNullOrEmpty(SelectedParameter) || string.IsNullOrEmpty(SelectedPartNo))
                     return;
 
-                string part = SelectedPartNo == "All" ? null : SelectedPartNo;
-                string lot = SelectedLotNo == "All" ? null : SelectedLotNo;
-                string oper = SelectedOperator == "All" ? null : SelectedOperator;
+                string? part = SelectedPartNo == "All" ? null : SelectedPartNo;
+                string? lot = SelectedLotNo == "All" ? null : SelectedLotNo;
+                string? oper = SelectedOperator == "All" ? null : SelectedOperator;
 
                 var config = _dataService.GetPartConfig(part)?.FirstOrDefault(c => c.Parameter == SelectedParameter);
                 if (config == null) return;
@@ -892,7 +887,6 @@ namespace EVMS
                     for (int i = 0; i < values.Length; i++)
                     {
                         double xCenter = xs[i];
-                        double barWidth = 0.8;
 
                         bool ok = values[i] >= LSL && values[i] <= USL;
 

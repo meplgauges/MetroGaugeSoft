@@ -171,6 +171,8 @@
                                 Click="DashboardCard_Click" Background="#F0FFEE"/>
                         <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/graph.png" Content="Report Graph"
                                 Click="DashboardCard_Click" Background="#FFF0F5"/>
+                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/report.png" Content="RnR Report"
+                                Click="DashboardCard_Click" Background="#FFFFFF"/>
                         <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/Part Manager.png" Content="Part Manager"
                                 Click="DashboardCard_Click" Background="#FFFBEA"/>
 
@@ -192,8 +194,11 @@
                         <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/sett.png" Content="Settings"
                                 Click="DashboardCard_Click" Background="#E8F4FF"/>
 
-                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/inst.png" Content="Probe Install"
+                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/inst.png" Content="Probes"
                                 Click="DashboardCard_Click" Background="#FFFFFF"/>
+
+
+
 
                     </UniformGrid>
                 </Grid>

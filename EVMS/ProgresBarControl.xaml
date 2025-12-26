@@ -33,7 +33,7 @@
                           Opacity="0.3"/>
 
         <DropShadowEffect x:Key="GlowEffect"
-                          BlurRadius="15"
+                          BlurRadius="1"
                           ShadowDepth="0"
                           Color="#00FFAA"
                           Opacity="0.6"/>
@@ -151,7 +151,7 @@
                 <!-- Title display -->
                 <TextBlock x:Name="TitleBox"
                            Height="25"
-                           Width="100"
+                           Width="120"
                            Foreground="#333333"
                            Padding="2"
                            FontSize="15"

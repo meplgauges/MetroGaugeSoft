@@ -1,9 +1,6 @@
 ﻿using EVMS.Service;
-using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -52,6 +49,29 @@ namespace EVMS
             }
         }
 
+        public ObservableCollection<int> RecordsCountOptions { get; set; } = new();
+        private int _selectedRecordsCount = 30;   // default 30
+
+        public int SelectedRecordsCount
+        {
+            get => _selectedRecordsCount;
+            set
+            {
+                if (_selectedRecordsCount != value)
+                {
+                    _selectedRecordsCount = value;
+                    OnPropertyChanged(nameof(SelectedRecordsCount));
+
+                    // Reload when user changes count and parameter is selected
+                    if (!string.IsNullOrEmpty(SelectedPartNo) &&
+                        !string.IsNullOrEmpty(SelectedParameter))
+                    {
+                        _ = LoadReadingsAsync();
+                    }
+                }
+            }
+        }
+
         private SummaryStats _summary = new();
         public SummaryStats Summary
         {
@@ -70,16 +90,30 @@ namespace EVMS
             _dataService = new DataStorageService();
             DataContext = this;
 
+            // ✅ Set fixed options for number of records
+            RecordsCountOptions.Clear();
+            foreach (var n in new[] { 5, 10, 15, 20, 25, 30 })
+                RecordsCountOptions.Add(n);
+
+            SelectedRecordsCount = 30; // default
+
             LoadActiveParts();
         }
+
 
         private void LoadActiveParts()
         {
             ActiveParts.Clear();
             var parts = _dataService.GetActiveParts();
+
             foreach (var p in parts)
                 ActiveParts.Add(p.Para_No);
+
+            // ✅ Auto-pick first active part
+            if (ActiveParts.Any())
+                SelectedPartNo = ActiveParts[0];   // This will call LoadParametersForPart()
         }
+
 
         private void LoadParametersForPart()
         {
@@ -108,13 +142,15 @@ namespace EVMS
                 if (readings == null || !readings.Any())
                     return;
 
-                string columnName = MapParameterToColumn(SelectedParameter);
+                string columnName = MapParameterToProperty(SelectedParameter);
 
-                var last30 = readings.OrderByDescending(r => r.MeasurementDate)
-                                     .Take(30)
-                                     .ToList();
+                int count = SelectedRecordsCount > 0 ? SelectedRecordsCount : 30;
 
-                var values = last30
+                var lastN = readings.OrderByDescending(r => r.MeasurementDate)
+                                    .Take(count)
+                                    .ToList();
+
+                var values = lastN
                     .Select(r =>
                     {
                         var prop = r.GetType().GetProperty(columnName);
@@ -124,6 +160,7 @@ namespace EVMS
                     })
                     .Where(v => v.Reading != 0)
                     .ToList();
+
 
                 int serialNo = 1;
                 foreach (var v in values)
@@ -163,30 +200,25 @@ namespace EVMS
             }
         }
 
-        private string MapParameterToColumn(string parameter)
+        private string MapParameterToProperty(string parameter) => parameter switch
         {
-            return parameter switch
-            {
-                "Overall Length" => "OL",
-                "Datum to End" => "DE",
-                "Head Diameter" => "HD",
-                "Groove Position" => "GP",
-                "Stem Dia Near Groove" => "STDG",
-                "Stem Dia Near Undercut" => "STDU",
-                "Groove Diameter" => "GIR_DIA",
-                "Straightness" => "STN",
-                "Ovality SDG" => "Ovality_SDG",
-                "Ovality SDU" => "Ovality_SDU",
-                "Ovality Head" => "Ovality_Head",
-                "Stem Taper" => "Stem_Taper",
-                "End Face Runout" => "EFRO",
-                "Face Runout" => "Face_Runout",
-                "Seat Height" => "SH",
-                "Datum to Groove" => "DG",
-                "Seat Runout" => "S_RO",
-                _ => parameter?.Replace(" ", "") ?? string.Empty
-            };
-        }
+            "STEP OD1" => nameof(MeasurementReading.StepOd1),
+            "STEP RUNOUT-1" => nameof(MeasurementReading.StepRunout1),
+            "OD-1" => nameof(MeasurementReading.Od1),
+            "RN-1" => nameof(MeasurementReading.Rn1),
+            "OD-2" => nameof(MeasurementReading.Od2),
+            "RN-2" => nameof(MeasurementReading.Rn2),
+            "OD-3" => nameof(MeasurementReading.Od3),
+            "RN-3" => nameof(MeasurementReading.Rn3),
+            "STEP OD2" => nameof(MeasurementReading.StepOd2),
+            "STEP RUNOUT-2" => nameof(MeasurementReading.StepRunout2),
+            "ID-1" => nameof(MeasurementReading.Id1),
+            "RN-4" => nameof(MeasurementReading.Rn4),
+            "ID-2" => nameof(MeasurementReading.Id2),
+            "RN-5" => nameof(MeasurementReading.Rn5),
+            "OL" => nameof(MeasurementReading.Ol),
+            _ => parameter.Replace(" ", "")
+        };
 
         private void PartNo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {

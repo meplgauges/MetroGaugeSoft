@@ -1,20 +1,16 @@
 ﻿using ActUtlType64Lib;
-using ICSharpCode.SharpZipLib.Zip;
 using Microsoft.Data.SqlClient;
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Configuration;
+using System.Data;
 using System.Globalization;
 using System.IO.Ports;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;   // ← add this line
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -23,6 +19,7 @@ namespace EVMS
 {
     public partial class ProbeSetupPage : UserControl, INotifyPropertyChanged
     {
+
         private readonly string _connectionString;
         private readonly DispatcherTimer _timer;
         private readonly DispatcherTimer ioMonitorTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
@@ -31,12 +28,16 @@ namespace EVMS
         // PLC
         private IActUtlType64 plc = new ActUtlType64Class();
         private bool isPlcConnected = false;
-        private bool plcBitState = false;
-        private bool motorRunState = false;
+        //private bool plcBitState = false;
+        //private bool motorRunState = false;
 
         // IO devices
         private List<IODevice> inputDevices = new();
         private Dictionary<string, Button> inputButtons = new();
+
+        private List<IODevice> outputDevices = new();
+        private Dictionary<string, ToggleButton> outputButtons = new();
+
 
         // Serial
         private SerialPort? _serial;
@@ -88,7 +89,60 @@ namespace EVMS
         private void ProbeSetupPage_Loaded(object sender, RoutedEventArgs e)
         {
             ConnectToCom3();
+            ConnectPlcOnPageLoad();
         }
+
+
+        private async void ConnectPlcOnPageLoad()
+        {
+            NotifyStatus("🔄 Connecting PLC...");
+
+            //plc.ActLogicalStationNumber = 1;
+            //var openTask = Task.Run(() => plc.Open());
+            //var completed = await Task.WhenAny(openTask, Task.Delay(3000));
+
+            //if (completed == openTask && openTask.Result == 0)
+            //{
+            //    isPlcConnected = true;
+            //    NotifyStatus("✅ PLC Connected");
+
+            //    // ✅ Enable buttons immediately after connect
+            //    foreach (var btn in outputButtons.Values)
+            //        btn.IsEnabled = true;
+            //}
+            //else
+            //{
+            //    isPlcConnected = false;
+            //    NotifyStatus("❌ PLC Failed");
+            //}
+        }
+
+
+
+
+        public List<SerialPortConfigModel> GetSerialPortConfig()
+        {
+            var list = new List<SerialPortConfigModel>();
+            string query = "SELECT ID, ComPort, BaudRate FROM SerialSettings WHERE ID = 1";
+
+            using SqlConnection conn = new(_connectionString);
+            using SqlCommand cmd = new(query, conn);
+
+            conn.Open();
+            using SqlDataReader reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                list.Add(new SerialPortConfigModel
+                {
+                    ID = Convert.ToInt32(reader["ID"]),
+                    ComPort = reader["ComPort"].ToString(),
+                    BaudRate = Convert.ToInt32(reader["BaudRate"])
+                });
+            }
+            return list;
+        }
+
+
 
         private void ConnectToCom3()
         {
@@ -98,13 +152,19 @@ namespace EVMS
                 _serial?.Dispose();
                 _serial = null;
 
-                _serial = new SerialPort("COM3", 115200, Parity.None, 8, StopBits.One)
+                // ✅ WHATEVER IN DB - NO COM8 fallback
+                var config = GetSerialPortConfig().FirstOrDefault();
+                if (config != null && !string.IsNullOrEmpty(config.ComPort))
                 {
-                    ReadTimeout = 500,
-                    WriteTimeout = 500
-                };
+                    string comPort = config.ComPort;  // DB value
 
-                _serial.Open();
+                    _serial = new SerialPort(comPort, 115200, Parity.None, 8, StopBits.One)
+                    {
+                        ReadTimeout = 500,
+                        WriteTimeout = 500
+                    };
+                    _serial.Open();
+                }
             }
             catch { }
         }
@@ -114,15 +174,29 @@ namespace EVMS
             try
             {
                 await LoadInputDevicesAsync();
+                await LoadOutputDevicesAsync();
+                GenerateOutputButtons();
                 GenerateInputButtons();
-                StartIOMonitoring();
 
                 await LoadPartNumbersAsync();
-
                 if (!string.IsNullOrEmpty(SelectedPartNo))
                     await LoadProbeDataFromInstallationDataAsync(SelectedPartNo);
+                // ✅ Wait for PLC connection before initializing
+                await Task.Delay(3500); // Give PLC connect time
+                await InitializeOutputButtonStatesAsync();
 
-                NotifyStatus("PLC auto-connect not attempted.");
+                // ✅ Enable output buttons only if PLC connected
+                if (isPlcConnected)
+                {
+                    foreach (var btn in outputButtons.Values)
+                        btn.IsEnabled = true;
+
+                    StartIOMonitoring();
+                }
+
+
+
+                NotifyStatus(isPlcConnected ? "✅ All systems ready" : "⚠️ PLC not connected");
             }
             catch (Exception ex)
             {
@@ -130,56 +204,40 @@ namespace EVMS
             }
         }
 
+
         #region MOTOR PLC BUTTONS
-        private void MotorUpDownButton_Click(object sender, RoutedEventArgs e)
+        private async Task InitializeOutputButtonStatesAsync()
         {
-            if (!isPlcConnected)
+            if (!isPlcConnected) return;
+
+            foreach (var device in outputDevices)
             {
-                MessageBox.Show("PLC not connected.");
-                return;
-            }
+                if (!outputButtons.ContainsKey(device.Bit)) continue;
 
-            string plcBit = "M10";
-
-            try
-            {
-                plcBitState = !plcBitState;
-                int valueToWrite = plcBitState ? 1 : 0;
-
-                int result = plc.SetDevice(plcBit, valueToWrite);
-
-                if (result == 0)
+                try
                 {
-                    MotorUpDownButton.Content = plcBitState ? "Cylinder: DOWN" : "Cylinder: UP";
+                    int result = plc.GetDevice(device.Bit, out int value);
+                    if (result == 0)
+                    {
+                        var btn = outputButtons[device.Bit];
+                        btn.IsChecked = (value == 1);
+                        btn.Background = value == 1 ? Brushes.Green : Brushes.Red;
+                    }
+                    else
+                    {
+                        outputButtons[device.Bit].Background = Brushes.Gray;
+                    }
+                }
+                catch
+                {
+                    if (outputButtons.ContainsKey(device.Bit))
+                        outputButtons[device.Bit].Background = Brushes.Gray;
                 }
             }
-            catch { }
         }
 
-        private void MotorRunButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (!isPlcConnected)
-            {
-                MessageBox.Show("PLC not connected.");
-                return;
-            }
 
-            string plcBit = "M14";
 
-            try
-            {
-                motorRunState = !motorRunState;
-                int valueToWrite = motorRunState ? 1 : 0;
-
-                int result = plc.SetDevice(plcBit, valueToWrite);
-
-                if (result == 0)
-                {
-                    MotorRunButton.Content = motorRunState ? "MOTOR: ON" : "MOTOR: OFF";
-                }
-            }
-            catch { }
-        }
         #endregion
 
         #region DATABASE LOADING
@@ -190,14 +248,25 @@ namespace EVMS
                 using var con = new SqlConnection(_connectionString);
                 await con.OpenAsync();
 
-                using var cmd = new SqlCommand("SELECT DISTINCT Para_No FROM PART_ENTRY ORDER BY Para_No", con);
+                // Only active part(s)
+                const string sql = @"
+            SELECT Para_No 
+            FROM PART_ENTRY 
+            WHERE ActivePart = 1
+            ORDER BY Para_No";
+
+                using var cmd = new SqlCommand(sql, con);
 
                 PartNumbers.Clear();
 
                 using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
-                    PartNumbers.Add(reader.GetString(0));
+                    // If Para_No is INT in DB
+                    object raw = reader.GetValue(0);
+                    string paraNo = Convert.ToString(raw, CultureInfo.InvariantCulture) ?? "";
+                    if (!string.IsNullOrWhiteSpace(paraNo))
+                        PartNumbers.Add(paraNo);
                 }
 
                 if (PartNumbers.Count > 0)
@@ -205,7 +274,7 @@ namespace EVMS
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading part numbers: {ex.Message}");
+                MessageBox.Show($"Error loading active part: {ex.Message}");
             }
         }
 
@@ -220,38 +289,92 @@ namespace EVMS
                 await con.OpenAsync();
 
                 string query = @"
-            SELECT ParameterName, BoxId, ChannelId 
-            FROM ProbeInstallationData 
+            SELECT ParameterName, BoxId, ChannelId, ProbeName
+            FROM ProbeInstallationData
             WHERE PartNo = @P
-            ORDER BY ParameterName, ChannelId";
+            ORDER BY 
+                CASE 
+                    WHEN ProbeName LIKE 'Probe%' THEN 
+                        CAST(SUBSTRING(ProbeName, 6, LEN(ProbeName)) AS INT)
+                    ELSE 999
+                END,
+                ProbeName";
 
                 using var cmd = new SqlCommand(query, con);
                 cmd.Parameters.AddWithValue("@P", partNo);
 
+                var allRows = new List<(string ParameterName, string ProbeName, int BoxId, int ChannelId)>();
                 using var reader = await cmd.ExecuteReaderAsync();
-
-                Probes.Clear();
 
                 while (await reader.ReadAsync())
                 {
-                    string name = reader["ParameterName"].ToString();
-                    int boxId = Convert.ToInt32(reader["BoxId"]);
-                    int channel = Convert.ToInt32(reader["ChannelId"]);
-
-                    // ⚡ EACH PROBE IS A SEPARATE ROW NOW
-                    Probes.Add(new ProbeRow
-                    {
-                        Title = $"{name} (CH {channel})",
-                        BoxId = boxId,
-                        Channels = new List<int> { channel }  // SINGLE PROBE ONLY
-                    });
+                    allRows.Add((
+                        ParameterName: reader.GetString("ParameterName"),
+                        ProbeName: reader.GetString("ProbeName"),
+                        BoxId: reader.GetInt32("BoxId"),
+                        ChannelId: reader.GetInt32("ChannelId")
+                    ));
                 }
+
+                // Group by ProbeName and sort numerically
+                var probeGroups = allRows
+                    .GroupBy(x => x.ProbeName)
+                    .Select(g => new ProbeRow
+                    {
+                        ID = g.First().ParameterName,
+                        BoxId = g.First().BoxId,
+                        Channels = g.Select(x => x.ChannelId).Distinct().OrderBy(c => c).ToList(),
+                        Title = g.Key  // Shows exactly "Probe 1", "Probe 2", "Probe 3"
+                    })
+                    .OrderBy(p => ExtractProbeNumber(p.Title))  // Numeric sort: 1,2,3...
+                    .ThenBy(p => p.Title);
+
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    Probes.Clear();
+                    foreach (var probe in probeGroups)
+                        Probes.Add(probe);
+                });
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading ProbeInstallationData: {ex.Message}");
+                MessageBox.Show($"Error loading probes: {ex.Message}", "Database Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
+
+        private async Task LoadOutputDevicesAsync()
+        {
+            outputDevices.Clear();
+            using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync();
+            const string sql = "SELECT ID, Description, Bit, IsOutput FROM IODevices WHERE IsOutput = 1";
+            using var cmd = new SqlCommand(sql, conn);
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                outputDevices.Add(new IODevice
+                {
+                    Description = reader["Description"]?.ToString() ?? "Unknown",
+                    Bit = reader["Bit"]?.ToString() ?? "Unknown",
+                    // add IsOutput if you keep that property
+                });
+            }
+        }
+
+
+        // Helper method for numeric probe sorting
+        private int ExtractProbeNumber(string probeName)
+        {
+            if (probeName.StartsWith("Probe ") && int.TryParse(probeName.Substring(6), out int number))
+                return number;
+            return 999; // Unknown probes last
+        }
+
+
+
+
 
         #endregion
 
@@ -495,7 +618,7 @@ namespace EVMS
                 }
                 else
                 {
-                   // System.Diagnostics.Debug.WriteLine($"❌ Ch{i + 1} Parse failed: '{valueStr}'");
+                    // System.Diagnostics.Debug.WriteLine($"❌ Ch{i + 1} Parse failed: '{valueStr}'");
                 }
             }
 
@@ -596,28 +719,267 @@ namespace EVMS
 
         private void GenerateInputButtons()
         {
-            InputButtonPanel.Children.Clear();
-            inputButtons.Clear();
-
-            foreach (var dev in inputDevices)
+            try
             {
-                Button b = new Button
-                {
-                    Width = 140,
-                    Height = 40,
-                    Margin = new Thickness(10),
-                    Tag = dev,
-                    Background = Brushes.White,
-                    Foreground = Brushes.Black,
-                    Opacity = 0.7,
-                    FontWeight = FontWeights.Bold,
-                    Content = dev.Description
-                };
+                ToggleGrid1.Children.Clear();
+                inputButtons.Clear();
 
-                inputButtons[dev.Bit] = b;
-                InputButtonPanel.Children.Add(b);
+                foreach (var device in inputDevices)
+                {
+                    try
+                    {
+                        Button inputButton = new Button
+                        {
+                            Width = 120,
+                            Height = 35,
+                            Margin = new Thickness(20),
+                            Tag = device,
+                            Background = Brushes.White,
+                            Foreground = Brushes.Black,
+                            Opacity = 0.7,
+                            FontWeight = FontWeights.Bold,
+                            Content = new TextBlock
+                            {
+                                Text = device.Description,
+                                TextWrapping = TextWrapping.Wrap,
+                                TextAlignment = TextAlignment.Center,
+                                HorizontalAlignment = HorizontalAlignment.Center,
+                                VerticalAlignment = VerticalAlignment.Center
+                            }
+                        };
+
+
+                        try
+                        {
+                            inputButton.Style = (Style)FindResource("ModernButtonStyle");
+                        }
+                        catch (ResourceReferenceKeyNotFoundException)
+                        {
+                            // Style not found, continue with default
+                        }
+
+                        inputButtons[device.Bit] = inputButton;
+                        ToggleGrid1.Children.Add(inputButton);
+                    }
+                    catch (Exception buttonEx)
+                    {
+                        MessageBox.Show($"Error creating input button for {device.Bit}: {buttonEx.Message}",
+                            "Button Creation Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error generating input buttons: {ex.Message}", "UI Error",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             }
         }
+
+        private void GenerateOutputButtons()
+        {
+            try
+            {
+                ToggleGrid.Children.Clear();
+                outputButtons.Clear();
+
+                foreach (var device in outputDevices)
+                {
+                    try
+                    {
+                        StackPanel container = new StackPanel
+                        {
+                            Orientation = Orientation.Vertical,
+                            Margin = new Thickness(3),
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                            VerticalAlignment = VerticalAlignment.Center
+
+                        };
+
+                        ToggleButton outputButton = new ToggleButton
+                        {
+                            Tag = device,
+                            IsEnabled = false,
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                            Margin = new Thickness(0, 0, 0, 5)
+                        };
+
+                        try
+                        {
+                            outputButton.Style = (Style)FindResource("ModernSwitchToggleStyle");
+                        }
+                        catch (ResourceReferenceKeyNotFoundException)
+                        {
+                            // Style not found, set default properties
+                            outputButton.Width = 80;
+                            outputButton.Height = 36;
+                        }
+
+                        TextBlock deviceLabel = new TextBlock
+                        {
+                            Text = $"{device.Description}",
+                            Foreground = Brushes.White,
+                            FontWeight = FontWeights.Bold,
+                            FontSize = 12,
+                            TextAlignment = TextAlignment.Center,
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Margin = new Thickness(0, 0, 0, 0)
+                        };
+
+                        outputButton.Checked += OutputButton_Checked;
+                        outputButton.Unchecked += OutputButton_Unchecked;
+                        outputButtons[device.Bit] = outputButton;
+
+                        container.Children.Add(outputButton);
+                        container.Children.Add(deviceLabel);
+                        ToggleGrid.Children.Add(container);
+                    }
+                    catch (Exception buttonEx)
+                    {
+                        MessageBox.Show($"Error creating output button for {device.Bit}: {buttonEx.Message}",
+                            "Button Creation Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error generating output buttons: {ex.Message}", "UI Error",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
+
+        private void OutputButton_Checked(object sender, RoutedEventArgs e)
+        {
+            if (sender is not ToggleButton button || button.Tag is not IODevice device)
+                return;
+
+            if (!isPlcConnected)
+            {
+                MessageBox.Show("PLC not connected.");
+                button.IsChecked = false;
+                return;
+            }
+
+            try
+            {
+                int result = plc.SetDevice(device.Bit, 1);
+                if (result == 0)
+                {
+                    button.Background = Brushes.Green;
+                }
+                else
+                {
+                    button.IsChecked = false;
+                    button.Background = Brushes.Red;
+                    MessageBox.Show($"Failed to turn {device.Bit} ON. Error code {result}.");
+                }
+            }
+            catch (Exception ex)
+            {
+                button.IsChecked = false;
+                MessageBox.Show($"PLC error for {device.Bit}: {ex.Message}");
+            }
+        }
+
+        private void OutputButton_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (sender is not ToggleButton button || button.Tag is not IODevice device)
+                return;
+
+            if (!isPlcConnected)
+            {
+                MessageBox.Show("PLC not connected.");
+                button.IsChecked = true; // Keep ON if not connected
+                return;
+            }
+
+            try
+            {
+                int result = plc.SetDevice(device.Bit, 0);
+                if (result == 0)
+                {
+                    button.Background = Brushes.Red;
+                }
+                else
+                {
+                    button.IsChecked = true;  // Stay ON on failure
+                    button.Background = Brushes.Green;
+                    MessageBox.Show($"Failed to turn {device.Bit} OFF. Error: {result}");
+                }
+            }
+            catch (Exception ex)
+            {
+                button.IsChecked = true;
+                MessageBox.Show($"PLC error {device.Bit}: {ex.Message}");
+            }
+        }
+
+
+
+        private async void ReadingToggle_Checked(object sender, RoutedEventArgs e)
+        {
+            // Same logic as StartBtn_Click
+            if (_serial == null || !_serial.IsOpen)
+            {
+                MessageBox.Show("Connect serial first.");
+                ReadingToggleButton.IsChecked = false;
+                return;
+            }
+
+            if (_serialCts != null)
+            {
+                MessageBox.Show("Already running.");
+                ReadingToggleButton.IsChecked = false;
+                return;
+            }
+
+            ReadingToggleButton.Content = "Stop Reading";
+            _serialCts = new CancellationTokenSource();
+            _serialReadTask = Task.Run(() => SerialLiveLoopAsync(_serialCts.Token));
+        }
+
+        private void ReadingToggle_Unchecked(object sender, RoutedEventArgs e)
+        {
+            // Same logic as StopBtn_Click
+            try
+            {
+                _serialCts?.Cancel();
+
+                if (_serialReadTask != null)
+                {
+                    _ = Task.WhenAny(_serialReadTask, Task.Delay(500));
+                    _serialReadTask = null;
+                }
+
+                _serialCts?.Dispose();
+                _serialCts = null;
+
+                if (_serial != null && _serial.IsOpen)
+                {
+                    _serial.Close();
+                    _serial.Dispose();
+                    _serial = null;
+                }
+
+                ReadingToggleButton.Content = "Start Reading";
+
+                foreach (var p in Probes)
+                {
+                    p.Value = 0;
+                    p.Status = "";
+                    p.InRange = false;
+                }
+
+                if (_timer.IsEnabled)
+                    _timer.Stop();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error closing serial port: {ex.Message}");
+            }
+        }
+
+
 
         private void UpdateInputButtonStates()
         {
@@ -648,10 +1010,13 @@ namespace EVMS
         #region CLEANUP
         private void NotifyStatus(string msg) => StatusMessageChanged?.Invoke(msg);
 
-        private void HandleEscKeyAction()
+        public void HandleEscKeyAction()
         {
             try
             {
+                foreach (var btn in outputButtons.Values)
+                    btn.IsEnabled = false;
+
                 _timer?.Stop();
                 StopSerial();
                 StopIOMonitoring();
@@ -685,6 +1050,13 @@ namespace EVMS
             private string _status = "";
             private double _value;
             private bool _inRange;
+            private string _id = string.Empty;
+
+
+            public string ProbeName { get; set; }   // 🔥 Add this!
+            public string ParameterName { get; set; }
+
+            public string ID { get => _id; set => Set(ref _id, value); }
 
             public string Title { get => _title; set => Set(ref _title, value); }
             public int BoxId { get => _boxId; set => Set(ref _boxId, value); }

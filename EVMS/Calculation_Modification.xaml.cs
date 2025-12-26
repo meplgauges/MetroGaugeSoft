@@ -1,6 +1,4 @@
 ﻿using EVMS.Service;
-using System;
-using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -263,7 +261,7 @@ namespace EVMS
                         Content = "ADD",
                         Tag = new Tuple<ParameterConfigItem, TextBox>(item, compensationBox),
                         Height = 35,
-                        Width=120,
+                        Width = 120,
                         Margin = new Thickness(5, 0, 5, 0),
                         FontWeight = FontWeights.Bold
                     };

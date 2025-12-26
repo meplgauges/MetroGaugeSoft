@@ -416,6 +416,8 @@
             </Setter.Value>
         </Setter>
     </Style>
+    
+    
     <!-- Optional: DropShadow Effect for Left Panel -->
     <DropShadowEffect x:Key="DropShadowEffectLight" BlurRadius="8" ShadowDepth="1" Direction="270" Color="#24000000"/>
 

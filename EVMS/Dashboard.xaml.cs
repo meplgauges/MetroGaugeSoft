@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using static EVMS.Login_Page;
@@ -146,7 +144,7 @@ namespace EVMS
                         pageToShow = new SettingsPage();
                         break;
 
-                    case "Probe Install":
+                    case "Probes":
                         pageToShow = new ProbeInstallPage();
                         break;
 
@@ -161,7 +159,12 @@ namespace EVMS
                     case "Calculation":
                         pageToShow = new Calculation_Modification();
                         break;
+
+                    case "RnR Report":
+                        pageToShow = new RnR_Report_Page();
+                        break;
                 }
+
 
                 if (pageToShow != null)
                 {

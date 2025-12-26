@@ -1,7 +1,5 @@
 ﻿using ActUtlType64Lib;
 using Microsoft.Data.SqlClient;
-using System;
-using System.Collections.Generic;
 using System.Configuration;
 using System.Windows;
 using System.Windows.Controls;
@@ -22,7 +20,7 @@ namespace EVMS
         private Dictionary<string, ToggleButton> outputButtons = new Dictionary<string, ToggleButton>();
         private List<IODevice> inputDevices = new List<IODevice>();
         private List<IODevice> outputDevices = new List<IODevice>();
-        
+
         // Class representing an IO device
         public IO_Controle_page()
         {
@@ -237,7 +235,7 @@ namespace EVMS
                         bool isInput = InputCheckBox?.IsChecked == true;
                         bool isOutput = OutputCheckBox?.IsChecked == true;
 
-                      //  UpdateDevice(description, bit, isInput, isOutput);
+                        //  UpdateDevice(description, bit, isInput, isOutput);
                     };
                 }
 
@@ -266,39 +264,35 @@ namespace EVMS
                 inputDevices.Clear();
                 outputDevices.Clear();
 
-                using (SqlConnection conn = new SqlConnection(connectionString))
-                {
-                    conn.Open();
-                    string query = "SELECT * FROM IODevices";
-                    using (SqlCommand cmd = new SqlCommand(query, conn))
-                    {
-                        using (SqlDataReader reader = cmd.ExecuteReader())
-                        {
-                            while (reader.Read())
-                            {
-                                try
-                                {
-                                    var device = new IODevice
-                                    {
-                                        ID = reader["ID"] != DBNull.Value ? (int)reader["ID"] : 0,
-                                        Description = reader["Description"]?.ToString() ?? "Unknown",
-                                        Bit = reader["Bit"]?.ToString() ?? "Unknown",
-                                        IsInput = reader["IsInput"] != DBNull.Value && (bool)reader["IsInput"],
-                                        IsOutput = reader["IsOutput"] != DBNull.Value && (bool)reader["IsOutput"]
-                                    };
+                using SqlConnection conn = new(connectionString);
+                conn.Open();
+                string query = "SELECT * FROM IODevices";
 
-                                    if (device.IsInput)
-                                        inputDevices.Add(device);
-                                    if (device.IsOutput)
-                                        outputDevices.Add(device);
-                                }
-                                catch (Exception rowEx)
-                                {
-                                    MessageBox.Show($"Error reading device row: {rowEx.Message}", "Data Error",
-                                        System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
-                                }
-                            }
-                        }
+                using SqlCommand cmd = new(query, conn);
+                using SqlDataReader reader = cmd.ExecuteReader();
+
+                while (reader.Read())
+                {
+                    try
+                    {
+                        var device = new IODevice
+                        {
+                            ID = reader["ID"] != DBNull.Value ? (int)reader["ID"] : 0,
+                            Description = reader["Description"]?.ToString() ?? "Unknown",
+                            Bit = reader["Bit"]?.ToString() ?? "Unknown",
+                            IsInput = reader["IsInput"] != DBNull.Value && (bool)reader["IsInput"],
+                            IsOutput = reader["IsOutput"] != DBNull.Value && (bool)reader["IsOutput"]
+                        };
+
+                        if (device.IsInput)
+                            inputDevices.Add(device);
+                        if (device.IsOutput)
+                            outputDevices.Add(device);
+                    }
+                    catch (Exception rowEx)
+                    {
+                        MessageBox.Show($"Error reading device row: {rowEx.Message}", "Data Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
                     }
                 }
             }
@@ -438,26 +432,22 @@ namespace EVMS
                         MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
-                using (SqlConnection conn = new SqlConnection(connectionString))
-                {
-                    conn.Open();
-                    string query = "DELETE FROM IODevices WHERE Description = @desc";
-                    using (SqlCommand cmd = new SqlCommand(query, conn))
-                    {
-                        cmd.Parameters.AddWithValue("@desc", description);
-                        int rows = cmd.ExecuteNonQuery();
-                        if (rows > 0)
-                        {
-                            MessageBox.Show("Device deleted successfully!", "Success",
-                                MessageBoxButton.OK, MessageBoxImage.Information);
-                        }
-                        else
-                        {
-                            MessageBox.Show("Device not found.", "Error",
-                                MessageBoxButton.OK, MessageBoxImage.Warning);
-                        }
-                    }
-                }
+
+                using SqlConnection conn = new(connectionString);
+                conn.Open();
+                string query = "DELETE FROM IODevices WHERE Description = @desc";
+
+                using SqlCommand cmd = new(query, conn);
+                cmd.Parameters.AddWithValue("@desc", description);
+                int rows = cmd.ExecuteNonQuery();
+
+                string message = rows > 0
+                    ? "Device deleted successfully!"
+                    : "Device not found.";
+
+                MessageBox.Show(message, rows > 0 ? "Success" : "Not Found",
+                    MessageBoxButton.OK, rows > 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+
                 LoadDevicesFromDatabase();
                 GenerateButtons();
             }
@@ -467,6 +457,7 @@ namespace EVMS
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
 
 
 
@@ -505,7 +496,7 @@ namespace EVMS
                             Tag = device,
                             Background = Brushes.White,
                             Foreground = Brushes.Black,
-                            Opacity=0.7,
+                            Opacity = 0.7,
                             FontWeight = FontWeights.Bold,
                             Content = new TextBlock
                             {
@@ -728,7 +719,7 @@ namespace EVMS
             {
                 isConnected = false;
                 PowerToggle.IsChecked = false;
-                MessageBox.Show($"PLC connection error: {ex.Message}", "PLC Error",  
+                MessageBox.Show($"PLC connection error: {ex.Message}", "PLC Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 PlcStatusText.Text = "Connection Error ❌";
             }
@@ -962,7 +953,7 @@ namespace EVMS
                                 }
                             }
                         }
-                        catch (Exception deviceEx)
+                        catch (Exception)
                         {
                             // Log device-specific errors without showing popup (too frequent)
                             if (inputButtons.ContainsKey(device.Bit))
