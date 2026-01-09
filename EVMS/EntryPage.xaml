@@ -17,15 +17,17 @@
     <Grid Background="{StaticResource PageBackgroundBrush}">
         
         <Border Width="480" Height="400"
-            HorizontalAlignment="Center" VerticalAlignment="Center"
-            CornerRadius="20" Background="#F0F0F5"
-            BorderBrush="#D1D1E5" BorderThickness="1">
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                CornerRadius="20" Background="#F0F0F5"
+                BorderBrush="#D1D1E5" BorderThickness="1">
             <StackPanel Margin="30">
+                
                 <TextBlock Text="WELCOME BACK OPERATOR"
                        Style="{StaticResource FormLabelStyle}"
                        HorizontalAlignment="Center"
                        Margin="0,0,0,10"/>
                 <TextBlock Text="Select Model" Style="{StaticResource FormLabelStyle}"/>
+                
                 <ComboBox 
                 Width="370" x:Name="cmbModels"
                     Style="{StaticResource ModernComboBoxStyle}" />

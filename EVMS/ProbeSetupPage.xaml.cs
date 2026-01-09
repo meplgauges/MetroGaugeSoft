@@ -44,6 +44,40 @@ namespace EVMS
         private CancellationTokenSource? _serialCts;
         private readonly int[] _pos = { 4, 16, 28, 40 };
 
+
+        private readonly Dictionary<string, string> pairedBits = new()
+            {
+                { "M114", "M115" },  //
+                { "M116", "M117" }, // 
+                { "M118", "M119" },  //
+                { "M120", "M121" } ,
+                { "M122", "M123" } // 
+            };
+
+        // 🔒 OUTPUT → REQUIRED INPUT (X) INTERLOCKS
+        private readonly Dictionary<string, string[]> outputInputConditions = new()
+            {
+                { "M114", new[] { "X51" } },
+                { "M116", new[] { "X67", "X61" ,"X75"} },
+                { "M118", new[] { "X73", "X63","X101" } },
+                { "M120", new[] { "X77", "X61","X65" } },
+                { "M122", new[] { "X103", "X73","X63" } },
+                { "M127", new[] { "X50" } },
+                { "M131", new[] { "X65", "X75" } },
+                { "M132", new[] { "X71", "X101" } },
+                { "M133", new[] { "X66" } },
+                { "M134", new[] { "X72" } },
+                { "M135", new[] { "X76" } },
+                { "M136", new[] { "X102" } },
+               { "M137", new[] { "!X6" } }
+
+
+                //{ "M122", new[] { "X65", "X66" } },
+            };
+
+        private bool IsPairedBit(string bit) => pairedBits.ContainsKey(bit);
+        private string GetPairedOffBit(string bit) => pairedBits.GetValueOrDefault(bit, bit);
+
         // Data collections
         public ObservableCollection<string> PartNumbers { get; } = new();
         public ObservableCollection<ProbeRow> Probes { get; } = new();
@@ -75,6 +109,7 @@ namespace EVMS
 
             this.Loaded += SettingsPage_Loaded;
             this.PreviewKeyDown += SettingsPage_PreviewKeyDown;
+
         }
 
         private void SettingsPage_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -97,24 +132,26 @@ namespace EVMS
         {
             NotifyStatus("🔄 Connecting PLC...");
 
-            //plc.ActLogicalStationNumber = 1;
-            //var openTask = Task.Run(() => plc.Open());
-            //var completed = await Task.WhenAny(openTask, Task.Delay(3000));
+            plc.ActLogicalStationNumber = 1;
+            var openTask = Task.Run(() => plc.Open());
+            var completed = await Task.WhenAny(openTask, Task.Delay(3000));
 
-            //if (completed == openTask && openTask.Result == 0)
-            //{
-            //    isPlcConnected = true;
-            //    NotifyStatus("✅ PLC Connected");
+            if (completed == openTask && openTask.Result == 0)
+            {
+                isPlcConnected = true;
+                NotifyStatus("✅ PLC Connected");
 
-            //    // ✅ Enable buttons immediately after connect
-            //    foreach (var btn in outputButtons.Values)
-            //        btn.IsEnabled = true;
-            //}
-            //else
-            //{
-            //    isPlcConnected = false;
-            //    NotifyStatus("❌ PLC Failed");
-            //}
+                // ✅ Enable buttons immediately after connect
+                foreach (var btn in outputButtons.Values)
+                    btn.IsEnabled = true;
+            }
+            else
+            {
+                isPlcConnected = false;
+                NotifyStatus("❌ PLC Failed");
+            }
+            NotifyStatus("Probe Setup");
+
         }
 
 
@@ -212,21 +249,41 @@ namespace EVMS
 
             foreach (var device in outputDevices)
             {
-                if (!outputButtons.ContainsKey(device.Bit)) continue;
+                if (!outputButtons.TryGetValue(device.Bit, out var btn)) continue;
 
                 try
                 {
-                    int result = plc.GetDevice(device.Bit, out int value);
-                    if (result == 0)
+                    bool isOn;
+
+                    if (IsPairedBit(device.Bit))
                     {
-                        var btn = outputButtons[device.Bit];
-                        btn.IsChecked = (value == 1);
-                        btn.Background = value == 1 ? Brushes.Green : Brushes.Red;
+                        // 🔥 PAIRED BITS: Read both bits
+                        int res1 = plc.GetDevice(device.Bit, out int vOn);
+                        int res2 = plc.GetDevice(GetPairedOffBit(device.Bit), out int vOff);
+
+                        if (res1 != 0 || res2 != 0)
+                        {
+                            btn.Background = Brushes.Gray;
+                            continue;
+                        }
+
+                        // ON state = OnBit=1 AND OffBit=0
+                        isOn = (vOn == 1 && vOff == 0);
                     }
                     else
                     {
-                        outputButtons[device.Bit].Background = Brushes.Gray;
+                        // Normal single bit
+                        int result = plc.GetDevice(device.Bit, out int value);
+                        if (result != 0)
+                        {
+                            btn.Background = Brushes.Gray;
+                            continue;
+                        }
+                        isOn = (value == 1);
                     }
+
+                    btn.IsChecked = isOn;
+                    btn.Background = isOn ? Brushes.Green : Brushes.Red;
                 }
                 catch
                 {
@@ -235,6 +292,7 @@ namespace EVMS
                 }
             }
         }
+
 
 
 
@@ -289,7 +347,7 @@ namespace EVMS
                 await con.OpenAsync();
 
                 string query = @"
-            SELECT ParameterName, BoxId, ChannelId, ProbeName
+            SELECT ParameterName, BoxId, ChannelId, ProbeName, ProbeType
             FROM ProbeInstallationData
             WHERE PartNo = @P
             ORDER BY 
@@ -303,7 +361,7 @@ namespace EVMS
                 using var cmd = new SqlCommand(query, con);
                 cmd.Parameters.AddWithValue("@P", partNo);
 
-                var allRows = new List<(string ParameterName, string ProbeName, int BoxId, int ChannelId)>();
+                var allRows = new List<(string ParameterName, string ProbeName, string ProbeType,int BoxId, int ChannelId)>();
                 using var reader = await cmd.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
@@ -311,10 +369,13 @@ namespace EVMS
                     allRows.Add((
                         ParameterName: reader.GetString("ParameterName"),
                         ProbeName: reader.GetString("ProbeName"),
+                        ProbeType: reader.GetString("ProbeType"),
                         BoxId: reader.GetInt32("BoxId"),
                         ChannelId: reader.GetInt32("ChannelId")
+                        
                     ));
                 }
+
 
                 // Group by ProbeName and sort numerically
                 var probeGroups = allRows
@@ -322,9 +383,12 @@ namespace EVMS
                     .Select(g => new ProbeRow
                     {
                         ID = g.First().ParameterName,
+
                         BoxId = g.First().BoxId,
                         Channels = g.Select(x => x.ChannelId).Distinct().OrderBy(c => c).ToList(),
-                        Title = g.Key  // Shows exactly "Probe 1", "Probe 2", "Probe 3"
+                        Title = g.Key , // Shows exactly "Probe 1", "Probe 2", "Probe 3"
+                        ProbeType = g.First().ProbeType,
+
                     })
                     .OrderBy(p => ExtractProbeNumber(p.Title))  // Numeric sort: 1,2,3...
                     .ThenBy(p => p.Title);
@@ -395,6 +459,7 @@ namespace EVMS
 
         private void StartSerialButton_Click(object sender, RoutedEventArgs e)
         {
+
             if (_serial == null || !_serial.IsOpen)
             {
                 MessageBox.Show("Connect serial first.");
@@ -730,9 +795,9 @@ namespace EVMS
                     {
                         Button inputButton = new Button
                         {
-                            Width = 120,
-                            Height = 35,
-                            Margin = new Thickness(20),
+                            Width = 170,
+                            Height = 40,
+                            Margin = new Thickness(3),
                             Tag = device,
                             Background = Brushes.White,
                             Foreground = Brushes.Black,
@@ -850,8 +915,7 @@ namespace EVMS
 
         private void OutputButton_Checked(object sender, RoutedEventArgs e)
         {
-            if (sender is not ToggleButton button || button.Tag is not IODevice device)
-                return;
+            if (sender is not ToggleButton button || button.Tag is not IODevice device) return;
 
             if (!isPlcConnected)
             {
@@ -860,9 +924,43 @@ namespace EVMS
                 return;
             }
 
+            //  INPUT INTERLOCK CHECK (X65, X66, etc.)
+            if (!CheckInputCondition(device.Bit))
+            {
+                MessageBox.Show(
+                    $"{device.Bit} cannot be turned ON\nSome Cylinders Not At Home",
+                    "Interlock Active",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                // 🔥 FORCE PLC OFF (safety)
+                plc.SetDevice(device.Bit, 0);
+                if (IsPairedBit(device.Bit))
+                    plc.SetDevice(GetPairedOffBit(device.Bit), 1);
+
+                button.IsChecked = false;
+                button.Background = Brushes.Red;
+                return;
+            }
+
+
             try
             {
-                int result = plc.SetDevice(device.Bit, 1);
+                int result = 0;
+
+                if (IsPairedBit(device.Bit))
+                {
+                    // 🔥 PAIRED BITS: ON = 1, OFF = 0
+                    result = plc.SetDevice(device.Bit, 1);                       // e.g. M114 = 1
+                    if (result == 0)
+                        result |= plc.SetDevice(GetPairedOffBit(device.Bit), 0); // e.g. M115 = 0
+                }
+                else
+                {
+                    // Normal single bit
+                    result = plc.SetDevice(device.Bit, 1);
+                }
+
                 if (result == 0)
                 {
                     button.Background = Brushes.Green;
@@ -871,38 +969,51 @@ namespace EVMS
                 {
                     button.IsChecked = false;
                     button.Background = Brushes.Red;
-                    MessageBox.Show($"Failed to turn {device.Bit} ON. Error code {result}.");
+                    MessageBox.Show($"Failed to turn {device.Bit} ON. Error: {result}");
                 }
             }
             catch (Exception ex)
             {
                 button.IsChecked = false;
-                MessageBox.Show($"PLC error for {device.Bit}: {ex.Message}");
+                button.Background = Brushes.Red;
+                MessageBox.Show($"PLC error {device.Bit}: {ex.Message}");
             }
         }
 
+
         private void OutputButton_Unchecked(object sender, RoutedEventArgs e)
         {
-            if (sender is not ToggleButton button || button.Tag is not IODevice device)
-                return;
+            if (sender is not ToggleButton button || button.Tag is not IODevice device) return;
 
             if (!isPlcConnected)
             {
                 MessageBox.Show("PLC not connected.");
-                button.IsChecked = true; // Keep ON if not connected
+                button.IsChecked = true;
                 return;
             }
 
             try
             {
-                int result = plc.SetDevice(device.Bit, 0);
-                if (result == 0)
+                int result = 0;
+
+                if (IsPairedBit(device.Bit))
                 {
-                    button.Background = Brushes.Red;
+                    // 🔥 PAIRED BITS: ON=0, OFF=1
+                    result = plc.SetDevice(device.Bit, 0);                           // M120=0
+                    if (result == 0)
+                        result |= plc.SetDevice(GetPairedOffBit(device.Bit), 1);     // M121=1
                 }
                 else
                 {
-                    button.IsChecked = true;  // Stay ON on failure
+                    // Normal single bit
+                    result = plc.SetDevice(device.Bit, 0);
+                }
+
+                if (result == 0)
+                    button.Background = Brushes.Red;
+                else
+                {
+                    button.IsChecked = true;
                     button.Background = Brushes.Green;
                     MessageBox.Show($"Failed to turn {device.Bit} OFF. Error: {result}");
                 }
@@ -910,9 +1021,11 @@ namespace EVMS
             catch (Exception ex)
             {
                 button.IsChecked = true;
+                button.Background = Brushes.Green;
                 MessageBox.Show($"PLC error {device.Bit}: {ex.Message}");
             }
         }
+
 
 
 
@@ -998,6 +1111,49 @@ namespace EVMS
             }
         }
 
+
+        // ✅ Check required X inputs before allowing output ON
+        //private bool CheckInputCondition(string outputBit)
+        //{
+        //    if (!outputInputConditions.TryGetValue(outputBit, out var inputs))
+        //        return true;   // No condition → allow ON
+
+        //    foreach (string x in inputs)
+        //    {
+        //        int r = plc.GetDevice(x, out int v);
+        //        if (r != 0 || v != 1)
+        //            return false;
+        //    }
+        //    return true;
+        //}
+
+
+        private bool CheckInputCondition(string outputBit)
+        {
+            if (!outputInputConditions.TryGetValue(outputBit, out var inputs))
+                return true;
+
+            foreach (string raw in inputs)
+            {
+                bool inverted = raw.StartsWith("!");
+                string x = inverted ? raw[1..] : raw;
+
+                int r = plc.GetDevice(x, out int v);
+                if (r != 0)
+                    return false;
+
+                if (!inverted && v != 1)
+                    return false;
+
+                if (inverted && v != 0)
+                {
+                    MessageBox.Show("AIR PRESSURE LOW");
+                    return false;
+                }
+            }
+            return true;
+        }
+
         private void StartIOMonitoring()
         {
             ioMonitorTimer.Tick += (s, e) => UpdateInputButtonStates();
@@ -1008,8 +1164,10 @@ namespace EVMS
         #endregion
 
         #region CLEANUP
-        private void NotifyStatus(string msg) => StatusMessageChanged?.Invoke(msg);
-
+        private void NotifyStatus(string message)
+        {
+            MainWindow.ShowStatusMessage(message);
+        }
         public void HandleEscKeyAction()
         {
             try
@@ -1032,6 +1190,8 @@ namespace EVMS
 
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
+                NotifyStatus(".");
+
             }
             catch { }
         }
@@ -1050,13 +1210,20 @@ namespace EVMS
             private string _status = "";
             private double _value;
             private bool _inRange;
+            private string _stroke = string.Empty;
+
             private string _id = string.Empty;
 
 
-            public string ProbeName { get; set; }   // 🔥 Add this!
-            public string ParameterName { get; set; }
+            public string? ProbeName { get; set; }   // 🔥 Add this!
+            public string? ParameterName { get; set; }
+
+            public string? ProbType { get; set; }
+
 
             public string ID { get => _id; set => Set(ref _id, value); }
+
+            public string ProbeType { get => _stroke; set => Set(ref _stroke, value); }
 
             public string Title { get => _title; set => Set(ref _title, value); }
             public int BoxId { get => _boxId; set => Set(ref _boxId, value); }

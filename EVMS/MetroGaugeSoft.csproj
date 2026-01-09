@@ -35,7 +35,7 @@
 		<None Remove="Resource\generated-image.png" />
 		<None Remove="Resource\logo.png" />
 		<None Remove="Resource\Logo_ME.png" />
-		<None Remove="Resource\valve.png" />
+		<None Remove="Resource\valve_g.png" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -131,8 +131,8 @@
 		<Resource Include="Resource\Logo_ME.png">
 			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
 		</Resource>
-		<Resource Include="Resource\valve.png">
-			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		<Resource Include="Resource\valve_g.png">
+		  <CopyToOutputDirectory>Never</CopyToOutputDirectory>
 		</Resource>
 	</ItemGroup>
 

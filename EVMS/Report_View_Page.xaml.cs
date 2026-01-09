@@ -35,7 +35,7 @@ namespace EVMS
 
         public ObservableCollection<NgOkSummaryItem> NgOkSummaryItems { get; set; } = new ObservableCollection<NgOkSummaryItem>();
 
-
+        
         private string _selectedPartNo;
         public string SelectedPartNo
         {
@@ -390,10 +390,10 @@ namespace EVMS
                                 isAnyParamOutOfRange = true;
                         }
 
-                        item.Parameters[param] = measuredValue;
+                        item.Parameters[param] = Math.Round(measuredValue, 4);  
                     }
 
-                    item.Status = isAnyParamOutOfRange ? "FAIL" : "PASS";
+                    item.Status = isAnyParamOutOfRange ? "NG" : "OK";
 
                     ReportTableItems.Add(item);
                 }
@@ -494,7 +494,7 @@ namespace EVMS
         {
             if (ReportDataGrid == null) return;
 
-            // common centered style
+            // Common centered style
             var centerStyle = new Style(typeof(TextBlock));
             centerStyle.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center));
             centerStyle.Setters.Add(new Setter(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center));
@@ -505,10 +505,14 @@ namespace EVMS
 
             foreach (var param in parameters)
             {
+                // ✅ FIXED BINDING - Use StringFormat directly on Parameters (double)
                 var column = new DataGridTextColumn
                 {
                     Header = param,
-                    Binding = new Binding($"Parameters[{param}]"),
+                    Binding = new Binding($"Parameters[{param}]")
+                    {
+                        StringFormat = "F3"  // Forces 3 decimals: 16 → 16.000
+                    },
                     Width = 81,
                     ElementStyle = centerStyle
                 };
@@ -524,6 +528,7 @@ namespace EVMS
                 ElementStyle = centerStyle
             });
         }
+
 
 
         private void GenerateNgOkCountColumns(List<string> parameters)
@@ -590,20 +595,20 @@ namespace EVMS
         // For reflection on MeasurementReading
         private string MapParameterToProperty(string parameter) => parameter switch
         {
-            "STEP OD1" => nameof(MeasurementReading.StepOd1),
-            "STEP RUNOUT-1" => nameof(MeasurementReading.StepRunout1),
-            "OD-1" => nameof(MeasurementReading.Od1),
-            "RN-1" => nameof(MeasurementReading.Rn1),
-            "OD-2" => nameof(MeasurementReading.Od2),
-            "RN-2" => nameof(MeasurementReading.Rn2),
-            "OD-3" => nameof(MeasurementReading.Od3),
-            "RN-3" => nameof(MeasurementReading.Rn3),
-            "STEP OD2" => nameof(MeasurementReading.StepOd2),
-            "STEP RUNOUT-2" => nameof(MeasurementReading.StepRunout2),
+            "OD1" => nameof(MeasurementReading.StepOd1),
+            "RN1" => nameof(MeasurementReading.StepRunout1),
+            "OD2" => nameof(MeasurementReading.Od1),
+            "RN2" => nameof(MeasurementReading.Rn1),
+            "OD3" => nameof(MeasurementReading.Od2),
+            "RN3" => nameof(MeasurementReading.Rn2),
+            "OD4" => nameof(MeasurementReading.Od3),
+            "RN4" => nameof(MeasurementReading.Rn3),
+            "OD5" => nameof(MeasurementReading.StepOd2),
+            "RN5" => nameof(MeasurementReading.StepRunout2),
             "ID-1" => nameof(MeasurementReading.Id1),
-            "RN-4" => nameof(MeasurementReading.Rn4),
+            "RN6" => nameof(MeasurementReading.Rn4),
             "ID-2" => nameof(MeasurementReading.Id2),
-            "RN-5" => nameof(MeasurementReading.Rn5),
+            "RN7" => nameof(MeasurementReading.Rn5),
             "OL" => nameof(MeasurementReading.Ol),
             _ => parameter.Replace(" ", "")
         };
@@ -647,7 +652,6 @@ namespace EVMS
             }
         }
 
-
         private void ExportExcel_Click(object sender, RoutedEventArgs e)
         {
             if (!ReportTableItems.Any())
@@ -660,195 +664,314 @@ namespace EVMS
             {
                 using (var wb = new XLWorkbook())
                 {
-                    var ws = wb.Worksheets.Add("Report");
+                    var ws = wb.Worksheets.Add("Measurement Report");
 
                     // ===============================================================
-                    // 🔥 ADD COMPANY LOGO + COMPANY NAME HEADER (Left + Center)
+                    // HEADER – LOGO + COMPANY NAME (COMPACT, SIDE BY SIDE)
                     // ===============================================================
 
-                    // Logo block (A1:C3)
-                    var logoRange = ws.Range("A1:B3");
-                    logoRange.Merge();
+                    // ===============================================================
+                    // HEADER – LOGO + COMPANY NAME
+                    // ===============================================================
+                    ws.Row(1).Height = 50;
+                    ws.Row(2).Height = 25;
+                    ws.Row(3).Height = 15;
 
+                    ws.Range("A1:A2").Merge();
                     if (!string.IsNullOrEmpty(_companyLogoPath) && File.Exists(_companyLogoPath))
                     {
-                        var logoPicture = ws.AddPicture(_companyLogoPath)
-                    .MoveTo(ws.Cell("A1"), 4, 4)   // X offset = 5, Y offset = 5
-                    .Scale(0.2);                  // Resize logo
-
+                        try
+                        {
+                            ws.AddPicture(_companyLogoPath)
+                              .MoveTo(ws.Cell("A1"), 3, 3)
+                              .Scale(0.35);
+                        }
+                        catch { }
                     }
+                    ws.Column(1).Width = 12;
 
-                    // Company Name (Centered between D1:H3)
-                    var companyNameRange = ws.Range("C1:G3");
-                    companyNameRange.Merge();
-                    ws.Cell("C1").Value = _companyName;
-                    ws.Cell("C1").Style.Font.Bold = true;
-                    ws.Cell("C1").Style.Font.FontSize = 18;
-                    ws.Cell("C1").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-                    ws.Cell("C1").Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    ws.Range("C1:H1").Merge();
+                    var companyCell = ws.Cell("C1");
+                    companyCell.Value = _companyName ?? "COMPANY NAME";
+                    companyCell.Style.Font.SetBold();
+                    companyCell.Style.Font.SetFontSize(14);
+                    companyCell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Left);
+                    companyCell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Bottom;
+
 
                     // ===============================================================
-                    // 🔥 ORIGINAL LOGIC STARTS — NOTHING CHANGED
+                    // REPORT TITLE
                     // ===============================================================
 
-                    var partConfig = _dataService.GetPartConfigByPartNumber(SelectedPartNo ?? ReportTableItems.First().PartNo).ToList();
+                    ws.Row(4).Height = 25;
+                    ws.Row(5).Height = 25;
 
-                    var paramToShort = partConfig
-                        .Where(p => !string.IsNullOrWhiteSpace(p.Parameter))
-                        .ToDictionary(
-                            p => p.Parameter.Trim(),
-                            p => string.IsNullOrWhiteSpace(p.ShortName) ? p.Parameter.Trim() : p.ShortName.Trim(),
-                            StringComparer.OrdinalIgnoreCase
-                        );
+                    ws.Range("A4:U5").Merge();
+                    var titleCell = ws.Cell("A4");
+                    titleCell.Value = "MEASUREMENT REPORT";
+                    titleCell.Style.Font.SetBold();
+                    titleCell.Style.Font.SetFontSize(14);
+                    titleCell.Style.Font.SetFontColor(XLColor.White);
+                    titleCell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    titleCell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    titleCell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1F4E78");
 
-                    bool isSingleParameter = SelectedParameter != null && SelectedParameter != "All";
-                    List<string> paramList = isSingleParameter
-                        ? new List<string> { SelectedParameter }
-                        : ReportTableItems.First().Parameters.Keys.ToList();
+                    // ===============================================================
+                    // INFO SECTION (Part No, Lot No, Operator, Dates)
+                    // ===============================================================
 
-                    List<string> paramShortList = paramList
-                        .Select(p => paramToShort.TryGetValue(p, out var shortName) ? shortName : p)
+                    ws.Row(6).Height = 18;
+                    ws.Row(7).Height = 18;
+
+                    // Part No
+                    ws.Cell("A6").Value = "Part No:";
+                    ws.Cell("A6").Style.Font.SetBold();
+                    ws.Cell("C6").Value = SelectedPartNo;
+
+                    // Lot No
+                    ws.Cell("E6").Value = "Lot No:";
+                    ws.Cell("E6").Style.Font.SetBold();
+                    ws.Cell("G6").Value = ReportTableItems.FirstOrDefault()?.LotNo ?? "N/A";
+
+                    // Operator
+                    ws.Cell("A7").Value = "Operator:";
+                    ws.Cell("A7").Style.Font.SetBold();
+                    ws.Cell("C7").Value = ReportTableItems.FirstOrDefault()?.Operator ?? "N/A";
+
+                    // Date Range
+                    ws.Cell("E7").Value = "From:";
+                    ws.Cell("E7").Style.Font.SetBold();
+                    ws.Cell("G7").Value = _selectedDateTimeFrom?.ToString("dd-MMM-yyyy") ?? DateTime.Today.ToString("dd-MMM-yyyy");
+
+                    ws.Cell("J7").Value = "To:";
+                    ws.Cell("J7").Style.Font.SetBold();
+                    ws.Cell("L7").Value = _selectedDateTimeTo?.ToString("dd-MMM-yyyy") ?? DateTime.Today.ToString("dd-MMM-yyyy");
+
+                    // Bottom border
+                    ws.Range("A8:U8").Style.Border.BottomBorder = XLBorderStyleValues.Medium;
+
+                    // ===============================================================
+                    // PARAMETER CONFIG
+                    // ===============================================================
+
+                    int baseHeaderRow = 11;
+
+                    var partConfig = _dataService
+                        .GetPartConfigByPartNumber(SelectedPartNo ?? ReportTableItems.First().PartNo)
                         .ToList();
 
-                    var USL = partConfig.Select(p => new ParameterValue { Parameter = p.Parameter, Value = p.Nominal - p.RTolMinus }).ToList();
-                    var MEAN = partConfig.Select(p => new ParameterValue { Parameter = p.Parameter, Value = p.Nominal }).ToList();
-                    var LSL = partConfig.Select(p => new ParameterValue { Parameter = p.Parameter, Value = p.Nominal + p.RTolPlus }).ToList();
+                    if (!partConfig.Any())
+                    {
+                        MessageBox.Show("No parameter configuration found for this part.");
+                        return;
+                    }
 
-                    // Move your existing headers down because of logo/name
-                    int baseHeaderRow = 5;
+                    var paramToShort = partConfig.ToDictionary(
+                        p => p.Parameter.Trim(),
+                        p => string.IsNullOrWhiteSpace(p.ShortName)
+                            ? p.Parameter.Trim()
+                            : p.ShortName.Trim(),
+                        StringComparer.OrdinalIgnoreCase
+                    );
 
-                    ws.Range("J1:M1").Merge();
-                    ws.Cell("J1").Value = "Company Name:";
-                    ws.Cell("J1").Style.Font.Bold = true;
-                    ws.Cell("J1").Style.Font.FontSize = 14;
-                    ws.Cell("J1").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    // ===============================================================
+                    // USL / MEAN / LSL TABLE (SPECS)
+                    // ===============================================================
 
-                    ws.Range("J2:M2").Merge();
-                    ws.Cell("J2").Value = $"Date: {(_selectedDateTimeFrom.HasValue ? _selectedDateTimeTo.Value.ToString("dd-MMM-yyyy") : DateTime.Today.ToString("dd-MMM-yyyy"))}";
-                    ws.Cell("J2").Style.Font.Bold = true;
-                    ws.Cell("J2").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    ws.Row(baseHeaderRow).Height = 18;
+                    ws.Row(baseHeaderRow + 1).Height = 18;
+                    ws.Row(baseHeaderRow + 2).Height = 18;
+                    ws.Row(baseHeaderRow + 3).Height = 18;
 
-                    ws.Range("J3:M3").Merge();
-                    ws.Cell("J3").Value = $"Part Number: {SelectedPartNo}";
-                    ws.Cell("J3").Style.Font.Bold = true;
-                    ws.Cell("J3").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    // Header for specs
+                    ws.Cell(baseHeaderRow, 5).Value = "SPECS";
+                    ws.Cell(baseHeaderRow, 5).Style.Font.SetBold();
+                    ws.Cell(baseHeaderRow, 5).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    ws.Cell(baseHeaderRow, 5).Style.Fill.BackgroundColor = XLColor.FromHtml("#2F5496");
+                    ws.Cell(baseHeaderRow, 5).Style.Font.SetFontColor(XLColor.White);
 
                     // Parameter headers
                     for (int i = 0; i < partConfig.Count; i++)
                     {
-                        var cell = ws.Cell(baseHeaderRow, 4 + i);
-                        cell.Value = paramToShort.TryGetValue(partConfig[i].Parameter, out var shortName)
-                            ? shortName
-                            : partConfig[i].Parameter;
-
-                        cell.Style.Font.Bold = true;
-                        cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#D4E6F1");
-                        cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-                        cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        var headerCell = ws.Cell(baseHeaderRow, 6 + i);
+                        headerCell.Value = paramToShort[partConfig[i].Parameter];
+                        headerCell.Style.Font.SetBold();
+                        headerCell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                        headerCell.Style.Fill.BackgroundColor = XLColor.FromHtml("#2F5496");
+                        headerCell.Style.Font.SetFontColor(XLColor.White);
+                        headerCell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
+                        ws.Column(2 + i).Width = 12;
                     }
 
-                    var labelFormats = new (string Label, XLColor Color)[]
-                    {
-                ("USL", XLColor.Red),
-                ("MEAN", XLColor.ForestGreen),
-                ("LSL", XLColor.Red)
-                    };
-
-                    for (int idx = 0; idx < labelFormats.Length; idx++)
-                    {
-                        var labelCell = ws.Cell(baseHeaderRow + 1 + idx, 3);
-                        labelCell.Value = labelFormats[idx].Label;
-                        labelCell.Style.Font.Bold = true;
-                        labelCell.Style.Font.FontColor = labelFormats[idx].Color;
-                        labelCell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
-                    }
-
-                    ws.Column(3).Width = 15;
+                    // USL Row
+                    ws.Cell(baseHeaderRow + 1, 5).Value = "USL";
+                    ws.Cell(baseHeaderRow + 1, 5).Style.Font.SetBold();
+                    ws.Cell(baseHeaderRow + 1, 5).Style.Font.SetFontColor(XLColor.FromHtml("#C5504F"));
+                    ws.Cell(baseHeaderRow + 1, 5).Style.Fill.BackgroundColor = XLColor.FromHtml("#FEE8E6");
 
                     for (int i = 0; i < partConfig.Count; i++)
                     {
-                        ws.Cell(baseHeaderRow + 1, 4 + i).Value = USL[i].Value;
-                        ws.Cell(baseHeaderRow + 2, 4 + i).Value = MEAN[i].Value;
-                        ws.Cell(baseHeaderRow + 3, 4 + i).Value = LSL[i].Value;
-
-                        ws.Cell(baseHeaderRow + 1, 4 + i).Style.Font.FontColor = XLColor.Red;
-                        ws.Cell(baseHeaderRow + 2, 4 + i).Style.Font.FontColor = XLColor.ForestGreen;
-                        ws.Cell(baseHeaderRow + 3, 4 + i).Style.Font.FontColor = XLColor.Red;
+                        var cell = ws.Cell(baseHeaderRow + 1, 6 + i);
+                        cell.Value = Math.Round(partConfig[i].Nominal - partConfig[i].RTolMinus, 3);
+                        cell.Style.Font.SetBold();
+                        cell.Style.Font.SetFontColor(XLColor.FromHtml("#C5504F"));
+                        cell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                        cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#FEE8E6");
+                        cell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
                     }
 
-                    int lastCol = 4 + partConfig.Count - 1;
-                    ws.Range(baseHeaderRow, 3, baseHeaderRow + 3, lastCol)
-                          .Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    // MEAN Row
+                    ws.Cell(baseHeaderRow + 2, 5).Value = "MEAN";
+                    ws.Cell(baseHeaderRow + 2, 5).Style.Font.SetBold();
+                    ws.Cell(baseHeaderRow + 2, 5).Style.Font.SetFontColor(XLColor.FromHtml("#2F7C31"));
+                    ws.Cell(baseHeaderRow + 2, 5).Style.Fill.BackgroundColor = XLColor.FromHtml("#E8F5E9");
 
-                    int startTableRow = baseHeaderRow + 5;
+                    for (int i = 0; i < partConfig.Count; i++)
+                    {
+                        var cell = ws.Cell(baseHeaderRow + 2, 6 + i);
+                        cell.Value = Math.Round(partConfig[i].Nominal, 3);
+                        cell.Style.Font.SetBold();
+                        cell.Style.Font.SetFontColor(XLColor.FromHtml("#2F7C31"));
+                        cell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                        cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#E8F5E9");
+                        cell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
+                    }
+
+                    // LSL Row
+                    ws.Cell(baseHeaderRow + 3, 5).Value = "LSL";
+                    ws.Cell(baseHeaderRow + 3, 5).Style.Font.SetBold();
+                    ws.Cell(baseHeaderRow + 3, 5).Style.Font.SetFontColor(XLColor.FromHtml("#C5504F"));
+                    ws.Cell(baseHeaderRow + 3, 5).Style.Fill.BackgroundColor = XLColor.FromHtml("#FEE8E6");
+
+                    for (int i = 0; i < partConfig.Count; i++)
+                    {
+                        var cell = ws.Cell(baseHeaderRow + 3, 6 + i);
+                        cell.Value = Math.Round(partConfig[i].Nominal + partConfig[i].RTolPlus, 3);
+                        cell.Style.Font.SetBold();
+                        cell.Style.Font.SetFontColor(XLColor.FromHtml("#C5504F"));
+                        cell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                        cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#FEE8E6");
+                        cell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
+                    }
+
+                    // ===============================================================
+                    // DATA TABLE HEADER ROW
+                    // ===============================================================
+
+                    int paramHeaderRow = baseHeaderRow + 5;
+                    ws.Row(paramHeaderRow).Height = 22;
 
                     int col = 1;
-                    ws.Cell(startTableRow, col++).Value = "S.No";
-                    ws.Cell(startTableRow, col++).Value = "Part No";
-                    ws.Cell(startTableRow, col++).Value = "Lot No";
-                    ws.Cell(startTableRow, col++).Value = "Operator";
-                    ws.Cell(startTableRow, col++).Value = "Date";
+                    ws.Cell(paramHeaderRow, col++).Value = "S.No";
+                    ws.Cell(paramHeaderRow, col++).Value = "Part No";
+                    ws.Cell(paramHeaderRow, col++).Value = "Lot No";
+                    ws.Cell(paramHeaderRow, col++).Value = "Operator";
+                    ws.Cell(paramHeaderRow, col++).Value = "Date";
 
-                    foreach (var p in paramShortList)
-                        ws.Cell(startTableRow, col++).Value = p;
+                    foreach (var p in partConfig)
+                        ws.Cell(paramHeaderRow, col++).Value = paramToShort[p.Parameter];
 
-                    if (!isSingleParameter)
-                        ws.Cell(startTableRow, col++).Value = "Status";
+                    ws.Cell(paramHeaderRow, col++).Value = "Status";
 
-                    int row = startTableRow + 1;
+                    // Style header row
+                    for (int i = 1; i < col; i++)
+                    {
+                        var headerCell = ws.Cell(paramHeaderRow, i);
+                        headerCell.Style.Font.SetBold();
+                        headerCell.Style.Font.SetFontColor(XLColor.White);
+                        headerCell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                        headerCell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                        headerCell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1F4E78");
+                        headerCell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
+                    }
+
+                    // ===============================================================
+                    // DATA ROWS
+                    // ===============================================================
+
+                    int row = paramHeaderRow + 1;
+                    int sno = 1;
 
                     foreach (var item in ReportTableItems)
                     {
                         col = 1;
-                        ws.Cell(row, col++).Value = item.SerialNo;
+                        ws.Cell(row, col++).Value = sno++;
                         ws.Cell(row, col++).Value = item.PartNo;
                         ws.Cell(row, col++).Value = item.LotNo;
                         ws.Cell(row, col++).Value = item.Operator;
                         ws.Cell(row, col++).Value = item.Date;
 
-                        foreach (var p in paramList)
+                        foreach (var pc in partConfig)
                         {
+                            double value = item.Parameters.ContainsKey(pc.Parameter)
+                                ? item.Parameters[pc.Parameter]
+                                : 0;
+
                             var cell = ws.Cell(row, col++);
-                            double value = item.Parameters.ContainsKey(p) ? item.Parameters[p] : 0;
-                            cell.Value = value;
+                            cell.Value = Math.Round(value, 3);
+                            cell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
 
-                            var config = partConfig.FirstOrDefault(pc => pc.Parameter.Equals(p, StringComparison.OrdinalIgnoreCase));
-                            if (config != null)
+                            double usl = pc.Nominal - pc.RTolMinus;
+                            double lsl = pc.Nominal + pc.RTolPlus;
+
+                            // Highlight out of range values
+                            if (value < usl || value > lsl)
                             {
-                                double usl = config.Nominal - config.RTolMinus;
-                                double lsl = config.Nominal + config.RTolPlus;
-
-                                if (value < usl || value > lsl)
-                                    cell.Style.Font.FontColor = XLColor.Red;
+                                cell.Style.Font.SetFontColor(XLColor.FromHtml("#C5504F"));
+                                cell.Style.Font.SetBold();
+                                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#FFEB9C");
+                            }
+                            else
+                            {
+                                cell.Style.Font.SetFontColor(XLColor.FromHtml("#2F7C31"));
                             }
                         }
 
-                        if (!isSingleParameter)
-                            ws.Cell(row, col++).Value = item.Status;
+                        // Status column
+                        var statusCell = ws.Cell(row, col++);
+                        statusCell.Value = item.Status;
+                        statusCell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                        statusCell.Style.Font.SetBold();
+                        if (item.Status == "PASS")
+                            statusCell.Style.Font.SetFontColor(XLColor.FromHtml("#2F7C31"));
+                        else
+                            statusCell.Style.Font.SetFontColor(XLColor.FromHtml("#C5504F"));
+
+                        // Alternating row colors
+                        if (row % 2 == 0)
+                        {
+                            for (int i = 1; i < col; i++)
+                                ws.Cell(row, i).Style.Fill.BackgroundColor = XLColor.FromHtml("#F9F9F9");
+                        }
 
                         row++;
                     }
 
-                    ws.Columns().AdjustToContents();
+                    // ===============================================================
+                    // AUTO ADJUST COLUMNS AND SAVE
+                    // ===============================================================
 
-                    string baseFolder = @"D:\MEPL\Excel Report\Generated Data";
-                    if (!Directory.Exists(baseFolder))
-                        Directory.CreateDirectory(baseFolder);
+                    ws.Columns().AdjustToContents(8, 18);
 
-                    string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                    string fileName = $"EVMS_Report_{timestamp}.xlsx";
-                    string filePath = Path.Combine(baseFolder, fileName);
+                    string folder = @"D:\MEPL\Excel Report\Generated Data";
+                    Directory.CreateDirectory(folder);
+
+                    string filePath = Path.Combine(
+                        folder,
+                        $"Measurement_Report_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
 
                     wb.SaveAs(filePath);
-                    MessageBox.Show($"Excel exported successfully to: {filePath}");
+
+                    MessageBox.Show($"✅ Excel exported successfully!\n\n{filePath}");
                     Process.Start(new ProcessStartInfo(filePath) { UseShellExecute = true });
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Excel export failed: {ex.Message}");
+                MessageBox.Show($"❌ Export failed: {ex.Message}\n\n{ex.StackTrace}");
             }
         }
+
 
 
 

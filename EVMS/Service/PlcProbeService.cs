@@ -5,6 +5,7 @@ using System.Configuration;
 using System.Globalization;
 using System.IO.Ports;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 internal class PlcProbeService : IDisposable
 {
@@ -30,9 +31,111 @@ internal class PlcProbeService : IDisposable
         _connectionString = ConfigurationManager.ConnectionStrings["EVMSDb"].ConnectionString!;
     }
 
-    public bool IsConnected => isPlcConnected && isSerialConnected;
+    public bool IsConnected => isPlcConnected && isSerialConnected;  // ✅ Fixed
 
-    // ---------- PUBLIC API (UNCHANGED) ----------
+    // 🔥 SEPARATE CONNECTION METHODS
+    public async Task<bool> ConnectSerialAsync()
+    {
+        try
+        {
+            OpenSerialPort();
+            isSerialConnected = _serial?.IsOpen == true;
+            return isSerialConnected;
+        }
+        catch
+        {
+            isSerialConnected = false;
+            return false;
+        }
+    }
+
+    public void StopAndCloseSerial()
+    {
+        StopLiveReading();     // cancel task
+        Thread.Sleep(100);     // allow loop to exit
+
+        try
+        {
+            if (_serial != null)
+            {
+                if (_serial.IsOpen)
+                    _serial.Close();
+
+                _serial.Dispose();
+                _serial = null;
+            }
+
+            isSerialConnected = false;
+        }
+        catch { }
+    }
+
+    //public async Task<bool> ConnectPlcAsync()
+    //{
+    //    try
+    //    {
+    //        plc.Close();                    // Close stale
+    //        plc.ActLogicalStationNumber = 1;
+
+    //        var openTask = Task.Run(() => plc.Open());
+    //        var completedTask = await Task.WhenAny(openTask, Task.Delay(3000));
+
+    //        if (completedTask == openTask)
+    //        {
+    //            bool success = openTask.Result == 0;
+    //            isPlcConnected = true;
+    //            return success;
+    //        }
+    //        plc.Close();
+    //        isPlcConnected = false;
+    //        return false;
+    //    }
+    //    catch
+    //    {
+    //        plc.Close();
+    //        isPlcConnected = false;
+    //        return false;
+    //    }
+    //}
+
+    // 🔥 FULL CONNECT (both)
+    public async Task<bool> ConnectAsync()
+    {
+        //bool plcOk = await ConnectPlcAsync();
+        bool serialOk = await ConnectSerialAsync();
+        return serialOk;
+    }
+
+    // 🔥 SEPARATE DISCONNECT
+    public void DisconnectSerial()
+    {
+        try
+        {
+            _serial?.Close();
+            _serial?.Dispose();
+            _serial = null;
+            isSerialConnected = false;
+        }
+        catch { }
+    }
+
+    public void DisconnectPlc()
+    {
+        try
+        {
+            plc.Close();
+            isPlcConnected = false;
+        }
+        catch { }
+    }
+
+    public void Disconnect()
+    {
+        DisconnectPlc();
+        DisconnectSerial();
+    }
+
+    // ---------- PUBLIC API ----------
     public async Task LoadProbesAsync(string partNo)
     {
         var probes = new Dictionary<string, ProbeReading>();
@@ -52,18 +155,17 @@ internal class PlcProbeService : IDisposable
         using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            string probeName = reader["ProbeName"]?.ToString() ?? "";     // ✅ Unique ProbeName
+            string probeName = reader["ProbeName"]?.ToString() ?? "";
             string paramName = reader["ParameterName"]?.ToString() ?? "";
             int boxId = Convert.ToInt32(reader["BoxId"]);
-            int channel = Convert.ToInt32(reader["ChannelId"]);  // ✅ Fixed: was string literal
+            int channel = Convert.ToInt32(reader["ChannelId"]);
 
-            // ✅ Use ProbeName as UNIQUE KEY (no channel concatenation)
-            string key = probeName;
+            string key = probeName;  // ✅ Unique key
 
             probes[key] = new ProbeReading
             {
-                ParameterName = paramName,        // Human readable display name
-                ProbeName = probeName,           // Unique identifier (add this property)
+                ParameterName = paramName,
+                ProbeName = probeName,
                 BoxId = boxId,
                 Channel = channel,
                 Value = 0,
@@ -97,30 +199,24 @@ internal class PlcProbeService : IDisposable
         return list;
     }
 
-    public async Task<bool> ConnectAsync()
-    {
-        bool plcConnected = await ConnectPlcAsync();
-        isSerialConnected = _serial?.IsOpen == true;
-        isPlcConnected = plcConnected;
-        return IsConnected;
-    }
-
-    // 🔥 ENHANCED: StartLiveReading now pushes to queue + updates live readings
+    // 🔥 LIVE READING
     public void StartLiveReading(int intervalMs = 15)
     {
-        OpenSerialPort();
+        if (!isSerialConnected)
+            throw new InvalidOperationException("Connect serial first.");
 
         if (ProbeReadings.Count == 0)
-            throw new InvalidOperationException("No probes loaded. Call LoadProbesAsync(partNo) first.");
+            throw new InvalidOperationException("Load probes first.");
+
+        OpenSerialPort();  // Ensure open
 
         StopLiveReading();
-
-        // Clear old queue
         while (CollectedReadings.TryDequeue(out _)) { }
 
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
         _readTask = Task.Run(() => SerialLoopAsync(token, intervalMs));
+        IsReadingLive = true;
     }
 
     public void StopLiveReading()
@@ -131,9 +227,10 @@ internal class PlcProbeService : IDisposable
         _cts?.Dispose();
         _cts = null;
         _readTask = null;
+        IsReadingLive = false;
     }
 
-    // 🔥 EXISTING METHODS (unchanged)
+    // 🔥 EXISTING API
     public ProbeReading? GetProbeReading(string parameterName)
     {
         ProbeReadings.TryGetValue(parameterName, out var reading);
@@ -147,10 +244,30 @@ internal class PlcProbeService : IDisposable
         return null;
     }
 
-    // ---------- ENHANCED SERIAL LOOP ----------
-    // 🔥 FIX 1: Bug in LoadProbesAsync (line 78)
+    // ---------- PRIVATE IMPLEMENTATION ----------
+    private void OpenSerialPort()
+    {
+        try
+        {
+            _serial?.Close();
+            _serial?.Dispose();
+            _serial = null;
 
-    // 🔥 FIX 2: SerialLoopAsync - Use ProbeName consistently
+            var config = GetSerialPortConfig().FirstOrDefault();
+            if (config != null && !string.IsNullOrEmpty(config.ComPort))
+            {
+                string comPort = config.ComPort;
+                _serial = new SerialPort(comPort, 115200, Parity.None, 8, StopBits.One)
+                {
+                    ReadTimeout = 500,
+                    WriteTimeout = 500
+                };
+                _serial.Open();
+            }
+        }
+        catch { }
+    }
+
     private async Task SerialLoopAsync(CancellationToken token, int intervalMs)
     {
         try
@@ -166,13 +283,12 @@ internal class PlcProbeService : IDisposable
                     token.ThrowIfCancellationRequested();
                     await ReadBoxOnceAsync(box, token);
 
-                    // ✅ Enqueue using ProbeName as unique key
                     foreach (var kvp in ProbeReadings.Where(k => k.Value.BoxId == box))
                     {
                         var reading = kvp.Value;
                         CollectedReadings.Enqueue(new ProbeReadingQueueItem
                         {
-                            ParameterName = reading.ProbeName,    // ✅ ProbeName (unique key: "HD001")
+                            ParameterName = reading.ProbeName,  // "HD001"
                             Value = reading.Value,
                             Timestamp = DateTime.Now
                         });
@@ -187,41 +303,6 @@ internal class PlcProbeService : IDisposable
         }
         catch (OperationCanceledException) { }
     }
-
-    // ---------- INTERNAL IMPLEMENTATION (mostly unchanged) ----------
-    private async Task<bool> ConnectPlcAsync()
-    {
-        plc.ActLogicalStationNumber = 1;
-        var openTask = Task.Run(() => plc.Open());
-        var completedTask = await Task.WhenAny(openTask, Task.Delay(3000));
-        return completedTask == openTask && openTask.Result == 0;
-    }
-
-    private void OpenSerialPort()
-    {
-        try
-        {
-            _serial?.Close();
-            _serial?.Dispose();
-            _serial = null;
-
-            // ✅ WHATEVER IN DB - NO COM8 fallback
-            var config = GetSerialPortConfig().FirstOrDefault();
-            if (config != null && !string.IsNullOrEmpty(config.ComPort))
-            {
-                string comPort = config.ComPort;  // DB value
-
-                _serial = new SerialPort(comPort, 115200, Parity.None, 8, StopBits.One)
-                {
-                    ReadTimeout = 500,
-                    WriteTimeout = 500
-                };
-                _serial.Open();
-            }
-        }
-        catch { }
-    }
-
 
     private async Task ReadBoxOnceAsync(int box, CancellationToken token)
     {
@@ -339,6 +420,7 @@ internal class PlcProbeService : IDisposable
     public void Dispose()
     {
         StopLiveReading();
+        Disconnect();
         try
         {
             plc?.Close();
@@ -349,7 +431,7 @@ internal class PlcProbeService : IDisposable
     }
 }
 
-// 🔥 EXISTING DATA MODEL (unchanged)
+// 🔥 DATA MODELS (unchanged)
 public class ProbeReading
 {
     public string ParameterName { get; set; } = "";
@@ -358,16 +440,16 @@ public class ProbeReading
     public double Value { get; set; }
     public string Status { get; set; } = "";
     public bool InRange { get; set; }
-    public string ProbeName { get; set; } = "";           // ✅ Unique ID
-
+    public string ProbeName { get; set; } = "";
 }
+
 public class SerialPortConfigModel
 {
     public int ID { get; set; }
     public string? ComPort { get; set; }
     public int BaudRate { get; set; }
 }
-// 🔥 NEW: Queue item for MasterServices (matches your ProbeMeasurement pattern)
+
 public class ProbeReadingQueueItem
 {
     public string ParameterName { get; set; } = "";

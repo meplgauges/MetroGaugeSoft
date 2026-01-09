@@ -46,7 +46,7 @@
                             Margin="0,0,0,15">
                         <TextBlock Text="Add Controls"
                                    Foreground="White"
-                                   FontSize="16"
+                                   FontSize="15"
                                    FontWeight="Bold"
                                    TextAlignment="Center"/>
                     </Border>
@@ -129,7 +129,7 @@
                             Margin="0,0,0,15">
                         <TextBlock Text="Reading Controls"
                                    Foreground="White"
-                                   FontSize="16"
+                                   FontSize="15"
                                    FontWeight="Bold"
                                    TextAlignment="Center"/>
                     </Border>
@@ -145,6 +145,7 @@
                         <TextBox x:Name="ReadingCountTextBox"
                              Width="220"
                              Height="35"
+                                 TextAlignment="Center"
                              Style="{StaticResource ModernFilledTextBox}"
                              HorizontalAlignment="Center"/>
                     </StackPanel>
@@ -172,14 +173,14 @@
                 <StackPanel>
                     <Border Background="Black" BorderBrush="BurlyWood" BorderThickness="1" 
                 CornerRadius="10" Padding="10" HorizontalAlignment="Center" Margin="0,0,0,15">
-                        <TextBlock Text="COM Port " Foreground="White" FontSize="16" 
+                        <TextBlock Text="COM Port " Foreground="White" FontSize="14" 
                        FontWeight="Bold" TextAlignment="Center"/>
                     </Border>
 
                     <StackPanel Margin="5,1,5,0">
                         <TextBlock Text="Select Port:" FontWeight="Bold" Margin="10,0,0,5" Foreground="Black"/>
                         <ComboBox x:Name="ComPortComboBox" Width="250" Height="40" 
-                   Margin="10,0,0,2" 
+                   Margin="10,0,0,2"  Style="{DynamicResource ModernComboBoxStyle}"
                       FontSize="14" FontWeight="Bold"/>
                     </StackPanel>
 

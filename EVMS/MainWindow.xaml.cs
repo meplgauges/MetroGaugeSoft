@@ -426,10 +426,15 @@ namespace EVMS
             dashboard.VerticalAlignment = VerticalAlignment.Stretch;
 
             MainContentGrid.Children.Add(dashboard);
+            NotifyStatus("");
 
             //ApplyMenuPermissions();
         }
 
+        private void NotifyStatus(string message)
+        {
+            MainWindow.ShowStatusMessage(message);
+        }
         // ✅ NEW: Centralized cleanup method
         private void CleanupCurrentProbePage()
         {

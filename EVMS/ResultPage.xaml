@@ -11,7 +11,7 @@
     <UserControl.Resources>
         <!-- Modern Card Style -->
         <Style x:Key="CardBox" TargetType="Border">
-            <Setter Property="Background" Value="White"/>
+            <Setter Property="Background" Value="Black"/>
             <Setter Property="CornerRadius" Value="16"/>
             <Setter Property="Padding" Value="12"/>
             <Setter Property="Effect">
@@ -76,7 +76,7 @@
             <Setter Property="BorderBrush" Value="#CBD5E0"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontFamily" Value="Segoe UI, Arial"/>
-            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontSize" Value="13"/>
             <Setter Property="HorizontalGridLinesBrush" Value="#E2E8F0"/>
             <Setter Property="VerticalGridLinesBrush" Value="#E2E8F0"/>
         </Style>
@@ -246,6 +246,9 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+
+
 
 
 
@@ -281,70 +284,70 @@
             <StackPanel Grid.Column="4" Orientation="Vertical" Margin="8,0">
                 <TextBlock Text="OK Count" Style="{StaticResource LabelStyle}" Margin="2"/>
                 <TextBox x:Name="txtOkCount" 
-             Style="{StaticResource ValueBoxStyle}" 
-             Background="LimeGreen" 
-             Foreground="White" 
-             FontWeight="Bold"
-             Text="0" 
-             IsReadOnly="True"
-             Padding="4"/>
+                 Style="{StaticResource ValueBoxStyle}" 
+                 Background="LimeGreen" 
+                 Foreground="White" 
+                 FontWeight="Bold"
+                 Text="0" 
+                 IsReadOnly="True"
+                 Padding="4"/>
             </StackPanel>
 
             <!-- NG Count -->
             <StackPanel Grid.Column="5" Orientation="Vertical" Margin="8,0">
                 <TextBlock Text="NG Count" Style="{StaticResource LabelStyle}" Margin="2"/>
                 <TextBox x:Name="txtNgCount" 
-             Style="{StaticResource ValueBoxStyle}" 
-             Background="IndianRed" 
-             Foreground="White" 
-             FontWeight="Bold"
-             Text="0" 
-             IsReadOnly="True"
-             Padding="4"/>
+                 Style="{StaticResource ValueBoxStyle}" 
+                 Background="IndianRed" 
+                 Foreground="White" 
+                 FontWeight="Bold"
+                 Text="0" 
+                 IsReadOnly="True"
+                 Padding="4"/>
             </StackPanel>
 
             <StackPanel Grid.Column="6" Orientation="Vertical" Margin="8,0">
                 <TextBlock Text="Measurement" HorizontalAlignment="Center" Style="{StaticResource LabelStyle}" Margin="2"/>
                 <ToggleButton 
-        x:Name="MeasurementToggle"
-        Style="{StaticResource SwitchToggleStyle}"
-        Checked="MeasurementToggle_Checked"
-        Unchecked="ToggleButton_Unchecked"/>
+                x:Name="MeasurementToggle"
+                Style="{StaticResource SwitchToggleStyle}"
+                Checked="MeasurementToggle_Checked"
+                Unchecked="ToggleButton_Unchecked"/>
             </StackPanel>
 
             <StackPanel Grid.Column="7" Orientation="Vertical" Margin="8,0">
                 <TextBlock Text="Mastering" HorizontalAlignment="Center" Style="{StaticResource LabelStyle}" Margin="2"/>
                 <ToggleButton
-        x:Name="MasterToggle"
-        Style="{StaticResource SwitchToggleStyle}"
-        Checked="MasterToggle_Checked"
-        Unchecked="ToggleButton_Unchecked"/>
+                x:Name="MasterToggle"
+                Style="{StaticResource SwitchToggleStyle}"
+                Checked="MasterToggle_Checked"
+                Unchecked="ToggleButton_Unchecked"/>
             </StackPanel>
 
             <StackPanel Grid.Column="8" Orientation="Vertical" Margin="8,0">
                 <TextBlock Text="Master Inspection" HorizontalAlignment="Center" Style="{StaticResource LabelStyle}" Margin="2"/>
                 <ToggleButton 
-        x:Name="MasterInspectionToggleButton"
-        Style="{StaticResource SwitchToggleStyle}"
-        Checked="MasterInspectionToggleButton_Checked"
-        Unchecked="ToggleButton_Unchecked"/>
+                x:Name="MasterInspectionToggleButton"
+                Style="{StaticResource SwitchToggleStyle}"
+                Checked="MasterInspectionToggleButton_Checked"
+                Unchecked="ToggleButton_Unchecked"/>    
             </StackPanel>
 
             <StackPanel Grid.Column="9" Orientation="Vertical" Margin="8,0">
                 <TextBlock Text="Manual/Auto" HorizontalAlignment="Center" Style="{StaticResource LabelStyle}" Margin="2"/>
 
                 <ToggleButton 
-        x:Name="AutoManualToggle"
-        Style="{StaticResource SwitchToggleStyle}" 
-        Checked="AutoManualToggle_Checked" 
-        Unchecked="AutoManualToggle_Unchecked" />
+                x:Name="AutoManualToggle"
+                Style="{StaticResource SwitchToggleStyle}" 
+                Checked="AutoManualToggle_Checked" 
+                Unchecked="AutoManualToggle_Unchecked" />
 
             </StackPanel>
 
 
 
             <StackPanel Grid.Column="10" Orientation="Vertical" Margin="8,0">
-                <TextBlock Text="SwitchBar" HorizontalAlignment="Center" Style="{StaticResource LabelStyle}" Margin="2"/>
+                <TextBlock Text="Switch Bar" HorizontalAlignment="Center" Style="{StaticResource LabelStyle}" Margin="2"/>
 
                 <ToggleButton x:Name="SwitchProgressBarBtn"
                       Style="{StaticResource SwitchToggleStyle}"
@@ -354,96 +357,86 @@
 
 
             <StackPanel Grid.Column="11" Orientation="Vertical" Margin="8,0">
-                <TextBlock Text="SwitchValve" HorizontalAlignment="Center" Style="{StaticResource LabelStyle}" Margin="2"/>
+                <TextBlock Text="Switch Part" HorizontalAlignment="Center" Style="{StaticResource LabelStyle}" Margin="2"/>
                 <ToggleButton x:Name="ToggleBtn"
                     Style="{StaticResource SwitchToggleStyle}"
                     Click="ToggleBtn_Click"/>
             </StackPanel>
-            
-        </Grid>
 
+            <StackPanel Grid.Column="12" Orientation="Vertical" Margin="8,0">
+                <TextBlock Text="Clear Cycle" HorizontalAlignment="Center" Style="{StaticResource LabelStyle}" Margin="2"/>
+                <ToggleButton x:Name="ClearBit"
+                 Style="{StaticResource SwitchToggleStyle}"
+                 Click="ToggleBtn_Click1"/>
+            </StackPanel>
+
+        </Grid>
         <Viewbox Grid.Row="1" Grid.Column="0" Stretch="Uniform" MinWidth="400" MinHeight="350">
+
             <Canvas Width="820" Height="400" Background="#F7FAFC">
 
-                <!-- Valve Image -->
-                <Image Source="/Resource/valve.png" Width="700" Height="400" Canvas.Left="43" Canvas.Top="-22"/>
+                <Image Source="/Resource/valve_g.png" Width="700" Height="400" Canvas.Left="60" Canvas.Top="10"/>
 
-                <!-- Groove Dia -->
-                <Line X1="90" Y1="162" X2="90" Y2="198" Stroke="#5090F9" StrokeDashArray="4 2" StrokeThickness="2"/>
-                <Line X1="89" Y1="162" X2="110" Y2="162" Stroke="#5090F9" StrokeThickness="2"/>
-                <Line X1="89" Y1="196" X2="110" Y2="196" Stroke="#5090F9" StrokeThickness="2"/>
-                <TextBlock x:Name="GrooveDiaLabel" Text="GROOVE DIA" Style="{StaticResource LabelStyle1}" Canvas.Right="810" Canvas.Top="170"/>
-                <TextBox x:Name="GrooveDiaBox" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Right="750" Canvas.Top="170"/>
+                <Line X1="120" Y1="170" X2="120" Y2="235" Stroke="#5090F9" StrokeDashArray="4 2" StrokeThickness="2"/>
+                <Line X1="120" Y1="170" X2="232" Y2="170" Stroke="#5090F9" StrokeThickness="2"/>
+                <Line X1="120" Y1="235" X2="234" Y2="235" Stroke="#5090F9" StrokeThickness="2"/>
 
-                <TextBlock x:Name="GroovePoLabel" Text="GROOVE POSITION" Style="{StaticResource LabelStyle1}" Canvas.Right="760" Canvas.Top="260"/>
-                <TextBox x:Name="GroovePo" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Right="750" Canvas.Top="280"/>
+                <TextBlock x:Name="ID1_Label" Text="ID-1" Style="{StaticResource LabelStyle1}" Canvas.Left="9" Canvas.Top="179"/>
+                <TextBlock x:Name="RN_4_Label" Text="RUNOUT" Style="{StaticResource LabelStyle1}" Canvas.Left="-12" Canvas.Top="204"/>
+                <TextBox x:Name="ID_1" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="40" Canvas.Top="175"/>
+                <TextBox x:Name="RN_4" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="40" Canvas.Top="200"/>
 
-                <!-- Stem Dia -->
-                <Line X1="180" Y1="130" X2="180" Y2="165" Stroke="#5090F9" StrokeThickness="2"/>
-                <TextBlock x:Name="STDGLabel" Text="STDG" Style="{StaticResource LabelStyle1}" Canvas.Left="270" Canvas.Top="135"/>
-                <TextBox x:Name="STDG" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="190" Canvas.Top="131"/>
+                <Line X1="245" Y1="115" X2="245" Y2="167" Stroke="#5090F9" StrokeThickness="2"/>
+                <TextBlock x:Name="OD_1_Label" Text="SOD-1" Style="{StaticResource LabelStyle1}" Canvas.Left="190" Canvas.Top="64"/>
+                <TextBlock x:Name="OD_1_RN_Label" Text="RUNOUT" Style="{StaticResource LabelStyle1}" Canvas.Left="180" Canvas.Top="90"/>
+                <TextBox x:Name="STEP_OD1" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="230" Canvas.Top="60"/>
+                <TextBox x:Name="STEP_RUNOUT_1" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="230" Canvas.Top="85"/>
 
-                <Line X1="530" Y1="130" X2="530" Y2="165" Stroke="#5090F9" StrokeThickness="2"/>
-                <TextBlock x:Name="StemDiaLabel" Text="STEM DIA" Style="{StaticResource LabelStyle1}" Canvas.Left="430" Canvas.Top="135"/>
-                <TextBox x:Name="StemDiaBox" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="480" Canvas.Top="131"/>
+                <Line X1="300" Y1="237" X2="300" Y2="280" Stroke="#5090F9" StrokeThickness="2"/>
+                <TextBlock x:Name="OD_2_Label" Text="OD-2" Style="{StaticResource LabelStyle1}" Canvas.Left="260" Canvas.Top="285"/>
+                <TextBlock x:Name="OD_2_RN_Label" Text="RUNOUT" Style="{StaticResource LabelStyle1}" Canvas.Left="245" Canvas.Top="305"/>
+                <TextBox x:Name="OD_2" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="290" Canvas.Top="282"/>
+                <TextBox x:Name="RN_2" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="290" Canvas.Top="305"/>
 
-                <!-- Head Dia -->
-                <Line X1="665" Y1="250" X2="820" Y2="250" Stroke="#5090F9" StrokeThickness="2"/>
-                <Line X1="820" Y1="100" X2="820" Y2="250" Stroke="#5090F9" StrokeDashArray="4 2" StrokeThickness="2"/>
-                <TextBlock x:Name="HeadDiaLabel" Text="HEAD DIA" Style="{StaticResource LabelStyle1}" Canvas.Left="700" Canvas.Top="120"/>
-                <TextBox x:Name="HeadDiaBox" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="720" Canvas.Top="140"/>
+                <Line X1="380" Y1="115" X2="380" Y2="166" Stroke="#5090F9" StrokeThickness="2"/>
+                <TextBlock x:Name="OD_3_Label" Text="OD-3" Style="{StaticResource LabelStyle1}" Canvas.Left="335" Canvas.Top="64"/>
+                <TextBlock x:Name="OD_3_RN_Label" Text="RUNOUT" Style="{StaticResource LabelStyle1}" Canvas.Left="320" Canvas.Top="90"/>
+                <TextBox x:Name="OD_3" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="370" Canvas.Top="60"/>
+                <TextBox x:Name="RN_3" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="370" Canvas.Top="85"/>
 
-                <TextBlock x:Name="FaceRunoutLabel" Text="FACE RUNOUT" Style="{StaticResource LabelStyle1}" Canvas.Left="700" Canvas.Top="190"/>
-                <TextBox x:Name="FaceRunout" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="720" Canvas.Top="210"/>
+                <Line X1="450" Y1="237" X2="450" Y2="280" Stroke="#5090F9" StrokeThickness="2"/>
+                <TextBlock x:Name="OD_4_Label" Text="OD-4" Style="{StaticResource LabelStyle1}" Canvas.Left="415" Canvas.Top="285"/>
+                <TextBlock x:Name="OD_4_RN_Label" Text="RUNOUT" Style="{StaticResource LabelStyle1}" Canvas.Left="400" Canvas.Top="305"/>
+                <TextBox x:Name="OD_4" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="445" Canvas.Top="282"/>
+                <TextBox x:Name="RN_4B" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="445" Canvas.Top="305"/>
 
-                <!-- Seat Height -->
-                <Line X1="700" Y1="70" X2="665" Y2="70" Stroke="#5090F9" StrokeDashArray="4 2" StrokeThickness="2"/>
-                <Line X1="663" Y1="98" X2="663" Y2="70" Stroke="#5090F9" StrokeThickness="2"/>
-                <Line X1="665" Y1="100" X2="820" Y2="100" Stroke="#5090F9" StrokeThickness="2"/>
-                <TextBlock x:Name="SeatHeightLabel" Text="SEAT HEIGHT" Style="{StaticResource LabelStyle1}" Canvas.Left="670" Canvas.Top="40"/>
-                <TextBox x:Name="SeatHeightBox" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="735" Canvas.Top="35"/>
-                <TextBlock x:Name="SeatRunoutLabel" Text="SEAT RUNOUT" Style="{StaticResource LabelStyle1}" Canvas.Left="730" Canvas.Top="70"/>
-                <TextBox x:Name="SeatRunout" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="799" Canvas.Top="65"/>
+                <Line X1="560" Y1="115" X2="560" Y2="167" Stroke="#5090F9" StrokeThickness="2"/>
+                <TextBlock x:Name="OD_5_Label" Text="SOD-2" Style="{StaticResource LabelStyle1}" Canvas.Left="510" Canvas.Top="64"/>
+                <TextBlock x:Name="STEP_RUNOUT_2_Label" Text="RUNOUT" Style="{StaticResource LabelStyle1}" Canvas.Left="505" Canvas.Top="90"/>
+                <TextBox x:Name="STEP_OD2" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="550" Canvas.Top="60"/>
+                <TextBox x:Name="STEP_RUNOUT_2" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="550" Canvas.Top="85"/>
 
-                <!-- Datum to End -->
-                <Line X1="648" Y1="300" X2="648" Y2="240" Stroke="#5090F9" StrokeThickness="2"/>
-                <Line X1="645" Y1="120" X2="645" Y2="50" Stroke="#5090F9" StrokeThickness="2"/>
-                <Line X1="110" Y1="50" X2="110" Y2="161" Stroke="#5090F9" StrokeThickness="2"/>
-                <Line X1="110" Y1="50" X2="645" Y2="50" Stroke="#5090F9" StrokeDashArray="4 2" StrokeThickness="2"/>
-                <TextBlock x:Name="DatumToEndLabel" Text="DATUM TO END" Style="{StaticResource LabelStyle1}" Canvas.Left="350" Canvas.Top="30"/>
-                <TextBox x:Name="DatumToEndBox" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="430" Canvas.Top="20"/>
+                <Line X1="700" Y1="168" X2="700" Y2="234" Stroke="#5090F9" StrokeDashArray="4 2" StrokeThickness="2"/>
+                <Line X1="700" Y1="169" X2="584" Y2="169" Stroke="#5090F9" StrokeThickness="2"/>
+                <Line X1="700" Y1="234" X2="584" Y2="234" Stroke="#5090F9" StrokeThickness="2"/>
 
-                <!-- Datum to Groove -->
-                <Line X1="665" Y1="340" X2="665" Y2="250" Stroke="#5090F9" StrokeThickness="2"/>
-                <Line X1="140" Y1="300" X2="140" Y2="195" Stroke="#5090F9" StrokeThickness="2"/>
-                <Line X1="140" Y1="300" X2="650" Y2="300" Stroke="#5090F9" StrokeDashArray="4 2" StrokeThickness="2"/>
-                <TextBlock x:Name="DatumToGrooveLabel" Text="DATUM TO GROOVE" Style="{StaticResource LabelStyle1}" Canvas.Left="300" Canvas.Top="310"/>
-                <TextBox x:Name="DatumToGrooveBox" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="430" Canvas.Top="300"/>
+                <TextBlock x:Name="ID_2_Label" Text="ID-2" Style="{StaticResource LabelStyle1}" Canvas.Left="760" Canvas.Top="175"/>
+                <TextBlock x:Name="RN_5_Label" Text="RUNOUT" Style="{StaticResource LabelStyle1}" Canvas.Left="740" Canvas.Top="200"/>
+                <TextBox x:Name="ID_2" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="790" Canvas.Top="170"/>
+                <TextBox x:Name="RN_5" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="790" Canvas.Top="195"/>
 
-                <!-- Stem Taper -->
-                <TextBlock x:Name="StemTaperLabel" Text="STEM TAPER" Style="{StaticResource LabelStyle1}" Canvas.Left="310" Canvas.Top="70"/>
-                <TextBox x:Name="StemTaper" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="400" Canvas.Top="205"/>
+                <Line X1="234" Y1="355" X2="585" Y2="355" Stroke="#5090F9" StrokeDashArray="4 2" StrokeThickness="2"/>
+                <Line X1="235" Y1="235" X2="235" Y2="355" Stroke="#5090F9" StrokeThickness="2"/>
+                <Line X1="585" Y1="235" X2="585" Y2="355" Stroke="#5090F9" StrokeThickness="2"/>
 
-                <!-- Straightness -->
-                <TextBlock x:Name="StraightnessLabel" Text="STRAIGHTNESS" Style="{StaticResource LabelStyle1}" Canvas.Left="320" Canvas.Top="210"/>
-                <TextBox x:Name="Straightness" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="370" Canvas.Top="70"/>
-
-                <!-- Overall Length -->
-                <Line X1="110" Y1="340" X2="110" Y2="195" Stroke="#5090F9" StrokeThickness="2"/>
-                <Line X1="110" Y1="340" X2="665" Y2="340" Stroke="#5090F9" StrokeDashArray="4 2" StrokeThickness="2"/>
-                <TextBlock x:Name="OverallLengthLabel" Text="OVERALL LENGTH" Style="{StaticResource LabelStyle1}" Canvas.Left="310" Canvas.Top="360"/>
-                <TextBox x:Name="OverallLengthBox" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="400" Canvas.Top="350"/>
-
-                <!-- Head Runout -->
-                <TextBlock x:Name="HeadRunoutLabel" Text="HEAD RUNOUT" Style="{StaticResource LabelStyle1}" Canvas.Left="700" Canvas.Top="310"/>
-                <TextBox x:Name="HeadRunout" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="780" Canvas.Top="305"/>
-
-                <!-- Head Over -->
-                <TextBlock x:Name="HeadOverLabel" Text="HEAD OVER" Style="{StaticResource LabelStyle1}" Canvas.Left="710" Canvas.Top="280"/>
-                <TextBox x:Name="HeadOver" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="780" Canvas.Top="275"/>
+                <TextBlock x:Name="OL_Label" Text="TOTAL LENGTH" Style="{StaticResource LabelStyle1}" Canvas.Left="335" Canvas.Top="369"/>
+                <TextBox x:Name="OL" Text="--" Style="{StaticResource ValueBoxStyle1}" Canvas.Left="410" Canvas.Top="365"/>
 
             </Canvas>
         </Viewbox>
+
+
+
 
 
 
@@ -451,13 +444,13 @@
         <Grid Grid.Row="1" Grid.Column="1" Margin="0" >
             <!-- Gauge UniformGrid -->
             <UniformGrid x:Name="ProgressBarContainer"
-           Grid.Row="1"
-           Columns="9"
-           HorizontalAlignment="Stretch"
-           VerticalAlignment="Stretch"
-           Margin="0,0,30,0"
-           MinHeight="560"
-           MinWidth="200"/>
+               Grid.Row="1"
+               Columns="9"
+               HorizontalAlignment="Stretch"
+               VerticalAlignment="Stretch"
+               Margin="0,0,30,0"
+               MinHeight="560"
+               MinWidth="200"/>
         </Grid>
 
 
@@ -467,36 +460,35 @@
 
         <!-- Row 2: DataGrid spanning both columns -->
         <Border Style="{StaticResource CardBox}"
-        Grid.Row="2" Grid.ColumnSpan="4"
-        Margin="20,5,20,10" Padding="3"
-        HorizontalAlignment="Stretch"
-        VerticalAlignment="Stretch">
+                Grid.Row="2" Grid.ColumnSpan="4"
+                Margin="20,5,20,10" Padding="3"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch">    
 
             <DataGrid x:Name="ValveReadingsGrid"
-            PreviewKeyDown="ValveReadingsGrid_PreviewKeyDown"
-
-              AutoGenerateColumns="True"
-              AutoGeneratingColumn="ValveReadingsGrid_AutoGeneratingColumn"
-              CanUserAddRows="False"
-              CanUserDeleteRows="False"
-              IsReadOnly="True"
-              GridLinesVisibility="None"
-              Background="White"
-              Foreground="Black"
-              BorderBrush="#DDD"
-              RowBackground="White"
-              AlternatingRowBackground="#F2F2F2"
-              HorizontalGridLinesBrush="#E0E0E0"
-              VerticalGridLinesBrush="#E0E0E0"
-              RowHeight="26"
-              ColumnHeaderHeight="40"
-              FontSize="14"
-              FontFamily="Segoe UI"
-              HorizontalAlignment="Stretch"
-              VerticalAlignment="Stretch"
-              ColumnWidth="*"
-              MinHeight="100"
-              MinWidth="100">
+                  PreviewKeyDown="ValveReadingsGrid_PreviewKeyDown"
+                  AutoGenerateColumns="True"
+                  AutoGeneratingColumn="ValveReadingsGrid_AutoGeneratingColumn"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  IsReadOnly="True"
+                  GridLinesVisibility="None"
+                  Background="White"
+                  Foreground="Black"
+                  BorderBrush="#DDD"
+                  RowBackground="White"
+                  AlternatingRowBackground="#F2F2F2"
+                  HorizontalGridLinesBrush="#E0E0E0"
+                  VerticalGridLinesBrush="#E0E0E0"
+                  RowHeight="26"
+                  ColumnHeaderHeight="40"
+                  FontSize="14"
+                  FontFamily="Segoe UI"
+                  HorizontalAlignment="Stretch"
+                  VerticalAlignment="Stretch"
+                  ColumnWidth="*"
+                  MinHeight="100"
+                  MinWidth="100">
 
                 <!-- Modern Styles -->
                 <DataGrid.Resources>

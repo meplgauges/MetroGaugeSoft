@@ -13,11 +13,17 @@ namespace EVMS
     {
         // 🔥 predefined probe names
         public static readonly string[] ProbeNamesStatic = {
-            "Probe 1", "Probe 2", "Probe 3", "Probe 4", "Probe 5",
-            "Probe 6", "Probe 7", "Probe 8", "Probe 9", "Probe 10",
-            "Probe 11", "Probe 12", "Probe 13", "Probe 14", "Probe 15"
-        };
+                "Probe 1", "Probe 2", "Probe 3", "Probe 4", "Probe 5",
+                "Probe 6", "Probe 7", "Probe 8", "Probe 9", "Probe 10",
+                "Probe 11", "Probe 12", "Probe 13", "Probe 14", "Probe 15",
+                "Probe 16", "Probe 17", "Probe 18", "Probe 19", "Probe 20",
+                "Probe 21", "Probe 22", "Probe 23"
+            };
 
+
+        public static readonly string[] ProbeTypeStatic = {
+            "Normal", "Pneumatic"
+        };
         private readonly string connectionString;
 
         // existing collection of parameters (loaded from DB)
@@ -27,6 +33,8 @@ namespace EVMS
         public ObservableCollection<int> AvailableBoxes { get; set; } = new ObservableCollection<int>(Enumerable.Range(1, 10));
         public ObservableCollection<int> AvailableChannels { get; set; } = new ObservableCollection<int>(Enumerable.Range(1, 4));
         public ObservableCollection<string> ProbeNames { get; set; } = new ObservableCollection<string>(ProbeNamesStatic);
+        public ObservableCollection<string> ProbeType { get; set; } = new ObservableCollection<string>(ProbeTypeStatic);
+
 
         // Selected items bound to UI
         private ParameterItem? _selectedParameter;
@@ -57,6 +65,13 @@ namespace EVMS
             set { _selectedProbeName = value; NotifyPropertyChanged(); }
         }
 
+        private string? _selectedProbeType;
+        public string? SelectedProbeType
+        {
+            get => _selectedProbeType;
+            set { _selectedProbeType = value; NotifyPropertyChanged(); }
+        }
+
         // collection of mappings shown in DataGrid
         public ObservableCollection<ProbeMapping> Mappings { get; set; } = new ObservableCollection<ProbeMapping>();
 
@@ -78,6 +93,8 @@ namespace EVMS
             if (AvailableBoxes.Any()) SelectedBox = AvailableBoxes.First();
             if (AvailableChannels.Any()) SelectedChannel = AvailableChannels.First();
             SelectedProbeName = ProbeNames.FirstOrDefault();
+            SelectedProbeType = ProbeType.FirstOrDefault();
+
         }
 
         // ------------------ LOAD PARAMETERS ------------------  
@@ -135,7 +152,7 @@ namespace EVMS
 
                 if (partNo == null) return;
 
-                string mapQuery = @"SELECT ParameterName, BoxId, ChannelId, ISNULL(ProbeName,'') as ProbeName 
+                string mapQuery = @"SELECT ParameterName, BoxId, ChannelId,ISNULL(ProbeName,'') as ProbeName ,ISNULL(ProbeType,'') as ProbeType
                                     FROM ProbeInstallationData WHERE PartNo=@P";
 
                 using var mcmd = new SqlCommand(mapQuery, con);
@@ -149,7 +166,9 @@ namespace EVMS
                         Parameter = reader.GetString(0),
                         BoxId = reader.GetInt32(1),
                         ChannelId = reader.GetInt32(2),
-                        ProbeName = reader.IsDBNull(3) ? "" : reader.GetString(3)
+                        ProbeName = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                        ProbeType = reader.GetString(4),
+
                     };
                     Mappings.Add(mapping);
                 }
@@ -189,12 +208,20 @@ namespace EVMS
                     return;
                 }
 
+                if (string.IsNullOrWhiteSpace(SelectedProbeType))
+                {
+                    MessageBox.Show("Please select a probe name.", "Missing", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
                 var map = new ProbeMapping
                 {
                     Parameter = SelectedParameter.Name,
                     BoxId = SelectedBox,
                     ChannelId = SelectedChannel,
-                    ProbeName = SelectedProbeName ?? ""
+                    ProbeName = SelectedProbeName ?? "",
+                    ProbeType = SelectedProbeType ?? ""
+
                 };
 
                 Mappings.Add(map);
@@ -244,12 +271,14 @@ namespace EVMS
                 foreach (var m in Mappings)
                 {
                     var ins = new SqlCommand(
-                        "INSERT INTO ProbeInstallationData (PartNo,ParameterName,BoxId,ChannelId,ProbeName) VALUES (@p,@n,@b,@c,@probe)", con);
+                        "INSERT INTO ProbeInstallationData (PartNo,ParameterName,BoxId,ChannelId,ProbeName,ProbeType) VALUES (@p,@n,@b,@c,@probe,@probetype)", con);
                     ins.Parameters.AddWithValue("@p", partNo);
                     ins.Parameters.AddWithValue("@n", m.Parameter);
                     ins.Parameters.AddWithValue("@b", m.BoxId);
                     ins.Parameters.AddWithValue("@c", m.ChannelId);
                     ins.Parameters.AddWithValue("@probe", m.ProbeName ?? "");
+                    ins.Parameters.AddWithValue("@probetype", m.ProbeType ?? "");
+
                     await ins.ExecuteNonQueryAsync();
                     saved++;
                 }
@@ -290,12 +319,14 @@ namespace EVMS
                     foreach (int ch in p.Channels.Where(c => c >= 1 && c <= 4))
                     {
                         var ins = new SqlCommand(
-                            "INSERT INTO ProbeInstallationData (PartNo,ParameterName,BoxId,ChannelId,ProbeName) VALUES (@p,@n,@b,@c,@probeName)", con);
+                            "INSERT INTO ProbeInstallationData (PartNo,ParameterName,BoxId,ChannelId,ProbeName,ProbeType) VALUES (@p,@n,@b,@c,@probeName,@ProbeType)", con);
                         ins.Parameters.AddWithValue("@p", partNo);
                         ins.Parameters.AddWithValue("@n", p.Name);
                         ins.Parameters.AddWithValue("@b", p.BoxId);
                         ins.Parameters.AddWithValue("@c", ch);
                         ins.Parameters.AddWithValue("@probeName", p.ProbeName ?? "");
+                        ins.Parameters.AddWithValue("@ProbeType", p.ProbeType ?? "");
+
                         await ins.ExecuteNonQueryAsync();
                         savedCount++;
                     }
@@ -322,6 +353,8 @@ namespace EVMS
         private int _boxId;
         private string _liveValue = "-";
         private string _probeName = "";
+        private string _probeType = "";
+
 
         public string Name
         {
@@ -341,6 +374,12 @@ namespace EVMS
         {
             get => _probeName;
             set { _probeName = value; Notify(); }
+        }
+
+        public string ProbeType
+        {
+            get => _probeType;
+            set { _probeType = value; Notify(); }
         }
 
         public string ChannelsAsString
@@ -377,5 +416,6 @@ namespace EVMS
         public int BoxId { get; set; }
         public int ChannelId { get; set; }
         public string ProbeName { get; set; } = "";
+        public string ProbeType { get; set; } = "";
     }
 }

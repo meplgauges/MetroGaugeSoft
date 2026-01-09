@@ -108,10 +108,10 @@ namespace EVMS.Service
         {
             var list = new List<ProbeInstallModel>();
             string query = @"
-  SELECT PartNo, ProbeName, ParameterName, BoxId, ChannelId
-  FROM ProbeInstallationData
-  WHERE PartNo = @PartNo
-  ORDER BY ProbeName, ChannelId";
+                              SELECT PartNo, ProbeName, ParameterName, BoxId, ChannelId
+                              FROM ProbeInstallationData
+                              WHERE PartNo = @PartNo
+                              ORDER BY ProbeName, ChannelId";
 
             using SqlConnection conn = new(_connectionString);
             using SqlCommand cmd = new(query, conn);
@@ -181,18 +181,18 @@ namespace EVMS.Service
             var list = new List<MasterReadingModel>();
 
             string query = @"
-        SELECT 
-            p.SrNo,
-            p.Parameter,
-            COALESCE(m.Nominal, p.Nominal) AS Nominal,
-            COALESCE(m.RTolPlus, p.RTolPlus) AS RTolPlus,
-            COALESCE(m.RTolMinus, p.RTolMinus) AS RTolMinus
-        FROM PartConfig p
-        LEFT JOIN MasterReadingData m
-            ON p.Parameter = m.Parameter      -- match by parameter name
-           AND m.Para_No = @PartNumber        -- use master data for this part
-        WHERE p.Para_No = @PartNumber         -- only parameters for this part
-        ORDER BY p.SrNo;                      -- preserve PartConfig order";
+                            SELECT 
+                                p.SrNo,
+                                p.Parameter,
+                                COALESCE(m.Nominal, p.Nominal) AS Nominal,
+                                COALESCE(m.RTolPlus, p.RTolPlus) AS RTolPlus,
+                                COALESCE(m.RTolMinus, p.RTolMinus) AS RTolMinus
+                            FROM PartConfig p
+                            LEFT JOIN MasterReadingData m
+                                ON p.Parameter = m.Parameter      -- match by parameter name
+                               AND m.Para_No = @PartNumber        -- use master data for this part
+                            WHERE p.Para_No = @PartNumber         -- only parameters for this part
+                            ORDER BY p.SrNo;                      -- preserve PartConfig order";
 
             using SqlConnection conn = new(_connectionString);
             using SqlCommand cmd = new(query, conn);
@@ -204,7 +204,8 @@ namespace EVMS.Service
             {
                 list.Add(new MasterReadingModel
                 {
-                    Para_No = reader["SrNo"].ToString(),
+                    Para_No = partNumber,   // ✅ Part number
+
                     Parameter = reader["Parameter"].ToString(),
                     D_Name = reader["Parameter"].ToString(),
                     Nominal = Convert.ToDouble(reader["Nominal"]),
@@ -240,6 +241,66 @@ namespace EVMS.Service
         }
 
 
+
+        public List<PartID> GetActiveID()
+        {
+            var list = new List<PartID>();
+
+            string query = @"
+                    SELECT Para_No, ID_Value, BOT_Value
+                    FROM Part_Entry
+                    WHERE ActivePart = 1";
+
+            using SqlConnection conn = new(_connectionString);
+            using SqlCommand cmd = new(query, conn);
+
+            conn.Open();
+            using SqlDataReader reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                list.Add(new PartID
+                {
+                    Para_No = reader["Para_No"].ToString(),
+                    ID_Value = Convert.ToInt32(reader["ID_Value"]),
+                    BOT_Value = Convert.ToInt32(reader["BOT_Value"])
+                });
+            }
+
+            return list;
+        }
+
+        public List<PartConfigInfo> GetPartConfigBits(string partNo)
+        {
+            var list = new List<PartConfigInfo>();
+            string query = @"
+            SELECT 
+                SrNo,
+                Para_No,
+                ID_Value,
+                BOT_Value
+            FROM PartConfig
+            WHERE Para_No = @Para_No";
+
+            using SqlConnection conn = new(_connectionString);
+            using SqlCommand cmd = new(query, conn);
+            cmd.Parameters.AddWithValue("@Para_No", partNo);  // ✅ Parameterized by partNo
+
+            conn.Open();
+            using SqlDataReader reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                list.Add(new PartConfigInfo
+                {
+                    SrNo = reader["SrNo"] != DBNull.Value ? Convert.ToInt32(reader["SrNo"]) : 0,
+                    Para_No = reader["Para_No"]?.ToString() ?? string.Empty,
+                    ID_Value = reader["ID_Value"] != DBNull.Value ? Convert.ToInt32(reader["ID_Value"]) : 0,
+                    BOT_Value = reader["BOT_Value"] != DBNull.Value ? Convert.ToInt32(reader["BOT_Value"]) : 0
+                });
+            }
+            return list;
+        }
+
+
         public bool ProbeReferencesExist(string partNo)
         {
             string query = "SELECT COUNT(*) FROM MasterReadingProbeReference WHERE PartNo = @PartNo";
@@ -256,9 +317,9 @@ namespace EVMS.Service
         public List<(string Name, double Min, double Max)> GetMasterProbeRef(string partNo)
         {
             string query = @"
-        SELECT Name, MinValue, MaxValue
-        FROM MasterReadingProbeReference
-        WHERE PartNo = @PartNo";
+                            SELECT Name, MinValue, MaxValue
+                            FROM MasterReadingProbeReference
+                            WHERE PartNo = @PartNo";
 
             var result = new List<(string Name, double Min, double Max)>();
 
@@ -306,21 +367,21 @@ namespace EVMS.Service
                         string probeId = probe.ProbeName;  // "HD001"
 
                         string query = @"
-MERGE MasterReadingProbeReference AS target
-USING (VALUES (@PartNo, @ProbeId, @Name, @MinValue, @MaxValue)) 
-       AS source (PartNo, ProbeId, Name, MinValue, MaxValue)
-ON (target.PartNo = source.PartNo AND target.ProbeId = source.ProbeId)
-WHEN MATCHED THEN 
-    UPDATE SET 
-        MinValue    = source.MinValue,
-        MaxValue    = source.MaxValue,
-        LastUpdated = GETDATE(),
-        Name        = source.Name
-WHEN NOT MATCHED THEN
-    INSERT (PartNo, ProbeId, Name, MinValue, MaxValue, LastUpdated)
-    VALUES (source.PartNo, source.ProbeId, source.Name, 
-            source.MinValue, source.MaxValue, GETDATE());
-";
+                                        MERGE MasterReadingProbeReference AS target
+                                        USING (VALUES (@PartNo, @ProbeId, @Name, @MinValue, @MaxValue)) 
+                                               AS source (PartNo, ProbeId, Name, MinValue, MaxValue)
+                                        ON (target.PartNo = source.PartNo AND target.ProbeId = source.ProbeId)
+                                        WHEN MATCHED THEN 
+                                            UPDATE SET 
+                                                MinValue    = source.MinValue,
+                                                MaxValue    = source.MaxValue,
+                                                LastUpdated = GETDATE(),
+                                                Name        = source.Name
+                                        WHEN NOT MATCHED THEN
+                                            INSERT (PartNo, ProbeId, Name, MinValue, MaxValue, LastUpdated)
+                                            VALUES (source.PartNo, source.ProbeId, source.Name, 
+                                                    source.MinValue, source.MaxValue, GETDATE());
+                                        ";
 
                         using SqlCommand cmd = new(query, conn);
                         cmd.Parameters.AddWithValue("@PartNo", partNo);
@@ -372,14 +433,14 @@ WHEN NOT MATCHED THEN
         {
             var list = new List<Dictionary<string, object>>();
 
-            string query = "SELECT * FROM MeasurementReading WHERE PartNo = @PartNo";
+            string query = "SELECT * FROM MeasuredData WHERE PartNo = @PartNo";
 
             if (filterDate.HasValue)
             {
-                query += " AND MeasurementDate >= @StartDate AND MeasurementDate < @EndDate ";
+                query += " AND InspectionDate >= @StartDate AND InspectionDate < @EndDate ";
             }
 
-            query += " ORDER BY MeasurementDate ASC";
+            query += " ORDER BY InspectionDate ASC";
 
             try
             {
@@ -574,9 +635,9 @@ WHEN NOT MATCHED THEN
             DataTable dt = new DataTable();
 
             string query = @"
-        SELECT Parameter, Value
-        FROM MeasurementTable  -- Replace with your actual table
-        WHERE PartNo = @PartNo";
+                            SELECT Parameter, Value
+                            FROM MeasurementTable  -- Replace with your actual table
+                            WHERE PartNo = @PartNo";
 
             using (var conn = new SqlConnection(_connectionString))
             using (var cmd = new SqlCommand(query, conn))
@@ -686,9 +747,9 @@ WHEN NOT MATCHED THEN
                 await con.OpenAsync();
 
                 string query = @"
-            SELECT DISTINCT LotNo
-            FROM dbo.MeasuredData
-            WHERE 1 = 1";
+                                SELECT DISTINCT LotNo
+                                FROM dbo.MeasuredData
+                                WHERE 1 = 1";
 
                 if (!string.IsNullOrEmpty(partNo))
                     query += " AND PartNo = @PartNo";
@@ -735,16 +796,17 @@ WHEN NOT MATCHED THEN
             {
                 await con.OpenAsync();
 
-                string query = @"SELECT DISTINCT Operator_ID FROM MeasurementReading WHERE 1=1";
+                string query = @"SELECT DISTINCT Operator_ID FROM MeasuredData WHERE 1=1";
 
                 if (!string.IsNullOrEmpty(partNo))
                     query += " AND PartNo = @PartNo";
 
                 if (dateFrom.HasValue)
-                    query += " AND MeasurementDate >= @DateFrom";
+                    query += " AND " +
+                        "InspectionDate >= @DateFrom";
 
                 if (dateTo.HasValue)
-                    query += " AND MeasurementDate <= @DateTo";
+                    query += " AND InspectionDate <= @DateTo";
 
                 using (SqlCommand cmd = new SqlCommand(query, con))
                 {
@@ -814,37 +876,37 @@ WHEN NOT MATCHED THEN
 
             // We’ll dynamically unpivot MasterInspection (OL, DE, HD, etc.) to rows using CROSS APPLY
             string query = @"
-    SELECT 
-        c.Para_No,
-        c.Parameter,
-        c.Nominal,
-        c.RTolPlus,
-        c.RTolMinus,
-        v.ParameterName AS MeasurementParameter,
-        v.MeasurementValue,
-        mi.InspectionDate
-    FROM MasterInspection mi
-    CROSS APPLY (VALUES
-        ('OL', mi.OL),
-        ('DE', mi.DE),
-        ('HD', mi.HD),
-        ('GP', mi.GP),
-        ('STDG', mi.STDG),
-        ('STDU', mi.STDU),
-        ('GIR_DIA', mi.GIR_DIA),
-        ('STN', mi.STN),
-        ('Ovality_SDG', mi.Ovality_SDG),
-        ('Ovality_SDU', mi.Ovality_SDU),
-        ('Ovality_Head', mi.Ovality_Head),
-        ('Stem_Taper', mi.Stem_Taper),
-        ('EFRO', mi.EFRO),
-        ('Face_Runout', mi.Face_Runout),
-        ('SH', mi.SH),
-        ('S_RO', mi.S_RO),
-        ('DG', mi.DG)
-    ) AS v(ParameterName, MeasurementValue)
-    INNER JOIN PartConfig c ON c.Parameter = v.ParameterName AND c.Para_No = mi.PartNo
-    WHERE mi.PartNo = @PartNo";
+                            SELECT 
+                                c.Para_No,
+                                c.Parameter,
+                                c.Nominal,
+                                c.RTolPlus,
+                                c.RTolMinus,
+                                v.ParameterName AS MeasurementParameter,
+                                v.MeasurementValue,
+                                mi.InspectionDate
+                            FROM MasterInspection mi
+                            CROSS APPLY (VALUES
+                                ('OL', mi.OL),
+                                ('DE', mi.DE),
+                                ('HD', mi.HD),
+                                ('GP', mi.GP),
+                                ('STDG', mi.STDG),
+                                ('STDU', mi.STDU),
+                                ('GIR_DIA', mi.GIR_DIA),
+                                ('STN', mi.STN),
+                                ('Ovality_SDG', mi.Ovality_SDG),
+                                ('Ovality_SDU', mi.Ovality_SDU),
+                                ('Ovality_Head', mi.Ovality_Head),
+                                ('Stem_Taper', mi.Stem_Taper),
+                                ('EFRO', mi.EFRO),
+                                ('Face_Runout', mi.Face_Runout),
+                                ('SH', mi.SH),
+                                ('S_RO', mi.S_RO),
+                                ('DG', mi.DG)
+                            ) AS v(ParameterName, MeasurementValue)
+                            INNER JOIN PartConfig c ON c.Parameter = v.ParameterName AND c.Para_No = mi.PartNo
+                            WHERE mi.PartNo = @PartNo";
 
             if (startDate.HasValue && endDate.HasValue)
             {
@@ -892,11 +954,11 @@ WHEN NOT MATCHED THEN
 
 
         public async Task<List<MeasurementReading>> GetMeasurementReadingsAsync(
-     string? partNo,
-     string? lotNo,
-     string? operatorId,
-     DateTime? dateFrom,
-     DateTime? dateTo)
+                     string? partNo,
+                     string? lotNo,
+                     string? operatorId,
+                     DateTime? dateFrom,
+                     DateTime? dateTo)
         {
             var readings = new List<MeasurementReading>();
 
@@ -905,9 +967,9 @@ WHEN NOT MATCHED THEN
                 await con.OpenAsync();
 
                 string query = @"
-            SELECT *
-            FROM dbo.MeasuredData
-            WHERE (@PartNo IS NULL OR PartNo = @PartNo)";
+                            SELECT *
+                            FROM dbo.MeasuredData
+                            WHERE (@PartNo IS NULL OR PartNo = @PartNo)";
 
                 if (!string.IsNullOrEmpty(lotNo))
                     query += " AND LotNo = @LotNo";
@@ -990,11 +1052,11 @@ WHEN NOT MATCHED THEN
             {
                 await con.OpenAsync();
 
-                string query = "DELETE FROM MeasurementReading WHERE Id = @Id";
+                string query = "DELETE FROM MeasuredData WHERE ID = @ID";
 
                 using (SqlCommand cmd = new SqlCommand(query, con))
                 {
-                    cmd.Parameters.AddWithValue("@Id", id);
+                    cmd.Parameters.AddWithValue("@ID", id);
 
                     int rowsAffected = await cmd.ExecuteNonQueryAsync();
 
@@ -1011,14 +1073,14 @@ WHEN NOT MATCHED THEN
                 await con.OpenAsync();
 
                 string query = @"
-            DELETE FROM MeasurementReading
-            WHERE Id = (
-                SELECT TOP 1 Id FROM MeasurementReading
-                WHERE PartNo = @PartNo
-                  AND LotNo = @LotNo
-                  AND Operator_ID = @OperatorId
-                ORDER BY MeasurementDate DESC
-            )";
+                                DELETE FROM MeasuredData
+                                WHERE Id = (
+                                    SELECT TOP 1 ID FROM MeasuredData
+                                    WHERE PartNo = @PartNo
+                                      AND LotNo = @LotNo
+                                      AND Operator_ID = @OperatorId
+                                    ORDER BY InspectionDate DESC
+                                )";
 
                 using (SqlCommand cmd = new SqlCommand(query, con))
                 {
@@ -1191,6 +1253,21 @@ WHEN NOT MATCHED THEN
     }
 
 
+    public class PartConfigInfo
+    {
+        public int SrNo { get; set; }
+        public string Para_No { get; set; } = string.Empty;
+        public int ID_Value { get; set; }    // 0=No Select, 1=ID1, 2=ID2, 3=ID3
+        public int BOT_Value { get; set; }   // 0=No Select, 1=CYC1, 2=CYC2, 3=CYC3
+    }
+
+
+    public class PartID
+    {
+        public string Para_No { get; set; }
+        public int ID_Value { get; set; }
+        public int BOT_Value { get; set; }
+    }
 
 
     public class MeasurementReading

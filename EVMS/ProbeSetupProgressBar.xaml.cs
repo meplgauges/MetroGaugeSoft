@@ -47,17 +47,20 @@ namespace EVMS
         }
         #endregion
 
-        #region Stroke
-        public static readonly DependencyProperty StrokeProperty =
-            DependencyProperty.Register(nameof(Stroke), typeof(string),
-            typeof(ProbeSetupProgressBar), new PropertyMetadata("0"));
+        #region ProbeType
+        public static readonly DependencyProperty ProbeTypeProperty =
+            DependencyProperty.Register(nameof(ProbeType), typeof(string),
+            typeof(ProbeSetupProgressBar), new PropertyMetadata(string.Empty));
 
-        public string Stroke
+        public string ProbeType
         {
-            get => (string)GetValue(StrokeProperty);
-            set => SetValue(StrokeProperty, value);
+            get => (string)GetValue(ProbeTypeProperty);
+            set => SetValue(ProbeTypeProperty, value);
         }
+
+      
         #endregion
+
 
         #region Status
         public static readonly DependencyProperty StatusProperty =

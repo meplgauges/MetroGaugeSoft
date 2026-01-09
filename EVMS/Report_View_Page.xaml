@@ -27,15 +27,15 @@
 
 
         <Border 
-        Grid.Row="0" 
-        Background="{StaticResource PageBackgroundBrush}"
-        CornerRadius="12" 
-        Padding="10" 
-        Margin="0,2,0,0" 
-        BorderBrush="#D1D9E6" 
-        BorderThickness="1"
-        HorizontalAlignment="Stretch"
-        VerticalAlignment="Top">    
+                Grid.Row="0" 
+                Background="{StaticResource PageBackgroundBrush}"
+                CornerRadius="12" 
+                Padding="10" 
+                Margin="0,2,0,0" 
+                BorderBrush="#D1D9E6" 
+                BorderThickness="1"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Top">    
 
             <Grid HorizontalAlignment="Stretch" VerticalAlignment="Center">
                 <Grid.ColumnDefinitions>
@@ -54,10 +54,10 @@
                 <!-- DateTimePicker From -->
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="Date From" Margin="2,0,2,2" FontWeight="Bold"/>
-                    <xctk:DateTimePicker Margin="5" Width="180"
-                BorderBrush="#1976D2" BorderThickness="1" Padding="4"
-                Value="{Binding SelectedDateTimeFrom, Mode=TwoWay}" 
-                Format="Custom" FormatString="MM/dd/yyyy HH:mm:ss"/>
+                    <xctk:DateTimePicker Margin="5" Width="180" Height="33"
+                                        BorderBrush="#1976D2" BorderThickness="1" Padding="4"
+                                        Value="{Binding SelectedDateTimeFrom, Mode=TwoWay}" 
+                                        Format="Custom" FormatString="MM/dd/yyyy HH:mm:ss"/>    
                 </StackPanel>
 
                 <TextBlock Text="TO" Grid.Column="1" Margin="1,15,1,1" 
@@ -66,100 +66,101 @@
                 <!-- DateTimePicker To -->
                 <StackPanel Grid.Column="2">
                     <TextBlock Text="Date To" Margin="2,0,2,2" FontWeight="Bold"/>
-                    <xctk:DateTimePicker Margin="4" Width="180"
-                BorderBrush="#1976D2" BorderThickness="1" Padding="4"
-                Value="{Binding SelectedDateTimeTo, Mode=TwoWay}" 
-                Format="Custom" FormatString="MM/dd/yyyy HH:mm:ss"/>
+                    <xctk:DateTimePicker Margin="4" Width="180" Height="33"
+                                        BorderBrush="#1976D2" BorderThickness="1" Padding="4"
+                                        Value="{Binding SelectedDateTimeTo, Mode=TwoWay}" 
+                                        Format="Custom" FormatString="MM/dd/yyyy HH:mm:ss"/>    
                 </StackPanel>
 
                 <!-- PartNo ComboBox -->
                 <StackPanel Grid.Column="3">
                     <TextBlock Text="Part Number" Margin="2,0,2,2" FontWeight="Bold"/>
                     <ComboBox x:Name="PartNo"
-              ItemsSource="{Binding ActiveParts}"
-              SelectedItem="{Binding SelectedPartNo, Mode=TwoWay}"
-              Background="White"
-              Foreground="Black"
-              Style="{DynamicResource ModernComboBoxStyle}"
-              VerticalContentAlignment="Center"
-              Margin="4"/>
+                              ItemsSource="{Binding ActiveParts}"
+                              SelectedItem="{Binding SelectedPartNo, Mode=TwoWay}"
+                              Background="White"
+                              Foreground="Black"
+                              Style="{StaticResource ModernComboBoxStyle}"
+                              VerticalContentAlignment="Center"
+                              Margin="4"/>  
                 </StackPanel>
 
                 <!-- LotNo ComboBox -->
                 <StackPanel Grid.Column="4">
                     <TextBlock Text="Lot Number" Margin="2,0,2,2" FontWeight="Bold"/>
                     <ComboBox x:Name="LotNo"
-              ItemsSource="{Binding LotNumbers}"
-              SelectedItem="{Binding SelectedLotNo, Mode=TwoWay}"
-              Style="{DynamicResource ModernComboBoxStyle}"
-              VerticalContentAlignment="Center"
-              Margin="4"/>
+                              ItemsSource="{Binding LotNumbers}"
+                              SelectedItem="{Binding SelectedLotNo, Mode=TwoWay}"
+                              Style="{DynamicResource ModernComboBoxStyle}"
+                              VerticalContentAlignment="Center"
+                              Margin="4"/>  
                 </StackPanel>
 
                 <!-- Parameter ComboBox -->
                 <StackPanel Grid.Column="5">
                     <TextBlock Text="Parameter" Margin="2,0,2,2" FontWeight="Bold"/>
                     <ComboBox x:Name="Parameter"
-              Style="{DynamicResource ModernComboBoxStyle}"
-              VerticalContentAlignment="Center"
-              ItemsSource="{Binding ParametersOptions}"
-              SelectedItem="{Binding SelectedParameter, Mode=TwoWay}"
-              Margin="4"/>
+                              Style="{DynamicResource ModernComboBoxStyle}"
+                              VerticalContentAlignment="Center"
+                              ItemsSource="{Binding ParametersOptions}"
+                              SelectedItem="{Binding SelectedParameter, Mode=TwoWay}"
+                              Margin="4"/>
                 </StackPanel>
 
                 <!-- Operator ComboBox -->
                 <StackPanel Grid.Column="6">
                     <TextBlock Text="Operator" Margin="2,0,2,2" FontWeight="Bold"/>
                     <ComboBox x:Name="Operator"
-              ItemsSource="{Binding Operators}"
-              SelectedItem="{Binding SelectedOperator, Mode=TwoWay}"
-              Style="{DynamicResource ModernComboBoxStyle}"
-              Margin="4"/>
+                              ItemsSource="{Binding Operators}"
+                              SelectedItem="{Binding SelectedOperator, Mode=TwoWay}"
+                              Style="{DynamicResource ModernComboBoxStyle}"
+                              Margin="4"/>
                 </StackPanel>
 
                 <!-- Show NG/OK ComboBox -->
                 <StackPanel Grid.Column="7" Margin="10,0,0,0">
                     <TextBlock Text="Show NG/OK" Margin="2,0,2,2" FontWeight="Bold" />
                     <ComboBox x:Name="ReportTypeDropdown"
-              ItemsSource="{Binding ReportTypeOptions}"
-              SelectedItem="{Binding SelectedReportType, Mode=TwoWay}"
-              Style="{DynamicResource ModernComboBoxStyle}"
-              Margin="4" />
+                              ItemsSource="{Binding ReportTypeOptions}"
+                              SelectedItem="{Binding SelectedReportType, Mode=TwoWay}"
+                              Style="{DynamicResource ModernComboBoxStyle}"
+                              Margin="4" />
                 </StackPanel>
 
                 <!-- Show NG/OK Count ComboBox -->
                 <StackPanel Grid.Column="8" Margin="10,0,0,0">
                     <TextBlock Text="Show NG/OK Count" Margin="2,0,2,2" FontWeight="Bold" />
                     <ComboBox x:Name="NgOkCountDropdown"
-              ItemsSource="{Binding NgOkCountOptions}"
-              SelectedItem="{Binding ShowNgOkSummary, Mode=TwoWay}"
-              Style="{DynamicResource ModernComboBoxStyle}"
-              Margin="4" />
+                              ItemsSource="{Binding NgOkCountOptions}"
+                              SelectedItem="{Binding ShowNgOkSummary, Mode=TwoWay}"
+                              Style="{DynamicResource ModernComboBoxStyle}"
+                              Margin="4" />
                 </StackPanel>
 
                 <!-- Submit Button -->
                 <Button Grid.Column="9"
-            Width="90"
-            Margin="4,20,4,0"
-            Content="Submit"
-            Background="#1976D2"
-            Foreground="White"
-            FontWeight="Bold"
-            Cursor="Hand"
-            Click="OnSubmitClicked"
-            Style="{DynamicResource ModernButtonStyle1}" />
-            </Grid>
+                        Width="90"
+                        Height="34"
+                        Margin="2,15,1,0"               
+                        Content="✅ Generate"
+                        Background="#1976D2"
+                        Foreground="White"
+                        FontWeight="Bold"
+                        Cursor="Hand"
+                        Click="OnSubmitClicked"
+                        Style="{DynamicResource ModernButtonStyle1}" />
+            </Grid> 
         </Border>
 
 
         <!-- Table and Actions -->
         <Border Grid.Row="2"
-        Background="{StaticResource PageBackgroundBrush}"
-        CornerRadius="14"
-        Padding="18"
-        Margin="0,1,0,0"
-        BorderBrush="#D7DDE7"
-        BorderThickness="1">
+                Background="{StaticResource PageBackgroundBrush}"
+                CornerRadius="14"
+                Padding="18"
+                Margin="0,1,0,0"
+                BorderBrush="#D7DDE7"
+                BorderThickness="1">
 
             <Grid>
                 <Grid.RowDefinitions>
@@ -172,78 +173,90 @@
                     Margin="0,0,0,12"
                     HorizontalAlignment="Right" >
 
-                    <Button Content="Delete Selected Row"
-                    Width="160"
-                    Height="38"
-                    Margin="4"
-                    Background="#E53935"
-                    Foreground="White"
-                    FontSize="14"
-                    FontWeight="SemiBold"
-                    Click="DeleteSelectedRow_Click"
-                    Style="{DynamicResource ModernButtonStyle1}" />
+                    <Button 
+                            Content="🗑️ Delete"
+                            Width="120"
+                            Height="38"
+                            Margin="4"
+                            Background="#E53935"
+                            Foreground="White"
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            Click="DeleteSelectedRow_Click"
+                            Style="{DynamicResource ModernButtonStyle1}" />
 
-                    <Button Content="Export PDF"
-                    Width="120"
-                    Height="38"
-                    Margin="4"
-                    Background="#1E88E5"
-                    Foreground="White"
-                    FontSize="14"
-                    FontWeight="SemiBold"
-                    Click="ExportPdf_Click"
-                    Style="{DynamicResource ModernButtonStyle1}" />
+                    <Button Content="📄 PDF"
+                            Width="120"
+                            Height="38"
+                            Margin="4"
+                            Background="#1E88E5"
+                            Foreground="White"
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            Click="ExportPdf_Click"
+                            Style="{DynamicResource ModernButtonStyle1}" /> 
 
-                    <Button Content="Export Excel"
-                    Width="130"
-                    Height="38"
-                    Margin="4"
-                    Background="#43A047"
-                    Foreground="White"
-                    FontSize="14"
-                    FontWeight="SemiBold"
-                    Click="ExportExcel_Click"
-                    Style="{DynamicResource ModernButtonStyle1}" />
+                    <Button Content="📊 Excel"
+                            Width="130"
+                            Height="38"
+                            Margin="4"
+                            Background="#43A047"
+                            Foreground="White"
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            Click="ExportExcel_Click"
+                            Style="{DynamicResource ModernButtonStyle1}" />
                 </StackPanel>
 
                 <DataGrid x:Name="ReportDataGrid"
-                  Grid.Row="1"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="True"
-                  SelectionMode="Extended"
-                  SelectionUnit="FullRow"
-                  CanUserAddRows="False"
-                  CanUserDeleteRows="False"
-                  HeadersVisibility="Column"
-                  GridLinesVisibility="All"
-                  RowHeaderWidth="0"
-                  RowHeight="40"
-                  FontSize="14"
-                  ColumnHeaderHeight="40"
-                  Background="White"
-                  Foreground="#263238"
-                  BorderBrush="#D7DDE7"
-                  BorderThickness="1"
-                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                  ScrollViewer.VerticalScrollBarVisibility="Auto"
-                  PreviewKeyDown="ReportDataGrid_PreviewKeyDown"
-                  LoadingRow="ReportDataGrid_LoadingRow">       
+                          Grid.Row="1"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          SelectionMode="Extended"
+                          SelectionUnit="FullRow"
+                          CanUserAddRows="False"
+                          CanUserDeleteRows="False"
+                          HeadersVisibility="Column"
+                          GridLinesVisibility="All"
+                          RowHeaderWidth="0"
+                          RowHeight="40"
+                          FontSize="14"
+                          ColumnHeaderHeight="40"
+                          Background="White"
+                          Foreground="#263238"
+                          BorderBrush="#D7DDE7"
+                          BorderThickness="1"
+                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto"
+                          PreviewKeyDown="ReportDataGrid_PreviewKeyDown"
+                          LoadingRow="ReportDataGrid_LoadingRow">       
 
                     <DataGrid.Resources>
 
                         <!-- HEADER STYLE (BIGGER & CENTERED) -->
                         <Style TargetType="DataGridColumnHeader">
+                            <!-- Center content -->
                             <Setter Property="HorizontalContentAlignment" Value="Center"/>
                             <Setter Property="VerticalContentAlignment" Value="Center"/>
+
+                            <!-- Font -->
                             <Setter Property="FontWeight" Value="Bold"/>
                             <Setter Property="FontSize" Value="15"/>
-                            <Setter Property="Background" Value="#007BFF"/>
                             <Setter Property="Foreground" Value="White"/>
-                            <Setter Property="Padding" Value="10,10"/>
-                            <Setter Property="BorderBrush" Value="Black"/>
-                            <Setter Property="BorderThickness" Value="1"/>
-                            <Setter Property="Height" Value="40"/>
+
+                            <!-- Background & Padding -->
+                            <Setter Property="Background" Value="#1F4E78"/>
+                            <!-- Modern blue -->
+                            <Setter Property="Padding" Value="10,0"/>
+
+                            <!-- Remove individual borders for clean look -->
+                            <Setter Property="BorderBrush" Value="Transparent"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+
+                            <!-- Height -->
+                            <Setter Property="Height" Value="45"/>
                         </Style>
+
 
                         <!-- CELL STYLE (PERFECT CENTER) -->
                         <Style TargetType="DataGridCell">
@@ -261,7 +274,7 @@
                                 </Trigger>
                                 <Trigger Property="IsSelected" Value="True">
                                     <Setter Property="Background" Value="#DCE4FF"/>
-                                    <Setter Property="Foreground" Value="#1A237E"/>
+                                    <Setter Property="Foreground" Value="#1F4E78"/>
                                 </Trigger>
                             </Style.Triggers>
                         </Style>
@@ -278,30 +291,30 @@
                     <!-- Columns -->
                     <DataGrid.Columns>
 
-                        <DataGridTextColumn Header="No"
-                    Binding="{Binding SerialNo}"
-                    Width="0.6*"
-                    ElementStyle="{StaticResource CenteredTextBlockStyle}" />
+                    <DataGridTextColumn Header="No"
+                                        Binding="{Binding SerialNo}"
+                                        Width="0.6*"
+                                        ElementStyle="{StaticResource CenteredTextBlockStyle}" />
 
-                        <DataGridTextColumn Header="Part No"
-                    Binding="{Binding PartNo}"
-                    Width="1*"
-                    ElementStyle="{StaticResource CenteredTextBlockStyle}" />
+                    <DataGridTextColumn Header="Part No"
+                                        Binding="{Binding PartNo}"
+                                        Width="1*"
+                                        ElementStyle="{StaticResource CenteredTextBlockStyle}" />
 
-                        <DataGridTextColumn Header="Lot No"
-                    Binding="{Binding LotNo}"
-                    Width="1*"
-                    ElementStyle="{StaticResource CenteredTextBlockStyle}" />
+                   <DataGridTextColumn Header="Lot No"
+                                        Binding="{Binding LotNo}"
+                                        Width="1*"
+                                        ElementStyle="{StaticResource CenteredTextBlockStyle}" />
 
-                        <DataGridTextColumn Header="Operator"
-                    Binding="{Binding Operator}"
-                    Width="1*"
-                    ElementStyle="{StaticResource CenteredTextBlockStyle}" />
+                    <DataGridTextColumn Header="Operator"
+                                        Binding="{Binding Operator}"
+                                        Width="1*"
+                                        ElementStyle="{StaticResource CenteredTextBlockStyle}" />
 
-                        <DataGridTextColumn Header="Date"
-                    Binding="{Binding Date}"
-                    Width="1.4*"
-                    ElementStyle="{StaticResource CenteredTextBlockStyle}" />
+                    <DataGridTextColumn Header="Date"
+                                        Binding="{Binding Date}"
+                                        Width="1.4*"
+                                        ElementStyle="{StaticResource CenteredTextBlockStyle}" />
 
 
                     </DataGrid.Columns>

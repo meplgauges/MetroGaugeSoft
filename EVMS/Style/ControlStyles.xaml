@@ -308,12 +308,14 @@
     <Style x:Key="ModernComboBoxStyle" TargetType="ComboBox">
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="Padding" Value="10,6"/>
-        <Setter Property="Width" Value="370"/>
+        <Setter Property="Width" Value="180"/>
         <Setter Property="MinHeight" Value="36"/>
+        <Setter Property="MinWidth" Value="50"/>
+
         <Setter Property="Margin" Value="20,6"/>
         <Setter Property="Foreground" Value="#222"/>
-        <Setter Property="Background" Value="#F0F3FA"/>
-        <Setter Property="BorderBrush" Value="Black"/>
+        <Setter Property="Background" Value="AliceBlue"/>
+        <Setter Property="BorderBrush" Value="#80A0B9C9"/>
         <Setter Property="BorderThickness" Value="2"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
@@ -321,49 +323,50 @@
                 <ControlTemplate TargetType="ComboBox">
                     <Grid>
                         <Border x:Name="Border"
-                            Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="6"
-                            SnapsToDevicePixels="True">
+                   Background="{TemplateBinding Background}"
+                   BorderBrush="{TemplateBinding BorderBrush}"
+                   BorderThickness="{TemplateBinding BorderThickness}"
+                   CornerRadius="6"
+                   SnapsToDevicePixels="True">
                             <Grid>
                                 <ToggleButton x:Name="ToggleButton"
-                                          Focusable="false"
-                                          IsChecked="{Binding Path=IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
-                                          ClickMode="Press"
-                                          Background="Transparent"
-                                          BorderThickness="0"
-                                          HorizontalAlignment="Right"
-                                          Width="30"
-                                          Padding="0">
+                                 Focusable="false"
+                                 IsChecked="{Binding Path=IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                 ClickMode="Press"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 HorizontalAlignment="Right"
+                                 Width="30"
+                                 Padding="0">
                                     <Path VerticalAlignment="Center" HorizontalAlignment="Center" 
-                                      Data="M 0 0 L 8 0 L 4 4 Z" Fill="#222"/>
+                             Data="M 0 0 L 8 0 L 4 4 Z" Fill="#222"/>
                                 </ToggleButton>
                                 <ContentPresenter x:Name="ContentSite"
-                                   IsHitTestVisible="False"
-                                   Content="{TemplateBinding SelectionBoxItem}"
-                                   ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
-                                   ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
-                                   Margin="6,0,30,0"
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Center" />  
+                            IsHitTestVisible="False"
+                            Content="{TemplateBinding SelectionBoxItem}"
+                            ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                            ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                            Margin="6,0,30,0"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center" />
+
                             </Grid>
                         </Border>
                         <Popup x:Name="Popup"
-                           Placement="Bottom"
-                           IsOpen="{TemplateBinding IsDropDownOpen}"
-                           AllowsTransparency="True"
-                           Focusable="False"
-                           PopupAnimation="Slide">
+                  Placement="Bottom"
+                  IsOpen="{TemplateBinding IsDropDownOpen}"
+                  AllowsTransparency="True"
+                  Focusable="False"
+                  PopupAnimation="Slide">
                             <Grid x:Name="DropDown"
-                              SnapsToDevicePixels="True"
-                              MinWidth="{TemplateBinding ActualWidth}"
-                              MaxHeight="200"
-                              Background="White">
+                     SnapsToDevicePixels="True"
+                     MinWidth="{TemplateBinding ActualWidth}"
+                     MaxHeight="200"
+                     Background="White">
                                 <ScrollViewer Margin="4,6,4,6"
-                                          SnapsToDevicePixels="True">
+                                 SnapsToDevicePixels="True">
                                     <StackPanel IsItemsHost="True"
-                                            KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                   KeyboardNavigation.DirectionalNavigation="Contained"/>
                                 </ScrollViewer>
                             </Grid>
                         </Popup>
@@ -371,19 +374,31 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Border" Property="Background" Value="#EEE"/>
-                            <Setter Property="Foreground" Value="Black"/>
+                            <Setter Property="Foreground" Value="#888"/>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Border" Property="BorderBrush" Value="Black"/>
                         </Trigger>
                         <Trigger Property="IsDropDownOpen" Value="True">
-                            <Setter TargetName="Border" Property="BorderBrush" Value="#2ECC71"/>
+                            <Setter TargetName="Border" Property="BorderBrush" Value="Black"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>
+
+    <Style x:Key="CustomDataGridColumnHeaderStyle" TargetType="DataGridColumnHeader">
+        <Setter Property="Background" Value="#2D3748"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="8 4"/>
+        <Setter Property="Height" Value="38"/>
+    </Style>
+
     <!-- Drop Shadow Effect -->
     <DropShadowEffect x:Key="DropShadowEffect" BlurRadius="8" ShadowDepth="2" Direction="270" Color="#33000000"/>
     <!-- Modern Filled TextBox -->

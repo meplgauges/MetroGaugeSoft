@@ -1,15 +1,22 @@
 ﻿using Microsoft.Data.SqlClient;
+using System;
+using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace EVMS
 {
     public partial class Part_Manager : UserControl
     {
         private readonly string connectionString;
+
+        // Combo static values
+        private List<ComboItem> idItems;
+        private List<ComboItem> botItems;
 
         public Part_Manager()
         {
@@ -23,332 +30,274 @@ namespace EVMS
             btnUpdate.IsEnabled = false;
             btnDelete.IsEnabled = false;
 
-            this.Loaded += SettingsPage_Loaded;
+            this.Loaded += Part_Manager_Loaded;
+            this.PreviewKeyDown += Part_Manager_PreviewKeyDown;
 
-            // ✅ Register ESC key handler
-            this.PreviewKeyDown += SettingsPage_PreviewKeyDown;
+            LoadStaticComboData();
             LoadData();
             ClearInputs();
         }
 
-
-        private void SettingsPage_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        private void Part_Manager_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == System.Windows.Input.Key.Escape)
-            {
-                HandleEscKeyAction();
-                e.Handled = true;
-            }
+            if (e.Key == Key.Escape)
+                NavigateToDashboard();
         }
 
-
-        private void SettingsPage_Loaded(object? sender, RoutedEventArgs e)
+        private void Part_Manager_Loaded(object sender, RoutedEventArgs e)
         {
-            // Ask WPF to focus this control (deferred)
             this.Focusable = true;
             this.IsTabStop = true;
-
-            // Try several ways to set keyboard focus
-            Keyboard.Focus(this);                                  // set logical focus
-            FocusManager.SetFocusedElement(Window.GetWindow(this)!, this); // set focused element on window
+            Keyboard.Focus(this);
         }
-        // ✅ Handles ESC key press to go back to HomePage
-        private void HandleEscKeyAction()
+
+        private void NavigateToDashboard()
         {
-            Window currentWindow = Window.GetWindow(this);
+            var currentWindow = Window.GetWindow(this);
             if (currentWindow != null)
             {
-                var mainContentGrid = currentWindow.FindName("MainContentGrid") as Grid;
-                if (mainContentGrid != null)
+                if (currentWindow.FindName("MainContentGrid") is Grid mainGrid)
                 {
-                    mainContentGrid.Children.Clear();
-
-                    var resultPage = new Dashboard
+                    mainGrid.Children.Clear();
+                    mainGrid.Children.Add(new Dashboard
                     {
                         HorizontalAlignment = HorizontalAlignment.Stretch,
                         VerticalAlignment = VerticalAlignment.Stretch
-                    };
-
-                    mainContentGrid.Children.Add(resultPage);
+                    });
                 }
             }
         }
-        // Add method with validation and uniqueness check
+
+        private void LoadStaticComboData()
+        {
+            idItems = new List<ComboItem>
+    {
+        new ComboItem{ Value=0, Text="NOT REQ"},
+        new ComboItem{ Value=1, Text="ID-9.508"},
+        new ComboItem{ Value=2, Text="ID-12.642"},
+        new ComboItem{ Value=3, Text="ID-8.072"},
+    };
+
+            cmbCategory.ItemsSource = idItems;
+            cmbCategory.DisplayMemberPath = "Text";
+            cmbCategory.SelectedValuePath = "Value";
+            cmbCategory.SelectedIndex = 0;
+
+            botItems = new List<ComboItem>
+    {
+        new ComboItem{ Value=0, Text="DIRECT"},
+        new ComboItem{ Value=1, Text="CYC1"},
+        new ComboItem{ Value=2, Text="CYC2"},
+        new ComboItem{ Value=3, Text="CYC3"}
+    };
+
+            cmbVendor.ItemsSource = botItems;
+            cmbVendor.DisplayMemberPath = "Text";
+            cmbVendor.SelectedValuePath = "Value";
+            cmbVendor.SelectedIndex = 0;
+        }
+
+
         private void BtnAdd_Click(object sender, RoutedEventArgs e)
         {
             try
             {
+                int idValue = Convert.ToInt32(cmbCategory.SelectedValue); // ensures numeric
+                int botValue = Convert.ToInt32(cmbVendor.SelectedValue);  // ensures numeric
+
                 string paraNo = txtPartNumber.Text.Trim();
                 string paraName = txtPartName.Text.Trim();
                 bool activePart = chkActivePart.IsChecked == true;
 
                 if (string.IsNullOrEmpty(paraNo) || string.IsNullOrEmpty(paraName))
                 {
-                    MessageBox.Show("⚠️ Part Number and Part Name cannot be empty.", "Validation Error",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show("Part Number and Part Name cannot be empty.", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
 
-                using (SqlConnection con = new SqlConnection(connectionString))
+                using SqlConnection con = new(connectionString);
+                con.Open();
+
+                // Check duplicate
+                using SqlCommand check = new("SELECT COUNT(*) FROM Part_Entry WHERE Para_No=@Para_No", con);
+                check.Parameters.AddWithValue("@Para_No", paraNo);
+                int count = (int)check.ExecuteScalar();
+                if (count > 0)
                 {
-                    con.Open();
-
-                    // Check if Part Number already exists
-                    string checkQuery = "SELECT COUNT(*) FROM Part_Entry WHERE Para_No = @Para_No";
-                    using (SqlCommand checkCmd = new SqlCommand(checkQuery, con))
-                    {
-                        checkCmd.Parameters.AddWithValue("@Para_No", paraNo);
-                        int count = (int)checkCmd.ExecuteScalar();
-
-                        if (count > 0)
-                        {
-                            MessageBox.Show("⚠️ Part Number already exists. Please use a different Part Number.", "Duplicate Entry",
-                                MessageBoxButton.OK, MessageBoxImage.Warning);
-                            return;
-                        }
-                    }
-
-                    // If new part is to be active, reset other active parts
-                    if (activePart)
-                    {
-                        string resetActiveQuery = "UPDATE Part_Entry SET ActivePart = 0 WHERE ActivePart = 1";
-                        using (SqlCommand resetCmd = new SqlCommand(resetActiveQuery, con))
-                        {
-                            resetCmd.ExecuteNonQuery();
-                        }
-                    }
-
-                    // Insert new record with ActivePart value
-                    string insertQuery = "INSERT INTO Part_Entry (Para_No, Para_Name, ActivePart) VALUES (@Para_No, @Para_Name, @ActivePart)";
-                    using (SqlCommand cmd = new SqlCommand(insertQuery, con))
-                    {
-                        cmd.Parameters.AddWithValue("@Para_No", paraNo);
-                        cmd.Parameters.AddWithValue("@Para_Name", paraName);
-                        cmd.Parameters.AddWithValue("@ActivePart", activePart ? 1 : 0);
-                        cmd.ExecuteNonQuery();
-                    }
+                    MessageBox.Show("Part Number already exists.", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
                 }
 
-                MessageBox.Show("✅ Record inserted successfully.", "Success",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                if (activePart)
+                {
+                    using SqlCommand reset = new("UPDATE Part_Entry SET ActivePart=0 WHERE ActivePart=1", con);
+                    reset.ExecuteNonQuery();
+                }
 
+                using SqlCommand insert = new("INSERT INTO Part_Entry (Para_No,Para_Name,ActivePart,ID_Value,BOT_Value) VALUES(@Para_No,@Para_Name,@ActivePart,@ID_Value,@BOT_Value)", con);
+                insert.Parameters.AddWithValue("@Para_No", paraNo);
+                insert.Parameters.AddWithValue("@Para_Name", paraName);
+                insert.Parameters.AddWithValue("@ActivePart", activePart ? 1 : 0);
+                insert.Parameters.AddWithValue("@ID_Value", idValue);
+                insert.Parameters.AddWithValue("@BOT_Value", botValue);
+                insert.ExecuteNonQuery();
+
+                MessageBox.Show("Record added successfully.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
                 LoadData();
                 ClearInputs();
             }
-            catch (SqlException sqlEx)
-            {
-                MessageBox.Show($"Database error: {sqlEx.Message}", "SQL Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
-            }
             catch (Exception ex)
             {
-                MessageBox.Show($"Unexpected error: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        // Update method with validation and uniqueness check
         private void BtnUpdate_Click(object sender, RoutedEventArgs e)
         {
+            if (dataGrid.SelectedItem is not DataRowView row) return;
+
             try
             {
-                if (dataGrid.SelectedItem is not DataRowView selectedRow)
-                {
-                    MessageBox.Show("⚠️ Please select a record to update.", "Warning",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
+                int id = Convert.ToInt32(row["ID"]);
+                int idValue = (int)cmbCategory.SelectedValue;
+                int botValue = (int)cmbVendor.SelectedValue;
                 string paraNo = txtPartNumber.Text.Trim();
                 string paraName = txtPartName.Text.Trim();
-                bool activePartUpdate = chkActivePart.IsChecked == true;
+                bool activePart = chkActivePart.IsChecked == true;
 
-                if (string.IsNullOrEmpty(paraNo) || string.IsNullOrEmpty(paraName))
+                using SqlConnection con = new(connectionString);
+                con.Open();
+
+                // Check duplicate
+                using SqlCommand check = new("SELECT COUNT(*) FROM Part_Entry WHERE Para_No=@Para_No AND ID!=@ID", con);
+                check.Parameters.AddWithValue("@Para_No", paraNo);
+                check.Parameters.AddWithValue("@ID", id);
+                int count = (int)check.ExecuteScalar();
+                if (count > 0)
                 {
-                    MessageBox.Show("⚠️ Part Number and Part Name cannot be empty.", "Validation Error",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show("Part Number already exists.", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
 
-                int id = Convert.ToInt32(selectedRow["ID"]);
-
-                using (SqlConnection con = new SqlConnection(connectionString))
+                if (activePart)
                 {
-                    con.Open();
-
-                    // Check if Part Number exists in another record
-                    string checkQuery = "SELECT COUNT(*) FROM Part_Entry WHERE Para_No = @Para_No AND ID != @ID";
-                    using (SqlCommand checkCmd = new SqlCommand(checkQuery, con))
-                    {
-                        checkCmd.Parameters.AddWithValue("@Para_No", paraNo);
-                        checkCmd.Parameters.AddWithValue("@ID", id);
-                        int count = (int)checkCmd.ExecuteScalar();
-
-                        if (count > 0)
-                        {
-                            MessageBox.Show("⚠️ Part Number already exists in another record. Please use a different Part Number.", "Duplicate Entry",
-                                MessageBoxButton.OK, MessageBoxImage.Warning);
-                            return;
-                        }
-                    }
-
-                    // If updating to active, reset others to inactive
-                    if (activePartUpdate)
-                    {
-                        string resetActiveQuery = "UPDATE Part_Entry SET ActivePart = 0 WHERE ActivePart = 1 AND ID != @ID";
-                        using (SqlCommand resetCmd = new SqlCommand(resetActiveQuery, con))
-                        {
-                            resetCmd.Parameters.AddWithValue("@ID", id);
-                            resetCmd.ExecuteNonQuery();
-                        }
-                    }
-
-                    // Update record with ActivePart value
-                    string updateQuery = "UPDATE Part_Entry SET Para_No = @Para_No, Para_Name = @Para_Name, ActivePart = @ActivePart WHERE ID = @ID";
-                    using (SqlCommand cmd = new SqlCommand(updateQuery, con))
-                    {
-                        cmd.Parameters.AddWithValue("@Para_No", paraNo);
-                        cmd.Parameters.AddWithValue("@Para_Name", paraName);
-                        cmd.Parameters.AddWithValue("@ActivePart", activePartUpdate ? 1 : 0);
-                        cmd.Parameters.AddWithValue("@ID", id);
-
-                        int rows = cmd.ExecuteNonQuery();
-                        if (rows == 0)
-                        {
-                            MessageBox.Show("⚠️ No record found to update.", "Not Found",
-                                MessageBoxButton.OK, MessageBoxImage.Warning);
-                            return;
-                        }
-                    }
+                    using SqlCommand reset = new("UPDATE Part_Entry SET ActivePart=0 WHERE ActivePart=1 AND ID!=@ID", con);
+                    reset.Parameters.AddWithValue("@ID", id);
+                    reset.ExecuteNonQuery();
                 }
 
-                MessageBox.Show("✅ Record updated successfully.", "Success",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                using SqlCommand update = new("UPDATE Part_Entry SET Para_No=@Para_No, Para_Name=@Para_Name, ActivePart=@ActivePart, ID_Value=@ID_Value, BOT_Value=@BOT_Value WHERE ID=@ID", con);
+                update.Parameters.AddWithValue("@Para_No", paraNo);
+                update.Parameters.AddWithValue("@Para_Name", paraName);
+                update.Parameters.AddWithValue("@ActivePart", activePart ? 1 : 0);
+                update.Parameters.AddWithValue("@ID_Value", idValue);
+                update.Parameters.AddWithValue("@BOT_Value", botValue);
+                update.Parameters.AddWithValue("@ID", id);
+                update.ExecuteNonQuery();
 
+                MessageBox.Show("Record updated successfully.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
                 LoadData();
                 ClearInputs();
             }
-            catch (SqlException sqlEx)
-            {
-                MessageBox.Show($"Database error: {sqlEx.Message}", "SQL Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
-            }
             catch (Exception ex)
             {
-                MessageBox.Show($"Unexpected error: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        // Delete method
         private void BtnDelete_Click(object sender, RoutedEventArgs e)
         {
+            if (dataGrid.SelectedItem is not DataRowView row) return;
+
             try
             {
-                if (dataGrid.SelectedItem is not DataRowView row)
-                {
-                    MessageBox.Show("⚠️ Please select a record to delete.", "Warning",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
                 int id = Convert.ToInt32(row["ID"]);
-                string? paraNo = row["Para_No"].ToString();
+                string paraNo = row["Para_No"].ToString() ?? "";
 
-                if (MessageBox.Show($"Are you sure you want to delete '{paraNo}'?", "Confirm Delete",
-                    MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.No)
+                if (MessageBox.Show($"Delete {paraNo}?", "Confirm", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.No)
                     return;
 
-                using (SqlConnection con = new SqlConnection(connectionString))
-                {
-                    con.Open();
+                using SqlConnection con = new(connectionString);
+                con.Open();
+                using SqlCommand del = new("DELETE FROM Part_Entry WHERE ID=@ID", con);
+                del.Parameters.AddWithValue("@ID", id);
+                del.ExecuteNonQuery();
 
-                    string query = "DELETE FROM Part_Entry WHERE ID = @ID";
-                    using (SqlCommand cmd = new SqlCommand(query, con))
-                    {
-                        cmd.Parameters.AddWithValue("@ID", id);
-                        cmd.ExecuteNonQuery();
-                    }
-                }
-
-                MessageBox.Show("✅ Record deleted successfully.", "Success",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-
+                MessageBox.Show("Record deleted successfully.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
                 LoadData();
                 ClearInputs();
             }
-            catch (SqlException sqlEx)
-            {
-                MessageBox.Show($"Database error: {sqlEx.Message}", "SQL Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
-            }
             catch (Exception ex)
             {
-                MessageBox.Show($"Unexpected error: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        // Load data and hide ID column
+
+
         private void LoadData()
         {
             try
             {
-                using (SqlConnection con = new SqlConnection(connectionString))
-                {
-                    con.Open();
+                using SqlConnection con = new(connectionString);
+                con.Open();
 
-                    string query = @"
-                        SELECT
-                            ID,
-                            ROW_NUMBER() OVER (ORDER BY ID) AS SrNo,
-                            Para_No,
-                            Para_Name,
-                            ActivePart
-                        FROM Part_Entry
-                        ORDER BY ID";
+                string query = @"
+        SELECT 
+            ID,
+            ROW_NUMBER() OVER (ORDER BY ID) AS SrNo,
+            Para_No,
+            Para_Name,
+            ActivePart,
+            ID_Value,
+            BOT_Value
+        FROM Part_Entry
+        ORDER BY ID";
 
-                    SqlDataAdapter da = new SqlDataAdapter(query, con);
-                    DataTable dt = new DataTable();
-                    da.Fill(dt);
+                SqlDataAdapter da = new(query, con);
+                DataTable dt = new();
+                da.Fill(dt);
 
-                    dataGrid.ItemsSource = dt.DefaultView;
+                dataGrid.ItemsSource = dt.DefaultView;
 
-                    // Hide the ID column (first column)
-                    if (dataGrid.Columns.Count > 0)
-                        dataGrid.Columns[0].Visibility = Visibility.Collapsed;
-                }
-            }
-            catch (SqlException sqlEx)
-            {
-                MessageBox.Show($"Database error: {sqlEx.Message}", "SQL Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                // Hide ID column safely
+                if (dataGrid.Columns.Count > 0)
+                    dataGrid.Columns[0].Visibility = Visibility.Collapsed;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Unexpected error: {ex.Message}", "Error",
+                MessageBox.Show(ex.Message, "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        // Clear input fields and disable buttons
+
+
+
+
         private void ClearInputs()
         {
-            txtPartNumber.Text = string.Empty;
-            txtPartName.Text = string.Empty;
+            txtPartNumber.Text = "";
+            txtPartName.Text = "";
             chkActivePart.IsChecked = false;
+            cmbCategory.SelectedIndex = 0;
+            cmbVendor.SelectedIndex = 0;
             btnUpdate.IsEnabled = false;
             btnDelete.IsEnabled = false;
         }
 
-        // Handle DataGrid selection changed
         private void dataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (dataGrid.SelectedItem is DataRowView row)
             {
                 txtPartNumber.Text = row["Para_No"].ToString();
                 txtPartName.Text = row["Para_Name"].ToString();
-                chkActivePart.IsChecked = row["ActivePart"].ToString() == "1";
+                chkActivePart.IsChecked = Convert.ToInt32(row["ActivePart"]) == 1;
+
+                // ✅ USE EXISTING INT COLUMNS
+                cmbCategory.SelectedValue = Convert.ToInt32(row["ID_Value"]);
+                cmbVendor.SelectedValue = Convert.ToInt32(row["BOT_Value"]);
+
                 btnUpdate.IsEnabled = true;
                 btnDelete.IsEnabled = true;
             }
@@ -358,5 +307,11 @@ namespace EVMS
             }
         }
 
+
+        public class ComboItem
+        {
+            public int Value { get; set; }     // Saved to DB
+            public string Text { get; set; }   // Display
+        }
     }
 }

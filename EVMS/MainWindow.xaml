@@ -208,7 +208,7 @@
                     </Style>
                 </Menu.Resources>
 
-                <MenuItem x:Name="RunPartMenu" Header="_Home"  Click="HomeMenu_Click">
+                <MenuItem x:Name="RunPartMenu" Header="🏠 Home"  Click="HomeMenu_Click">
                     <!-- <MenuItem Header="Home..." Click="HomePage_Click" />
                     <MenuItem Header="Mesurment" Click="Mesurment_Click"/>
                     <MenuItem Header="Dashboard" Click="Dashboard_Click"/>
@@ -241,23 +241,23 @@
             </Menu>
 
             <TextBox x:Name="StatusMessageTextBlock"
-         DockPanel.Dock="Left"
-         Margin="380,4,8,4"
-         Width="1000"
-         Height="32"
-         IsReadOnly="True"
-         HorizontalAlignment="Right"
-         VerticalAlignment="Center"
-         Background="#2D3748"       
-                Foreground="#F56565"
-                Padding="10,0"
-         FontSize="20"
-         BorderThickness="0"
-         FontWeight="SemiBold"
-         Text=""
-         HorizontalContentAlignment="Center"
-         VerticalContentAlignment="Center"
-         FontFamily="Segoe UI"
+                     DockPanel.Dock="Left"
+                     Margin="380,4,8,4"
+                     Width="1000"
+                     Height="32"
+                     IsReadOnly="True"
+                     HorizontalAlignment="Right"
+                     VerticalAlignment="Center"
+                     Background="#2D3748"       
+                     Foreground="#F56565"
+                     Padding="10,0"
+                     FontSize="20"
+                     BorderThickness="0"
+                     FontWeight="SemiBold"
+                     Text=""
+                     HorizontalContentAlignment="Center"
+                     VerticalContentAlignment="Center"
+                     FontFamily="Segoe UI"
          />
                 <!-- Rounded corners -->
 
@@ -266,36 +266,36 @@
 
 
             <Button x:Name="ActivePartStatusButton"
-            DockPanel.Dock="Left"
-            Width="100" Height="30"
-            Margin="190,0,0,0" 
+                    DockPanel.Dock="Left"
+                    Width="100" Height="30"
+                    Margin="160,0,0,0" 
                     VerticalAlignment="Center"
-                Style="{StaticResource ActivePartStatusButtonStyle}"
-            Content="Active Part"/>
+                    Style="{StaticResource ActivePartStatusButtonStyle}"
+                    Content="Active Part"/>
 
             <Button x:Name="LogoutButton"
-            DockPanel.Dock="Right"
-            Width="60" Height="30"
-            Margin="0,0,10,0"
-            Background="Red"
-            Foreground="White"
-            FontWeight="Bold"
-            Content="Logout"
-            ToolTip="Logout from the application"
-            Click="LogoutButton_Click"/>
+                    DockPanel.Dock="Right"
+                    Width="60" Height="30"
+                    Margin="0,0,10,0"
+                    Background="Red"
+                    Foreground="White"
+                    FontWeight="Bold"
+                    Content="Logout"
+                    ToolTip="Logout from the application"
+                    Click="LogoutButton_Click"/>
 
 
             <Button x:Name="LoginButton"
-                DockPanel.Dock="Right"
-                Width="60"
-                Height="30"
-                Margin="0,0,15,0"
-                Background="Green"
-                Foreground="White"
-                FontWeight="Bold"
-                Content="Login"
-                ToolTip="Login to the application"
-                Click="LoginButton_Click"/>
+                    DockPanel.Dock="Right"
+                    Width="60"
+                    Height="30"
+                    Margin="0,0,15,0"
+                    Background="Green"
+                    Foreground="White"
+                    FontWeight="Bold"
+                    Content="Login"
+                    ToolTip="Login to the application"
+                    Click="LoginButton_Click"/>
 
 
         </DockPanel>
@@ -332,86 +332,87 @@
                     <Border Background="#AA000000"  
                         Visibility="Collapsed" x:Name="LoadingMessageBorder"
                             HorizontalAlignment="Stretch" VerticalAlignment="Stretch" >
+
                         <TextBlock Text="Please wait, initializing..."
-                   Foreground="White"
-                   FontSize="24"
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Center"/>
+                                   Foreground="White"
+                                   FontSize="24"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/> 
                     </Border>
                     <!-- Company Info (Left) -->
                   
                     <StackPanel x:Name="CompanyInfoPanel"
-            Grid.Column="0"
-            Margin="100,0,0,0"
-            VerticalAlignment="Center"
-            HorizontalAlignment="Center"
-            Width="Auto"
-            MinWidth="350" MaxWidth="600">
+                                Grid.Column="0"
+                                Margin="100,0,0,0"
+                                VerticalAlignment="Center"
+                                HorizontalAlignment="Center"
+                                Width="Auto"
+                                MinWidth="350" MaxWidth="600">
 
                         <!-- Company Name -->
                         <TextBlock x:Name="CompanyNameTextBlock"
-               Text="Metrology Equipment Pvt. Ltd."
-               FontSize="36"
-               FontWeight="Bold"
-               Foreground="#1E3A8A"
-               TextAlignment="Left"
-               TextWrapping="Wrap"
-               Margin="0,0,0,12"
-               Effect="{DynamicResource DropShadow}"/>
+                                   Text="Metrology Equipment Pvt. Ltd."
+                                   FontSize="36"
+                                   FontWeight="Bold"
+                                   Foreground="#1E3A8A"
+                                   TextAlignment="Left"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,12"
+                                   Effect="{DynamicResource DropShadow}"/>  
 
                         <!-- Accent underline -->
                         <Rectangle Height="4" Width="140"
-               Fill="#2563EB"
-               RadiusX="2" RadiusY="2"
-               HorizontalAlignment="Left"
-               Margin="0,0,0,20"/>
+                                   Fill="#2563EB"
+                                   RadiusX="2" RadiusY="2"
+                                   HorizontalAlignment="Left"
+                                   Margin="0,0,0,20"/>
 
                         <!-- Contact Header -->
                         <TextBlock Text="📍 Contact Us"
-               FontSize="22"
-               FontWeight="SemiBold"
-               Foreground="#1D4ED8"
-               Margin="0,0,0,18"/>
+                                   FontSize="22"
+                                   FontWeight="SemiBold"
+                                   Foreground="#1D4ED8"
+                                   Margin="0,0,0,18"/>  
 
                         <!-- Address Card -->
                         <Border Style="{StaticResource AddressCardStyle}"
-            MaxWidth="440"
-            MinWidth="220"
-            HorizontalAlignment="Left"
-            Background="Transparent"
-            Padding="20"
-            CornerRadius="14"
-            BorderBrush="#E5E7EB"
-            BorderThickness="1"
-            Effect="{StaticResource DropShadow}">
+                                MaxWidth="440"
+                                MinWidth="220"
+                                HorizontalAlignment="Left"
+                                Background="Transparent"
+                                Padding="20"
+                                CornerRadius="14"
+                                BorderBrush="#E5E7EB"
+                                BorderThickness="1"
+                                Effect="{StaticResource DropShadow}">   
                             <StackPanel>
                                 <TextBlock Text="# 55/18, Bellahalli Village"
-                       Foreground="#111827"
-                       FontSize="16"
-                       FontWeight="Medium"
-                       TextWrapping="Wrap"/>
+                                           Foreground="#111827"
+                                           FontSize="16"
+                                           FontWeight="Medium"
+                                           TextWrapping="Wrap"/>
                                 <TextBlock Text="Thanisandra Main Road, Near Bellahalli Cross"
-                       FontWeight="SemiBold"
-                       FontSize="15"
-                       Margin="0,6,0,0"
-                       TextWrapping="Wrap"/>
+                                           FontWeight="SemiBold"
+                                           FontSize="15"
+                                           Margin="0,6,0,0"
+                                           TextWrapping="Wrap"/>
                                 <TextBlock Text="Yelahanka Hobli, Bangalore - 560 064"
-                       FontSize="15"
-                       FontWeight="SemiBold"
-                       Margin="0,6,0,0"
-                       TextWrapping="Wrap"/>
+                                           FontSize="15"
+                                           FontWeight="SemiBold"
+                                           Margin="0,6,0,0"
+                                           TextWrapping="Wrap"/>    
 
                                 <!-- Contact Links -->
                                 <TextBlock Text="✉️ info@meplgauges.com"
-           Style="{StaticResource InteractiveLinkTextBlock}"
-           FontSize="15"
-           Margin="0,18,0,0"
-           MouseDown="EmailLink_Click"/>
+                                           Style="{StaticResource InteractiveLinkTextBlock}"
+                                           FontSize="15"
+                                           Margin="0,18,0,0"
+                                           MouseDown="EmailLink_Click"/>
                                 <TextBlock Text="🌐 Meplgauges.com"
-                       Style="{StaticResource InteractiveLinkTextBlock}"
-                       FontSize="15"
-                       Margin="0,10,0,0"
-                       MouseDown="WebsiteLink_Click"/>
+                                           Style="{StaticResource InteractiveLinkTextBlock}"
+                                           FontSize="15"
+                                           Margin="0,10,0,0"
+                                           MouseDown="WebsiteLink_Click"/>  
                             </StackPanel>
                         </Border>
                     </StackPanel>

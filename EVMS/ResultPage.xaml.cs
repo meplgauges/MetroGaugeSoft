@@ -25,6 +25,7 @@ namespace EVMS
         private ProcedureMode _currentMode;
         public event EventHandler Closed;
         private DispatcherTimer shiftTimer;
+        private readonly DataStorageService _dataStorageService;
 
 
 
@@ -251,20 +252,20 @@ namespace EVMS
                         {
                             await dataStorageService.InsertMasterInspectionAsync(
                                                      _model, _userId, _lotNo,
-                                                     Convert.ToDecimal(GetValue("STEP OD1")),
-                                                     Convert.ToDecimal(GetValue("STEP RUNOUT-1")),
-                                                     Convert.ToDecimal(GetValue("OD-1")),
-                                                     Convert.ToDecimal(GetValue("RN-1")),
-                                                     Convert.ToDecimal(GetValue("OD-2")),
-                                                     Convert.ToDecimal(GetValue("RN-2")),
-                                                     Convert.ToDecimal(GetValue("OD-3")),
-                                                     Convert.ToDecimal(GetValue("RN-3")),
-                                                     Convert.ToDecimal(GetValue("STEP OD2")),
-                                                     Convert.ToDecimal(GetValue("STEP RUNOUT-2")),
+                                                    Convert.ToDecimal(GetValue("OD1")),
+                                                     Convert.ToDecimal(GetValue("RN1")),
+                                                     Convert.ToDecimal(GetValue("OD2")),
+                                                     Convert.ToDecimal(GetValue("RN2")),
+                                                     Convert.ToDecimal(GetValue("OD3")),
+                                                     Convert.ToDecimal(GetValue("RN3")),
+                                                     Convert.ToDecimal(GetValue("OD4")),
+                                                     Convert.ToDecimal(GetValue("RN4")),
+                                                     Convert.ToDecimal(GetValue("OD5")),
+                                                     Convert.ToDecimal(GetValue("OD5")),
                                                      Convert.ToDecimal(GetValue("ID-1")),
-                                                     Convert.ToDecimal(GetValue("RN-4")),
+                                                     Convert.ToDecimal(GetValue("RN6")),
                                                      Convert.ToDecimal(GetValue("ID-2")),
-                                                     Convert.ToDecimal(GetValue("RN-5")),
+                                                     Convert.ToDecimal(GetValue("RN6")),
                                                      Convert.ToDecimal(GetValue("OL")),
                                                      status);
 
@@ -273,20 +274,20 @@ namespace EVMS
                         {
                             await dataStorageService.InsertMeasurementReadingAsync(
                                                      _model, _userId, _lotNo,
-                                                     Convert.ToDecimal(GetValue("STEP OD1")),
-                                                     Convert.ToDecimal(GetValue("STEP RUNOUT-1")),
-                                                     Convert.ToDecimal(GetValue("OD-1")),
-                                                     Convert.ToDecimal(GetValue("RN-1")),
-                                                     Convert.ToDecimal(GetValue("OD-2")),
-                                                     Convert.ToDecimal(GetValue("RN-2")),
-                                                     Convert.ToDecimal(GetValue("OD-3")),
-                                                     Convert.ToDecimal(GetValue("RN-3")),
-                                                     Convert.ToDecimal(GetValue("STEP OD2")),
-                                                     Convert.ToDecimal(GetValue("STEP RUNOUT-2")),
+                                                     Convert.ToDecimal(GetValue("OD1")),
+                                                     Convert.ToDecimal(GetValue("RN1")),
+                                                     Convert.ToDecimal(GetValue("OD2")),
+                                                     Convert.ToDecimal(GetValue("RN2")),
+                                                     Convert.ToDecimal(GetValue("OD3")),
+                                                     Convert.ToDecimal(GetValue("RN3")),
+                                                     Convert.ToDecimal(GetValue("OD4")),
+                                                     Convert.ToDecimal(GetValue("RN4")),
+                                                     Convert.ToDecimal(GetValue("OD5")),
+                                                     Convert.ToDecimal(GetValue("OD5")),
                                                      Convert.ToDecimal(GetValue("ID-1")),
-                                                     Convert.ToDecimal(GetValue("RN-4")),
+                                                     Convert.ToDecimal(GetValue("RN6")),
                                                      Convert.ToDecimal(GetValue("ID-2")),
-                                                     Convert.ToDecimal(GetValue("RN-5")),
+                                                     Convert.ToDecimal(GetValue("RN6")),
                                                      Convert.ToDecimal(GetValue("OL")),
                                                      status);
                         }
@@ -604,23 +605,23 @@ namespace EVMS
             InitializeValveDataAndUI();
             InitializeDataGrid();
             NotifyStatus("Initialization....");
-            //try
-            //{
-            //    // Ensure PLC and Probe Connection asynchronously when page loads
-            //    bool connected = await _masterService.EnsureConnectionAsync();
-            //    if (connected)
-            //    {
-            //        NotifyStatus("PLC and Probe Connected Successfully");
-            //    }
-            //    else
-            //    {
-            //        MessageBox.Show("Failed to connect to PLC and Probe", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            //    }
-            //}
-            //catch (Exception ex)
-            //{
-            //    MessageBox.Show($"Error during connection: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            //}
+            try
+            {
+                // Ensure PLC and Probe Connection asynchronously when page loads
+                bool connected = await _masterService.EnsureConnectionAsync();
+                if (connected)
+                {
+                    NotifyStatus("PLC and Probe Connected Successfully");
+                }
+                else
+                {
+                    MessageBox.Show("Failed to connect to PLC and Probe", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error during connection: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         // Helper method to add timeout to PLC connection
@@ -976,7 +977,9 @@ namespace EVMS
         // ========================= MASTER TOGGLE =========================
         private async void MasterToggle_Checked(object sender, RoutedEventArgs e)
         {
+
             if (!(sender is ToggleButton toggleButton)) return;
+
 
             if (_activeToggleButton != null && _activeToggleButton != toggleButton)
             {
@@ -1017,14 +1020,16 @@ namespace EVMS
         // ========================= MASTER INSPECTION TOGGLE =========================
         private async void MasterInspectionToggleButton_Checked(object sender, RoutedEventArgs e)
         {
+           
+
             if (!(sender is ToggleButton toggleButton)) return;
 
-            if (!_masterService.IsConnected)
-            {
-                MessageBox.Show("PLC not connected. Cannot perform inspection.");
-                toggleButton.IsChecked = false;
-                return;
-            }
+            //if (!_masterService.IsConnected)
+            //{
+            //    MessageBox.Show("PLC not connected. Cannot perform inspection.");
+            //    toggleButton.IsChecked = false;
+            //    return;
+            //}
 
             if (_activeToggleButton != null && _activeToggleButton != toggleButton)
             {
@@ -1069,14 +1074,16 @@ namespace EVMS
         // ========================= MEASUREMENT TOGGLE =========================
         private async void MeasurementToggle_Checked(object sender, RoutedEventArgs e)
         {
+            int ActiveID = 0;
+
             if (!(sender is ToggleButton toggleButton)) return;
 
-            if (!_masterService.IsConnected)
-            {
-                MessageBox.Show("PLC not connected. Cannot perform measurement.");
-                toggleButton.IsChecked = false;
-                return;
-            }
+            //if (!_masterService.IsConnected)
+            //{
+            //    MessageBox.Show("PLC not connected. Cannot perform measurement.");
+            //    toggleButton.IsChecked = false;
+            //    return;
+            //}
 
             if (_activeToggleButton != null && _activeToggleButton != toggleButton)
             {
@@ -1097,8 +1104,8 @@ namespace EVMS
             try
             {
                 InitializeValveDataAndUI();
-                _masterService.SetPlcDevice("M101", 0);
-                _masterService.SetPlcDevice("M102", 0); // General rejection
+                //_masterService.SetPlcDevice("M101", 0);
+                //_masterService.SetPlcDevice("M102", 0); // General rejection
 
                 _masterService.IsMasteringStage = false;
                 _masterService._continueMeasurement = true;
@@ -1139,21 +1146,22 @@ namespace EVMS
             // Stop measurement if Measurement toggle turned off
             if (toggleButton == MeasurementToggle)
             {
-                ResetAllResult();
-                _masterService.SetPlcDevice("M301", 0); // _masterService.SetPlcDevice("M10", 0); // 
+                //ResetAllResult();
+                //_masterService.SetPlcDevice("M301", 0); // _masterService.SetPlcDevice("M10", 0); // 
 
                 _masterService._continueMeasurement = false;
 
                 UpdateInspectionDataAsync();
 
-                //ResetAllPlcBits();
+                ResetAllPlcBits();
             }
 
             bitMatchCheckTimer?.Stop();
 
             try
             {
-                _masterService.SetPlcDevice("M300", 0);
+                ResetAllPlcBits();
+                //_masterService.SetPlcDevice("M300", 0);
                 NotifyStatus(".");
             }
             catch (Exception ex)
@@ -1229,6 +1237,97 @@ namespace EVMS
         //}
 
 
+
+        private async void ToggleBtn_Click1(object sender, RoutedEventArgs e)
+        {
+            var autoList = dataStorageService.GetActiveBit();
+
+            if (autoList == null || autoList.Count == 0)
+            {
+                MessageBox.Show("No Settings Found.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var autoControl = autoList.FirstOrDefault(c =>
+                string.Equals(c.Description, "Auto/Manual", StringComparison.OrdinalIgnoreCase));
+
+            int bitValue = _masterService.GetPlcDeviceBit("X0");
+
+            if (!((autoControl?.Bit == 1 && bitValue == 1) ||
+                  (autoControl?.Bit == 0 && bitValue == 0)))
+            {
+                MessageBox.Show(
+                    autoControl?.Bit == 0
+                        ? "Software is in Manual mode. Please switch PLC to Manual mode."
+                        : "Software is in Auto mode. Change PLC to Auto mode.",
+                    "Info",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                ClearBit.IsChecked = false;
+                return;
+            }
+
+            if (_masterService.GetPlcDeviceBit("M4") != 1)
+            {
+                MessageBox.Show(
+                    "Some cylinders are not at home.\nForcing homing operation.",
+                    "Auto Mode",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                ClearBit.IsChecked = false;
+                _masterService.SetPlcDevice("L25", 1);
+
+                return;
+            }
+
+            // 🔹 TOGGLE ON
+            if (ClearBit.IsChecked == true)
+            {
+                _masterService.SetPlcDevice("M11", 1);
+
+               
+                // Start monitoring PLC auto reset
+                _ = MonitorPlcAutoResetAsync();
+               
+            }
+            else
+            {
+                // 🔹 USER MANUALLY TURNED OFF → FORCE PLC OFF
+                _masterService.SetPlcDevice("M11", 0);
+            }
+        }
+
+
+        private async Task MonitorPlcAutoResetAsync()
+        {
+            while (true)
+            {
+                await Task.Delay(100);
+
+                NotifyStatus("Press Robo start button to Clear Cycle");
+                while (_masterService.GetPlcDeviceBit("B2") != 1) await Task.Delay(100);
+
+                int plcBit = _masterService.GetPlcDeviceBit("M11");
+
+                if (plcBit == 0)
+                {
+                    // PLC has completed cycle and reset bit
+
+                    MessageBox.Show("Clear cycle Has completed");
+                    Dispatcher.Invoke(() =>
+                    {
+                        ClearBit.IsChecked = false;
+                    });
+                    break;
+                }
+
+                // User manually unchecked toggle → stop monitoring
+                //if (ClearBit.IsChecked == false)
+                //    break;
+            }
+        }
+
+
         private void UpdateMeasurementResult(TextBox textBox, double value, bool isOk)
         {
             if (textBox == null) return;
@@ -1258,61 +1357,80 @@ namespace EVMS
 
         private void UpdateMeasurementFields(Dictionary<string, ParameterResult> resultsWithStatus)
         {
-            UpdateFieldIfExists(resultsWithStatus, "Groove Diameter", GrooveDiaBox, GrooveDiaLabel);
-            UpdateFieldIfExists(resultsWithStatus, "Groove Position", GroovePo, GroovePoLabel);
-            UpdateFieldIfExists(resultsWithStatus, "Stem Dia Near Groove", STDG, STDGLabel);
-            UpdateFieldIfExists(resultsWithStatus, "Stem Dia Near Undercut", StemDiaBox, StemDiaLabel);
-            UpdateFieldIfExists(resultsWithStatus, "Head Diameter", HeadDiaBox, HeadDiaLabel);
-            UpdateFieldIfExists(resultsWithStatus, "Face Runout", FaceRunout, FaceRunoutLabel);
-            UpdateFieldIfExists(resultsWithStatus, "Seat Height", SeatHeightBox, SeatHeightLabel);
-            UpdateFieldIfExists(resultsWithStatus, "Seat Runout", SeatRunout, SeatRunoutLabel);
-            UpdateFieldIfExists(resultsWithStatus, "Datum to End", DatumToEndBox, DatumToEndLabel);
-            UpdateFieldIfExists(resultsWithStatus, "Datum to Groove", DatumToGrooveBox, DatumToGrooveLabel);
-            UpdateFieldIfExists(resultsWithStatus, "Stem Taper", StemTaper, StemTaperLabel);
-            UpdateFieldIfExists(resultsWithStatus, "Straightness", Straightness, StraightnessLabel);
-            UpdateFieldIfExists(resultsWithStatus, "Overall Length", OverallLengthBox, OverallLengthLabel);
-            UpdateFieldIfExists(resultsWithStatus, "End Face Runout", HeadRunout, HeadRunoutLabel);
-            UpdateFieldIfExists(resultsWithStatus, "Ovality Head", HeadOver, HeadOverLabel);
+            UpdateFieldIfExists(resultsWithStatus, "ID-1", ID_1, ID1_Label);
+            UpdateFieldIfExists(resultsWithStatus, "RN6", RN_4, RN_4_Label);
+
+            UpdateFieldIfExists(resultsWithStatus, "OD1", STEP_OD1, OD_1_Label);
+            UpdateFieldIfExists(resultsWithStatus, "RN1", STEP_RUNOUT_1, OD_1_RN_Label);
+
+            UpdateFieldIfExists(resultsWithStatus, "OD2", OD_2, OD_2_Label);
+            UpdateFieldIfExists(resultsWithStatus, "RN2", RN_2, OD_2_RN_Label);
+
+            UpdateFieldIfExists(resultsWithStatus, "OD2", OD_3, OD_3_Label);
+            UpdateFieldIfExists(resultsWithStatus, "RN3", RN_3, OD_3_RN_Label);
+
+            UpdateFieldIfExists(resultsWithStatus, "OD4", OD_4, OD_4_Label);
+            UpdateFieldIfExists(resultsWithStatus, "RN4", RN_4B, OD_4_RN_Label);
+
+            UpdateFieldIfExists(resultsWithStatus, "OD5", STEP_OD2, OD_5_Label);
+            UpdateFieldIfExists(resultsWithStatus, "RN5", STEP_RUNOUT_2, STEP_RUNOUT_2_Label);
+
+            UpdateFieldIfExists(resultsWithStatus, "ID-2", ID_2, ID_2_Label);
+            UpdateFieldIfExists(resultsWithStatus, "RN7", RN_5, RN_5_Label);
+
+            UpdateFieldIfExists(resultsWithStatus, "OL", OL, OL_Label);
         }
+
 
         private void ResetMeasurementFieldsAndProgressBars()
         {
-            // Reset all measurement TextBox values and backgrounds
             Brush defaultBg = Brushes.White;
-
             string zeroText = "00";
 
-            GrooveDiaBox.Text = zeroText; GrooveDiaBox.Background = defaultBg;
-            GroovePo.Text = zeroText; GroovePo.Background = defaultBg;
-            STDG.Text = zeroText; STDG.Background = defaultBg;
-            StemDiaBox.Text = zeroText; StemDiaBox.Background = defaultBg;
-            HeadDiaBox.Text = zeroText; HeadDiaBox.Background = defaultBg;
-            FaceRunout.Text = zeroText; FaceRunout.Background = defaultBg;
-            SeatHeightBox.Text = zeroText; SeatHeightBox.Background = defaultBg;
-            SeatRunout.Text = zeroText; SeatRunout.Background = defaultBg;
-            DatumToEndBox.Text = zeroText; DatumToEndBox.Background = defaultBg;
-            DatumToGrooveBox.Text = zeroText; DatumToGrooveBox.Background = defaultBg;
-            StemTaper.Text = zeroText; StemTaper.Background = defaultBg;
-            Straightness.Text = zeroText; Straightness.Background = defaultBg;
-            OverallLengthBox.Text = zeroText; OverallLengthBox.Background = defaultBg;
-            HeadRunout.Text = zeroText; HeadRunout.Background = defaultBg;
-            HeadOver.Text = zeroText; HeadOver.Background = defaultBg;
+            void Reset(TextBox tb)
+            {
+                if (tb == null) return;
+                tb.Text = zeroText;
+                tb.Background = defaultBg;
+            }
 
-            // Reset progress bar controls for both designs if present
+            Reset(ID_1);
+            Reset(RN_4);
+
+            Reset(STEP_OD1);
+            Reset(STEP_RUNOUT_1);
+
+            Reset(OD_2);
+            Reset(RN_2);
+
+            Reset(OD_3);
+            Reset(RN_3);
+
+            Reset(OD_4);
+            Reset(RN_4B);
+
+            Reset(STEP_OD2);
+            Reset(STEP_RUNOUT_2);
+
+            Reset(ID_2);
+            Reset(RN_5);
+
+            Reset(OL);
+
             foreach (var control in _progressBarControls.Values)
             {
                 if (control is ResultProgressBar pb1)
                 {
-                    pb1.Value = 0;       // reset value
-                    pb1.UpdateValue(0, null); // clear any color status
+                    pb1.Value = 0;
+                    pb1.UpdateValue(0, null);
                 }
                 else if (control is ProgresBarControl pb2)
                 {
-                    pb2.Value = 0;       // reset value
-                                         // Optionally add a method to clear IsOk/Color state in ProgresBarControl if implemented
+                    pb2.Value = 0;
                 }
             }
         }
+
 
 
 
@@ -1358,50 +1476,58 @@ namespace EVMS
 
         private void ResetAllResult()
         {
-            _masterService.SetPlcDevice("M301", 0); // General rejection
-            _masterService.SetPlcDevice("M302", 0); // SRO rejection
-            _masterService.SetPlcDevice("M303", 0); // STDIA rejection
-            _masterService.SetPlcDevice("M304", 0); // Seat Height rejection
-            _masterService.SetPlcDevice("M305", 0); // Groove Diameter/Position rejection
-            _masterService.SetPlcDevice("M306", 0); // Groove Diameter/Position rejection
+            //_masterService.SetPlcDevice("M301", 0); // General rejection
+            //_masterService.SetPlcDevice("M302", 0); // SRO rejection
+            //_masterService.SetPlcDevice("M303", 0); // STDIA rejection
+            //_masterService.SetPlcDevice("M304", 0); // Seat Height rejection
+            //_masterService.SetPlcDevice("M305", 0); // Groove Diameter/Position rejection
+            //_masterService.SetPlcDevice("M306", 0); // Groove Diameter/Position rejection
 
         }
 
 
         private void ResetAllPlcBits()
         {
-            string[] bitsToReset =
-            {
-                    "M400", "M100", "M300", "M10", "M14", "M301"
-                };
 
-            try
-            {
-                foreach (var bit in bitsToReset)
-                {
-                    _masterService.SetPlcDevice(bit, 0);
-                }
-            }
-            catch (Exception ex)
-            {
-                // Show a single message for all errors
-                MessageBox.Show(
-                    $"PLC Reset Failed.\nError: {ex.Message}",
-                    "PLC Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error
-                );
+            _masterService.SetPlcDevice("L25", 1);
 
-                // Close current window/page
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    Window currentWindow = Window.GetWindow(this);
-                    if (currentWindow != null)
-                    {
-                        currentWindow.Close();
-                    }
-                });
-            }
+            _masterService.SetPlcDevice("M16", 0);
+            _masterService.SetPlcDevice("M26", 0);
+
+
+
+            //string[] bitsToReset =
+            //{
+            //        "M400", "M100", "M300", "M10", "M14", "M301"
+            //    };
+
+            //try
+            //{
+            //    foreach (var bit in bitsToReset)
+            //    {
+            //        _masterService.SetPlcDevice(bit, 0);
+            //    }
+            //}
+            //catch (Exception ex)
+            //{
+            //    // Show a single message for all errors
+            //    MessageBox.Show(
+            //        $"PLC Reset Failed.\nError: {ex.Message}",
+            //        "PLC Error",
+            //        MessageBoxButton.OK,
+            //        MessageBoxImage.Error
+            //    );
+
+            //    // Close current window/page
+            //    Application.Current.Dispatcher.Invoke(() =>
+            //    {
+            //        Window currentWindow = Window.GetWindow(this);
+            //        if (currentWindow != null)
+            //        {
+            //            currentWindow.Close();
+            //        }
+            //    });
+            //}
         }
 
 
@@ -1435,7 +1561,7 @@ namespace EVMS
                 if (autoControl != null && Convert.ToInt32(autoControl.Bit) == 1)
                 {
                     string currentShift = GetShiftCode();
-                    string dateShift = DateTime.Now.ToString("ddMMyy") + currentShift;  // Example: 031125A
+                    string dateShift = DateTime.Now.ToString("ddMMyyyy") + GetShiftCode();  // e.g. 031125A
                     txtLotNo.Text = dateShift;
                 }
                 else
@@ -1538,7 +1664,7 @@ namespace EVMS
                 return; // Can't check without software bit
 
             int softwareBit = autoControl.Bit; // Software bit value
-            int plcBit = _masterService.GetPlcDeviceBit("X14"); // PLC bit
+            int plcBit = _masterService.GetPlcDeviceBit("X0"); // PLC bit
 
             if (softwareBit == plcBit)
             {

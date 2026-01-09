@@ -411,6 +411,8 @@ namespace EVMS
             txtYTolMinus.Clear();
             chkProbe.IsChecked = false;
 
+           
+            
             txtParameter.IsEnabled = true;   // Enable for new inserts
 
             btnUpdate.IsEnabled = false;
@@ -468,7 +470,7 @@ namespace EVMS
                 btnDelete.IsEnabled = true;
 
                 // Disable txtParameter textbox to prevent editing during update
-                txtParameter.IsEnabled = false;
+               // txtParameter.IsEnabled = false;
             }
             else
             {

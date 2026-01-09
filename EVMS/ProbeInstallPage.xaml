@@ -177,7 +177,7 @@
                                               ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
                                               Margin="12,0,30,0"
                                               VerticalAlignment="Center"
-                                              HorizontalAlignment="Left"/>
+                                              HorizontalAlignment="Center"/>
                             <Popup x:Name="Popup"
                                    Placement="Bottom"
                                    IsOpen="{TemplateBinding IsDropDownOpen}"
@@ -248,7 +248,7 @@
                                Foreground="{StaticResource TextPrimary}"
                                Margin="0,0,0,24"/>
 
-                    <UniformGrid Columns="5" VerticalAlignment="Center">
+                    <UniformGrid Columns="6" VerticalAlignment="Center">
                         <!-- Parameter -->
                         <StackPanel Margin="0,0,24,0">
                             <TextBlock Text="📋 Parameter" 
@@ -286,23 +286,36 @@
                                       Style="{StaticResource ModernComboBoxStyle}"/>
                         </StackPanel>
 
+                       
+                        <!-- Probe Type -->
+                        <StackPanel Margin="0,0,24,0">
+                            <TextBlock Text="🎯 Probe Type" 
+                                        FontSize="14" 
+                                        FontWeight="SemiBold" 
+                                        Foreground="{StaticResource TextPrimary}"
+                                        Margin="0,0,0,10"/>
+                           <ComboBox ItemsSource="{Binding ProbeType}"
+                                       SelectedItem="{Binding SelectedProbeType, Mode=TwoWay}"
+                                       Style="{StaticResource ModernComboBoxStyle}"/>   
+                        </StackPanel>
+
                         <!-- Probe Name -->
                         <StackPanel Margin="0,0,24,0">
                             <TextBlock Text="🎯 Probe Name" 
-                                       FontSize="14" 
-                                       FontWeight="SemiBold" 
-                                       Foreground="{StaticResource TextPrimary}"
-                                       Margin="0,0,0,10"/>
+                                        FontSize="14" 
+                                        FontWeight="SemiBold" 
+                                        Foreground="{StaticResource TextPrimary}"
+                                        Margin="0,0,0,10"/>
                             <ComboBox ItemsSource="{Binding ProbeNames}"
-                                      SelectedItem="{Binding SelectedProbeName, Mode=TwoWay}"
-                                      Style="{StaticResource ModernComboBoxStyle}"/>
+                                       SelectedItem="{Binding SelectedProbeName, Mode=TwoWay}"
+                                       Style="{StaticResource ModernComboBoxStyle}"/>   
                         </StackPanel>
 
                         <!-- Add Button -->
                         <StackPanel VerticalAlignment="Bottom">
                             <Button Content="✔ Add Mapping" 
                                     Style="{StaticResource ModernButtonStyle}" 
-                                    Click="BtnAddMapping_Click"/>
+                                    Click="BtnAddMapping_Click" Width="183"/>
                         </StackPanel>
                     </UniformGrid>
                 </StackPanel>
@@ -348,7 +361,7 @@
                                     Content="💾 Save All Mappings" 
                                     Height="48" 
                                     MinWidth="240" 
-                                    Margin="0,0,0,16"
+                                    Margin="0,0,10,16"
                                     Style="{StaticResource SuccessButtonStyle}" 
                                     Click="BtnSaveMappingsToDb_Click"/>
                         </Grid>
@@ -363,18 +376,23 @@
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Parameter" 
                                                 Binding="{Binding Parameter}" 
-                                                Width="2*"/>
+                                                Width="1.5*"/>
                             <DataGridTextColumn Header="📦 Box" 
                                                 Binding="{Binding BoxId}" 
-                                                Width="140"/>
+                                                Width="1.5*"/>
                             <DataGridTextColumn Header="🔗 Channel" 
                                                 Binding="{Binding ChannelId}" 
-                                                Width="140"/>
+                                                Width="1.5*"/>
+
                             <DataGridTextColumn Header="🎯 Probe Name" 
                                                 Binding="{Binding ProbeName}" 
-                                                Width="2*"/>
+                                                Width="2*"/>    
+                            <DataGridTextColumn Header="🎯 Probe Type" 
+                                                Binding="{Binding ProbeType}" 
+                                                Width="2*"/>    
+                        
 
-                            <DataGridTemplateColumn Header="⚙️ Actions" Width="160">
+                            <DataGridTemplateColumn Header="⚙️ Actions" Width="1.5*">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <Button Content="🗑️ Delete" 

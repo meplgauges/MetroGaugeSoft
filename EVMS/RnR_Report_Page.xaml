@@ -102,45 +102,20 @@
 
     <Grid Margin="20" Background="Transparent">
         <Grid.RowDefinitions>
-            <RowDefinition Height="40"/>
             <RowDefinition Height="130" />
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
         <!-- ================= MODERN HEADER ================= -->
-        <Border Grid.Row="0">
-            <Border.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Color="#1E293B" Offset="0"/>
-                    <GradientStop Color="#334155" Offset="1"/>
-                </LinearGradientBrush>
-            </Border.Background>
-            <Border.CornerRadius>
-                <CornerRadius>16</CornerRadius>
-            </Border.CornerRadius>
-            <Border.Padding>1</Border.Padding>
-            <DockPanel LastChildFill="True">
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
-                    <TextBlock Text="📊 Parameter:" VerticalAlignment="Center" Margin="0,0,12,0"
-                               Foreground="#CBD5E5" FontSize="16" FontWeight="SemiBold"/>
-                    <Border Background="#0F172A" CornerRadius="8" Padding="12,8">
-                        <TextBlock Text="{Binding SelectedParameter}" FontSize="16" Foreground="White" FontWeight="Medium"/>
-                    </Border>
-                </StackPanel>
-                <TextBlock Text="Gauge R&amp;R Report (MSA)" 
-                           Foreground="White" FontSize="24" FontWeight="Bold" 
-                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </DockPanel>
-        </Border>
+        
 
         <!-- ================= FILTER BAR ================= -->
-        <Border Grid.Row="1">
-            <Border.Background>White</Border.Background>
+        <Border Grid.Row="0" Background="{StaticResource PageBackgroundBrush}" >
             <Border.CornerRadius>
                 <CornerRadius>16</CornerRadius>
             </Border.CornerRadius>
             <Border.Padding>1</Border.Padding>
-            <Border.Margin>0,20,0,20</Border.Margin>
+            <Border.Margin>0,0,0,25</Border.Margin>
             <Border.BorderBrush>#E2E8F0</Border.BorderBrush>
             <Border.BorderThickness>1</Border.BorderThickness>
             <Grid>
@@ -149,12 +124,14 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+
                 </Grid.ColumnDefinitions>
 
                 <!-- Date Range -->
-                <StackPanel Grid.Column="0" Margin="20,8,34,0">
+                <StackPanel Grid.Column="0" Margin="20,8,34,0" >
                     <TextBlock Text="📅 Date Range" FontWeight="Bold" Foreground="#1E293B" FontSize="13" Margin="0,0,0,8"/>
                     <StackPanel Orientation="Horizontal">
                         <xctk:DateTimePicker Width="220" Margin="0,0,8,0" Height="40"
@@ -205,11 +182,11 @@
                 </StackPanel>
 
                 <!-- Apply Button -->
-                <Button Grid.Column="4" Width="140" Height="38" Margin="0,16,450,0"
-        Content="🚀 Calculate RNR"
-        Command="{Binding SubmitCommand}"
-        FontSize="14" FontWeight="Bold"
-        BorderThickness="0" Foreground="White">
+                <Button Grid.Column="4" Width="140" Height="38" Margin="30,1,45,0"
+                        Content="🚀 Calculate RNR"
+                        Command="{Binding SubmitCommand}"
+                        FontSize="14" FontWeight="Bold"
+                        BorderThickness="0" Foreground="White"> 
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
                             <Border CornerRadius="12">
@@ -226,6 +203,26 @@
                     </Button.Template>
                 </Button>
 
+                <Button Grid.Column="5" Width="140" Height="38" Margin="0,1,0,0"
+                     Content="💾 Export Excel"
+                     Command="{Binding ExportToExcelCommand}"
+                     FontSize="14" FontWeight="Bold"
+                     BorderThickness="0" Foreground="White">        
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border CornerRadius="12">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#3B82F6" Offset="0"/>
+                                        <GradientStop Color="#1D4ED8" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                                <ContentPresenter HorizontalAlignment="Center"
+                   VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
             </Grid>
         </Border>
 
@@ -234,12 +231,11 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2.5*"/>
                 <ColumnDefinition Width="20"/>
-                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="1.2*"/>
             </Grid.ColumnDefinitions>
 
             <!-- LEFT: ALL RAW MEASUREMENTS VISIBLE AT ONCE -->
-            <Border Grid.Column="0">
-                <Border.Background>White</Border.Background>
+            <Border Grid.Column="0" Background="{StaticResource PageBackgroundBrush}" >
                 <Border.CornerRadius>
                     <CornerRadius>16</CornerRadius>
                 </Border.CornerRadius>
@@ -261,10 +257,10 @@
                             <TextBlock Text="👤 Appraiser 1" Style="{StaticResource AppraiserHeaderStyle}"/>
                             <Border Background="#F8FAFC" CornerRadius="12" Padding="10" Margin="0,0,0,2">
                                 <DataGrid ItemsSource="{Binding Appraiser1Data}"
-                  AutoGenerateColumns="False" CanUserAddRows="False"
-                  IsReadOnly="False" HeadersVisibility="Column"
-                  GridLinesVisibility="None" RowHeight="30"
-                  CellStyle="{StaticResource CenterCellStyle}">
+                                          AutoGenerateColumns="False" CanUserAddRows="False"
+                                          IsReadOnly="False" HeadersVisibility="Column"
+                                          GridLinesVisibility="None" RowHeight="30"
+                                          CellStyle="{StaticResource CenterCellStyle}">     
                                     <DataGrid.RowStyle>
                                         <Style TargetType="DataGridRow">
                                             <Style.Triggers>
@@ -314,10 +310,10 @@
                             <TextBlock Text="👤 Appraiser 2" Style="{StaticResource AppraiserHeaderStyle}"/>
                             <Border Background="#F8FAFC" CornerRadius="12" Padding="10" Margin="0,0,0,2">
                                 <DataGrid ItemsSource="{Binding Appraiser2Data}"
-                  AutoGenerateColumns="False" CanUserAddRows="False"
-                  IsReadOnly="False" HeadersVisibility="Column"
-                  GridLinesVisibility="None" RowHeight="30"
-                  CellStyle="{StaticResource CenterCellStyle}">
+                                          AutoGenerateColumns="False" CanUserAddRows="False"
+                                          IsReadOnly="False" HeadersVisibility="Column"
+                                          GridLinesVisibility="None" RowHeight="30"
+                                          CellStyle="{StaticResource CenterCellStyle}">     
                                     <DataGrid.RowStyle>
                                         <Style TargetType="DataGridRow">
                                             <Style.Triggers>
@@ -342,9 +338,9 @@
 
                                     <DataGrid.Resources>
                                         <Style TargetType="DataGridColumnHeader"
-                       BasedOn="{StaticResource ModernDataGridHeader}"/>
+                                               BasedOn="{StaticResource ModernDataGridHeader}"/>
                                         <Style TargetType="DataGridCell"
-                       BasedOn="{StaticResource ModernDataGridCell}"/>
+                                               BasedOn="{StaticResource ModernDataGridCell}"/>
                                     </DataGrid.Resources>
 
                                     <!-- same columns as Appraiser 1 -->
@@ -368,10 +364,10 @@
                             <TextBlock Text="👤 Appraiser 3" Style="{StaticResource AppraiserHeaderStyle}"/>
                             <Border Background="#F8FAFC" CornerRadius="12" Padding="10">
                                 <DataGrid ItemsSource="{Binding Appraiser3Data}"
-                  AutoGenerateColumns="False" CanUserAddRows="False"
-                  IsReadOnly="False" HeadersVisibility="Column"
-                  GridLinesVisibility="None" RowHeight="30"
-                  CellStyle="{StaticResource CenterCellStyle}">
+                                          AutoGenerateColumns="False" CanUserAddRows="False"
+                                          IsReadOnly="False" HeadersVisibility="Column"
+                                          GridLinesVisibility="None" RowHeight="30"
+                                          CellStyle="{StaticResource CenterCellStyle}">     
                                     <DataGrid.RowStyle>
                                         <Style TargetType="DataGridRow">
                                             <Style.Triggers>
@@ -394,9 +390,9 @@
 
                                     <DataGrid.Resources>
                                         <Style TargetType="DataGridColumnHeader"
-                       BasedOn="{StaticResource ModernDataGridHeader}"/>
+                                               BasedOn="{StaticResource ModernDataGridHeader}"/>
                                         <Style TargetType="DataGridCell"
-                       BasedOn="{StaticResource ModernDataGridCell}"/>
+                                               BasedOn="{StaticResource ModernDataGridCell}"/>
                                     </DataGrid.Resources>
 
                                     <DataGrid.Columns>
@@ -420,8 +416,7 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Column="2">
-                <Border.Background>White</Border.Background>
+            <Border Grid.Column="2" Background="{StaticResource PageBackgroundBrush}" >
                 <Border.CornerRadius>
                     <CornerRadius>16</CornerRadius>
                 </Border.CornerRadius>
@@ -449,10 +444,10 @@
                             Style="{StaticResource RoundedButtonStyle}"/>
 
                         <Button Content="🔁 Recalculate"
-        Width="120" Height="40" Margin="4"
-        Command="{Binding RecalculateCommand}"
-        Background="#6366F1"
-        Style="{StaticResource RoundedButtonStyle}"/>
+                                Width="120" Height="40" Margin="4"
+                                Command="{Binding RecalculateCommand}"
+                                Background="#6366F1"
+                                Style="{StaticResource RoundedButtonStyle}"/>   
 
                     </StackPanel>
 
@@ -586,8 +581,8 @@
                                 <TextBlock Text="Tolerance" FontSize="19" Foreground="#065F46" 
                                FontWeight="SemiBold" HorizontalAlignment="Center"/>
                                 <TextBlock Text="{Binding TotalTolerance, StringFormat={}{0:F3}}" 
-                               FontSize="32" FontWeight="Bold" Foreground="#047857" 
-                               HorizontalAlignment="Center"/>
+                                           FontSize="32" FontWeight="Bold" Foreground="#047857" 
+                                           HorizontalAlignment="Center"/>   
                             </StackPanel>
                         </Border>
 
@@ -604,7 +599,7 @@
                                 <TextBlock Text="Status" FontSize="17" Foreground="#065F46" 
                                FontWeight="SemiBold" HorizontalAlignment="Center"/>
                                 <TextBlock Text="{Binding GRRConclusion}" 
-                               FontSize="24" FontWeight="Bold" Foreground="#047857" 
+                               FontSize="20" FontWeight="Bold" Foreground="#047857" 
                                HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Border>
@@ -651,8 +646,8 @@
                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                     <TextBlock Text="EV" FontSize="13" Foreground="#1E40AF" HorizontalAlignment="Center"/>
                                     <TextBlock Text="{Binding Repeatability, StringFormat={}{0:F4}}" 
-                           FontSize="18" FontWeight="Bold" Foreground="#1D4ED8" 
-                           HorizontalAlignment="Center"/>
+                                               FontSize="18" FontWeight="Bold" Foreground="#1D4ED8" 
+                                               HorizontalAlignment="Center"/>   
                                 </StackPanel>
                             </Border>
                             <Border Margin="0,0,12,0" HorizontalAlignment="Center">
@@ -666,8 +661,8 @@
                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                     <TextBlock Text="AV" FontSize="13" Foreground="#1E40AF" HorizontalAlignment="Center"/>
                                     <TextBlock Text="{Binding Reproducibility, StringFormat={}{0:F4}}" 
-                           FontSize="18" FontWeight="Bold" Foreground="#1D4ED8" 
-                           HorizontalAlignment="Center"/>
+                                               FontSize="18" FontWeight="Bold" Foreground="#1D4ED8" 
+                                               HorizontalAlignment="Center"/>   
                                 </StackPanel>
                             </Border>
                             <Border HorizontalAlignment="Center">
@@ -681,8 +676,8 @@
                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                     <TextBlock Text="PV" FontSize="13" Foreground="#1E40AF" HorizontalAlignment="Center"/>
                                     <TextBlock Text="{Binding PartVariation, StringFormat={}{0:F4}}" 
-                           FontSize="18" FontWeight="Bold" Foreground="#1D4ED8" 
-                           HorizontalAlignment="Center"/>
+                                               FontSize="18" FontWeight="Bold" Foreground="#1D4ED8" 
+                                               HorizontalAlignment="Center"/>           
                                 </StackPanel>
                             </Border>
                         </StackPanel>

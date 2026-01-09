@@ -1,15 +1,23 @@
-﻿using EVMS.Service;
+﻿using ClosedXML.Excel;
+using EVMS.Service;
+using Microsoft.Data.SqlClient;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Configuration;
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+
 
 namespace EVMS
 {
     public partial class RnR_Report_Page : UserControl, INotifyPropertyChanged
     {
         private readonly DataStorageService _dataService;
+        private readonly string connectionString;
+
 
         // FILTER SOURCES
         public ObservableCollection<string> ActiveParts { get; } = new();
@@ -161,6 +169,8 @@ namespace EVMS
         public ICommand SelectPVMethodCommand { get; }
         public ICommand SelectToleranceMethodCommand { get; }
         public ICommand RecalculateCommand { get; }
+        public ICommand ExportToExcelCommand { get; }
+
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -170,19 +180,22 @@ namespace EVMS
         {
             InitializeComponent();
             _dataService = new DataStorageService();
+            connectionString = ConfigurationManager.ConnectionStrings["EVMSDb"].ConnectionString;
 
             SubmitCommand = new RelayCommand(async _ => await LoadRnRDataAsync(), _ => CanSubmit());
             CloseCommand = new RelayCommand(_ => ClosePage());
 
             SelectPVMethodCommand = new RelayCommand(_ => SelectedMethod = RrMethod.PV);
             SelectToleranceMethodCommand = new RelayCommand(_ => SelectedMethod = RrMethod.Tolerance);
+            RecalculateCommand = new RelayCommand(_ => RecalculateFromGrids());
+            ExportToExcelCommand = new RelayCommand(_ => ExportToExcel());
 
             LoadActiveParts();
             LoadOperators();
+            LoadCompanyInfo();
 
             // default selection
             SelectedMethod = RrMethod.PV;
-            RecalculateCommand = new RelayCommand(_ => RecalculateFromGrids());
 
             DataContext = this;
         }
@@ -499,7 +512,7 @@ namespace EVMS
             };
 
             // 9. Tolerance Method
-            double TV_Tol = TotalTolerance;
+            double TV_Tol = Math.Round(TotalTolerance, 4);
             double percentGrr_Tol = Math.Round((GRR / TV_Tol) * 100.0, 4);
             double percentPV_Tol = Math.Round((PV / TV_Tol) * 100.0, 4);
 
@@ -724,7 +737,7 @@ namespace EVMS
             var all = a1.Concat(a2).Concat(a3).ToList();
             double dataMin = all.Min();
             double dataMax = all.Max();
-            TotalTolerance = dataMax - dataMin;
+            TotalTolerance = Math.Round(dataMax - dataMin, 4);
 
             var both = ComputeBothMethods(a1, a2, a3, TotalTolerance);
             PvMethodResult = both.pvResult;
@@ -754,6 +767,323 @@ namespace EVMS
                 avg.SetColumn(c, col.Average());
                 rng.SetColumn(c, col.Max() - col.Min());
             }
+        }
+
+        private string GetWritableLogoFolder()
+        {
+            string baseFolder = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string logoFolder = System.IO.Path.Combine(baseFolder, "EVMS", "CompanyLogo");
+
+            if (!Directory.Exists(logoFolder))
+                Directory.CreateDirectory(logoFolder);
+
+            return logoFolder;
+        }
+
+
+        // Global variables for company info
+        private string _companyName = "";
+        private string _companyLogoPath = "";
+
+        private void LoadCompanyInfo()
+        {
+            string query = "SELECT TOP 1 CompanyName, LogoPath FROM CompanyConfig WHERE Id = 1";
+
+            using SqlConnection conn = new SqlConnection(connectionString);
+            using SqlCommand cmd = new SqlCommand(query, conn);
+            conn.Open();
+
+            using SqlDataReader reader = cmd.ExecuteReader();
+            if (reader.Read())
+            {
+                _companyName = reader["CompanyName"]?.ToString() ?? "";
+                //txtCompanyName.Text = _companyName;
+
+                string logoFile = reader["LogoPath"]?.ToString();
+
+                if (!string.IsNullOrEmpty(logoFile))
+                {
+                    // FIX: use a writable local folder, NOT app directory
+                    string logoFolder = GetWritableLogoFolder();
+                    _companyLogoPath = System.IO.Path.Combine(logoFolder, logoFile);
+
+                    if (File.Exists(_companyLogoPath))
+                    {
+                        //imgPreview.Source = new BitmapImage(new Uri(_companyLogoPath));
+                    }
+                }
+            }
+        }
+        private void ExportToExcel()
+        {
+            try
+            {
+                if (!Appraiser1Data.Any() && !Appraiser2Data.Any() && !Appraiser3Data.Any())
+                {
+                    MessageBox.Show("No data to export. Please generate R&R first.");
+                    return;
+                }
+
+                string folder = @"D:\MEPL\RnR Report";
+                if (!Directory.Exists(folder))
+                    Directory.CreateDirectory(folder);
+
+                string fileName = $"RnR_{SelectedPartNo}_{SelectedParameter}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+                string filePath = Path.Combine(folder, fileName);
+
+                using (var wb = new XLWorkbook())
+                {
+                    var ws = wb.Worksheets.Add("R&R Report");
+
+                    // ===============================================================
+                    // HEADER – LOGO + COMPANY NAME
+                    // ===============================================================
+                    ws.Row(1).Height = 50;
+                    ws.Row(2).Height = 25;
+                    ws.Row(3).Height = 15;
+
+                    ws.Range("A1:A2").Merge();
+                    if (!string.IsNullOrEmpty(_companyLogoPath) && File.Exists(_companyLogoPath))
+                    {
+                        try
+                        {
+                            ws.AddPicture(_companyLogoPath)
+                              .MoveTo(ws.Cell("A1"), 3, 3)
+                              .Scale(0.35);
+                        }
+                        catch { }
+                    }
+                    ws.Column(1).Width = 12;
+
+                    ws.Range("B1:G1").Merge();
+                    var companyCell = ws.Cell("B1");
+                    companyCell.Value = _companyName ?? "COMPANY NAME";
+                    companyCell.Style.Font.SetBold();
+                    companyCell.Style.Font.SetFontSize(14);
+                    companyCell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Left);
+                    companyCell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Bottom;
+
+                    // ===============================================================
+                    // REPORT TITLE
+                    // ===============================================================
+                    ws.Row(4).Height = 25;
+                    ws.Row(5).Height = 25;
+
+                    ws.Range("A3:P4").Merge();
+                    var titleCell = ws.Cell("A3");
+                    titleCell.Value = "R&R REPORT";
+                    titleCell.Style.Font.SetBold();
+                    titleCell.Style.Font.SetFontSize(14);
+                    titleCell.Style.Font.SetFontColor(XLColor.White);
+                    titleCell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    titleCell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    titleCell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1F4E78");
+
+                    // ===============================================================
+                    // INFO SECTION
+                    // ===============================================================
+                    ws.Row(6).Height = 18;
+                    ws.Row(7).Height = 18;
+                    ws.Row(8).Height = 18;
+
+                    ws.Cell("A6").Value = "Part No:"; ws.Cell("A6").Style.Font.SetBold();
+                    ws.Cell("C6").Value = SelectedPartNo;
+
+                    ws.Cell("E6").Value = "Lot No:"; ws.Cell("E6").Style.Font.SetBold();
+                    ws.Cell("G6").Value = SelectedLotNo;
+
+                    ws.Cell("J6").Value = "Parameter:"; ws.Cell("J6").Style.Font.SetBold();
+                    ws.Cell("L6").Value = SelectedParameter;
+
+                    ws.Cell("A7").Value = "Operator:"; ws.Cell("A7").Style.Font.SetBold();
+                    ws.Cell("C7").Value = SelectedOperator;
+
+                    ws.Cell("E7").Value = "From:"; ws.Cell("E7").Style.Font.SetBold();
+                    ws.Cell("G7").Value = SelectedDateTimeFrom?.ToString("dd-MMM-yyyy");
+
+                    ws.Cell("J7").Value = "To:"; ws.Cell("J7").Style.Font.SetBold();
+                    ws.Cell("L7").Value = SelectedDateTimeTo?.ToString("dd-MMM-yyyy");
+
+                    ws.Range("A8:P8").Style.Border.BottomBorder = XLBorderStyleValues.Medium;
+
+                    int startRow = 10;
+
+                    // ===============================================================
+                    // LEFT SIDE – APPRAISERS
+                    // ===============================================================
+                    int leftRow = startRow;
+                    leftRow = WriteAppraiserReadings(ws, leftRow, "APPRAISER 1", Appraiser1Data);
+                    leftRow = WriteAppraiserReadings(ws, leftRow, "APPRAISER 2", Appraiser2Data);
+                    leftRow = WriteAppraiserReadings(ws, leftRow, "APPRAISER 3", Appraiser3Data);
+
+                    // ===============================================================
+                    // RIGHT SIDE – CALCULATION METHODS
+                    int calcRow = startRow;
+                    int calcCol = 13; // Column M
+
+                    // PV METHOD
+                    ws.Range(calcRow, calcCol, calcRow, calcCol + 3).Merge();
+                    ws.Cell(calcRow, calcCol).Value = "PV METHOD RESULTS";
+                    ws.Cell(calcRow, calcCol).Style.Font.SetBold().Font.SetFontColor(XLColor.White);
+                    ws.Cell(calcRow, calcCol).Style.Fill.BackgroundColor = XLColor.SteelBlue;
+                    ws.Cell(calcRow, calcCol).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    calcRow++;
+
+                    if (PvMethodResult != null)
+                    {
+                        calcRow = WriteResult(ws, calcRow, "Repeatability (EV)", PvMethodResult.Ev, calcCol);
+                        calcRow = WriteResult(ws, calcRow, "Reproducibility (AV)", PvMethodResult.Av, calcCol);
+                        calcRow = WriteResult(ws, calcRow, "GRR", PvMethodResult.Grr, calcCol);
+                        calcRow = WriteResult(ws, calcRow, "Part Variation (PV)", PvMethodResult.Pv, calcCol);
+                        calcRow = WriteResult(ws, calcRow, "Total Variation (TV)", PvMethodResult.Tv, calcCol);
+                        calcRow = WriteResult(ws, calcRow, "%GRR", PvMethodResult.PercentGrr_Pv, calcCol);
+                        calcRow = WriteResult(ws, calcRow, "NDC", PvMethodResult.Ndc, calcCol);
+                    }
+
+                    calcRow++;
+
+                    // TOLERANCE METHOD
+                    ws.Range(calcRow, calcCol, calcRow, calcCol + 3).Merge();
+                    ws.Cell(calcRow, calcCol).Value = "TOLERANCE METHOD RESULTS";
+                    ws.Cell(calcRow, calcCol).Style.Font.SetBold().Font.SetFontColor(XLColor.White);
+                    ws.Cell(calcRow, calcCol).Style.Fill.BackgroundColor = XLColor.SeaGreen;
+                    ws.Cell(calcRow, calcCol).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                    calcRow++;
+
+                    if (ToleranceMethodResult != null)
+                    {
+                        calcRow = WriteResult(ws, calcRow, "Repeatability (EV)", ToleranceMethodResult.Ev, calcCol);
+                        calcRow = WriteResult(ws, calcRow, "Reproducibility (AV)", ToleranceMethodResult.Av, calcCol);
+                        calcRow = WriteResult(ws, calcRow, "GRR", ToleranceMethodResult.Grr, calcCol);
+                        calcRow = WriteResult(ws, calcRow, "Total Tolerance", ToleranceMethodResult.Tv, calcCol);
+                        calcRow = WriteResult(ws, calcRow, "%GRR", ToleranceMethodResult.PercentGrrTolerance, calcCol);
+                        calcRow = WriteResult(ws, calcRow, "NDC", ToleranceMethodResult.Ndc, calcCol);
+                        calcRow = WriteResult(ws, calcRow, "Conclusion", ToleranceMethodResult.ConclusionTolerance, calcCol);
+                    }
+
+
+                    ws.Columns().AdjustToContents();
+                    wb.SaveAs(filePath);
+                }
+
+                Process.Start(new ProcessStartInfo(filePath) { UseShellExecute = true });
+                MessageBox.Show("Excel R&R report generated successfully.");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+
+
+
+        private int WriteAppraiserReadings(
+     IXLWorksheet ws,
+     int startRow,
+     string title,
+     ObservableCollection<RnRGridRow> data)
+        {
+            // ===== APPRAISER TITLE =====
+            ws.Cell(startRow, 1).Value = title;
+            ws.Range(startRow, 1, startRow, 11).Merge()
+                .Style.Font.SetBold()
+                .Fill.SetBackgroundColor(XLColor.RoyalBlue)
+                .Font.SetFontColor(XLColor.White);
+
+            startRow++;
+
+            // ===== HEADER ROW =====
+            ws.Cell(startRow, 1).Value = "Trial";
+            for (int i = 1; i <= 10; i++)
+                ws.Cell(startRow, i + 1).Value = i;
+
+            ws.Range(startRow, 1, startRow, 11).Style
+                .Font.SetBold()
+                .Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+
+            startRow++;
+
+            // ===== WRITE ALL ROWS (Trial 1,2,3, Average, Range) =====
+            foreach (var r in data)
+            {
+                ws.Cell(startRow, 1).Value = r.TrialNo;
+                ws.Cell(startRow, 1).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+
+                double[] values =
+                {
+            r.Data1, r.Data2, r.Data3, r.Data4, r.Data5,
+            r.Data6, r.Data7, r.Data8, r.Data9, r.Data10
+        };
+
+                for (int i = 0; i < 10; i++)
+                {
+                    ws.Cell(startRow, i + 2).Value = values[i];
+                    ws.Cell(startRow, i + 2).Style.NumberFormat.Format = "0.0000";
+                    ws.Cell(startRow, i + 2).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+                }
+
+                // Shade Average & Range rows
+                if (r.TrialNo == "Average" || r.TrialNo == "Range")
+                {
+                    ws.Range(startRow, 1, startRow, 11)
+                      .Style.Fill.SetBackgroundColor(XLColor.LightGray);
+                    ws.Cell(startRow, 1).Style.Font.SetBold();
+                }
+
+                startRow++;
+            }
+
+            // ===== BORDERS =====
+            ws.Range(startRow - data.Count - 1, 1, startRow - 1, 11)
+                .Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+            ws.Range(startRow - data.Count - 1, 1, startRow - 1, 11)
+                .Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+
+            startRow++; // space after table
+            return startRow;
+        }
+
+
+
+
+        private int WriteInfo(IXLWorksheet ws, int row, string label, object value)
+        {
+            ws.Cell(row, 1).Value = label;
+            ws.Cell(row, 1).Style.Font.SetBold();
+
+            if (value == null)
+                ws.Cell(row, 2).Value = "";
+            else if (value is DateTime dt)
+                ws.Cell(row, 2).Value = dt;
+            else if (value is double d)
+                ws.Cell(row, 2).Value = d;
+            else if (value is int i)
+                ws.Cell(row, 2).Value = i;
+            else
+                ws.Cell(row, 2).Value = value.ToString();
+
+            return row + 1;
+        }
+
+
+        private int WriteResult(IXLWorksheet ws, int row, string label, object value, int startCol)
+        {
+            ws.Cell(row, startCol).Value = label;
+            ws.Cell(row, startCol).Style.Font.SetBold();
+
+            if (value == null)
+                ws.Cell(row, startCol + 3).Value = "";
+            else if (value is double d)
+                ws.Cell(row, startCol + 3).Value = d;
+            else if (value is int i)
+                ws.Cell(row, startCol + 3).Value = i;
+            else
+                ws.Cell(row, startCol + 3).Value = value.ToString();
+
+            ws.Cell(row, startCol + 3).Style.NumberFormat.Format = "0.0000";
+            return row + 1;
         }
 
 

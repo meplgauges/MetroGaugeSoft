@@ -6,14 +6,14 @@
              mc:Ignorable="d"
              Background="White">
     <!-- Reusable Label Style to avoid repeating TextBlock settings -->
-        <UserControl.Resources>
-            <ResourceDictionary>
-                <ResourceDictionary.MergedDictionaries>
-                    <ResourceDictionary Source="Style/Design.xaml"/>
-                </ResourceDictionary.MergedDictionaries>
-            </ResourceDictionary>
-        </UserControl.Resources>
-        <Grid>
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Style/Design.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="1.5*"/>
             <ColumnDefinition Width="5*"/>
@@ -23,22 +23,22 @@
                 BorderBrush="#D9D9D9"
                 BorderThickness="1"
                 CornerRadius="14" Background="{StaticResource PageBackgroundBrush}">
-           
+
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-      
-                                  <!-- Title -->
-            <Border BorderBrush="BurlyWood" BorderThickness="1" Background="Black" CornerRadius="10" Padding="8" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,15,0,10">
-                <TextBlock Text="⚙ Part Configuration"
+
+                <!-- Title -->
+                <Border BorderBrush="BurlyWood" BorderThickness="1" Background="Black" CornerRadius="10" Padding="8" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,15,0,10">
+                    <TextBlock Text="⚙ Part Configuration"
                 FontSize="14" FontWeight="Bold"
                 Foreground="Aqua"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"/>
-            </Border>
+                </Border>
                 <StackPanel Grid.Row="1" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
                     <!-- ComboBox added above the Parameter label -->
                     <TextBlock Text="Select Part No:" Style="{StaticResource FormLabelStyle}"/>
@@ -50,20 +50,20 @@
                     <TextBlock Text="Parameter:" Style="{StaticResource FormLabelStyle}"/>
                     <TextBox x:Name="txtParameter" Style="{StaticResource ModernFilledTextBox}"/>
 
-                    
+
 
                     <TextBlock Text="Nominal:" Style="{StaticResource FormLabelStyle}"/>
                     <TextBox x:Name="txtNominal" Style="{StaticResource ModernFilledTextBox}"/>
-                    
+
                     <TextBlock Text="R_Tol(+):" Style="{StaticResource FormLabelStyle}"/>
                     <TextBox x:Name="txtRTolPlus" Style="{StaticResource ModernFilledTextBox}"/>
-                    
+
                     <TextBlock Text="R_Tol(-):" Style="{StaticResource FormLabelStyle}"/>
                     <TextBox x:Name="txtRTolMinus" Style="{StaticResource ModernFilledTextBox}"/>
-                    
+
                     <TextBlock Text="Y_Tol(+):" Style="{StaticResource FormLabelStyle}"/>
                     <TextBox x:Name="txtYTolPlus" Style="{StaticResource ModernFilledTextBox}"/>
-                    
+
                     <TextBlock Text="Y_Tol(-):" Style="{StaticResource FormLabelStyle}"/>
                     <TextBox x:Name="txtYTolMinus" Style="{StaticResource ModernFilledTextBox}"/>
 
@@ -73,7 +73,7 @@
 
                     <TextBlock Text="Report Name:" Style="{StaticResource FormLabelStyle}"/>
                     <TextBox x:Name="txtShort" Style="{StaticResource ModernFilledTextBox}"/>
-                    
+
                     <CheckBox x:Name="chkProbe"
                               Content="This is Probe ?"
                               Style="{StaticResource PillCheckBox}"/>
@@ -84,7 +84,7 @@
                     <Button x:Name="btnDelete" Content="Delete" Width="90" Height="36" Background="#E74C3C" Foreground="White" FontWeight="SemiBold" Margin="0,22,12,0" Style="{StaticResource ModernButtonStyle}"/>
                 </StackPanel>
 
-              
+
 
             </Grid>
         </Border>
@@ -92,7 +92,7 @@
         <Border Grid.Column="1" Margin="12,20,20,20"
                 BorderBrush="#D9D9D9"
                 BorderThickness="0.90" >
-           
+
             <!-- DataGrid -->
             <DataGrid x:Name="dataGrid"
                       AutoGenerateColumns="False"

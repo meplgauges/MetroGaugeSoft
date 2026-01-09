@@ -290,7 +290,7 @@ namespace EVMS
         public double Variation { get => _variation; set { _variation = value; OnPropertyChanged(nameof(Variation)); } }
 
         public event PropertyChangedEventHandler PropertyChanged;
-        protected void OnPropertyChanged(string name) =>
+        protected void OnPropertyChanged(string? name) =>
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }
