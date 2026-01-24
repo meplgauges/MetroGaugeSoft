@@ -30,7 +30,7 @@ namespace EVMS
         public ObservableCollection<ParameterItem> Parameters { get; set; } = new ObservableCollection<ParameterItem>();
 
         // UI helper lists for assignment panel
-        public ObservableCollection<int> AvailableBoxes { get; set; } = new ObservableCollection<int>(Enumerable.Range(1, 10));
+        public ObservableCollection<int> AvailableBoxes { get; set; } = new ObservableCollection<int>(Enumerable.Range(2, 10));
         public ObservableCollection<int> AvailableChannels { get; set; } = new ObservableCollection<int>(Enumerable.Range(1, 4));
         public ObservableCollection<string> ProbeNames { get; set; } = new ObservableCollection<string>(ProbeNamesStatic);
         public ObservableCollection<string> ProbeType { get; set; } = new ObservableCollection<string>(ProbeTypeStatic);

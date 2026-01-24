@@ -141,11 +141,27 @@ namespace EVMS.Service
         public List<PartConfigModel> GetPartConfig(string partNumber)
         {
             var list = new List<PartConfigModel>();
-            string query = @"
-                                SELECT Parameter, Nominal, RTolPlus, RTolMinus, YTolPlus, YTolMinus, ProbeStatus, Para_No, IsEnabled,Sign_Change,Compensation
-                                FROM PartConfig
-                                WHERE Para_No = @ParaNo AND IsEnabled = 1";
 
+            string query = @"
+                    SELECT
+                        pc.Parameter,
+                        COALESCE(mr.Nominal, pc.Nominal) AS Nominal,
+                        pc.RTolPlus,
+                        pc.RTolMinus,
+                        pc.YTolPlus,
+                        pc.YTolMinus,
+                        pc.ProbeStatus,
+                        pc.Para_No,
+                        pc.IsEnabled,
+                        pc.Sign_Change,
+                        pc.Compensation
+                    FROM PartConfig pc
+                    LEFT JOIN MasterReadingData mr
+                        ON pc.Para_No = mr.Para_No
+                       AND pc.Parameter = mr.Parameter
+                    WHERE pc.Para_No = @ParaNo
+                      AND pc.IsEnabled = 1
+                    ORDER BY pc.Parameter";
 
             using SqlConnection conn = new(_connectionString);
             using SqlCommand cmd = new(query, conn);
@@ -153,27 +169,26 @@ namespace EVMS.Service
 
             conn.Open();
             using SqlDataReader reader = cmd.ExecuteReader();
+
             while (reader.Read())
             {
                 list.Add(new PartConfigModel
                 {
+                    Para_No = reader["Para_No"].ToString(),
                     Parameter = reader["Parameter"].ToString(),
-                    Nominal = Convert.ToDouble(reader["Nominal"]),
+                    Nominal = Convert.ToDouble(reader["Nominal"]), // from MasterReadingData if exists
                     RTolPlus = Convert.ToDouble(reader["RTolPlus"]),
                     RTolMinus = Convert.ToDouble(reader["RTolMinus"]),
                     YTolPlus = Convert.ToDouble(reader["YTolPlus"]),
                     YTolMinus = Convert.ToDouble(reader["YTolMinus"]),
                     Sign_Change = Convert.ToInt32(reader["Sign_Change"]),
-                    Compensation = Convert.ToDouble(reader["Compensation"]),
-                    Para_No = reader["Para_No"].ToString()
-
-
+                    Compensation = Convert.ToDouble(reader["Compensation"])
+                    // ProbeStatus → map if needed
                 });
             }
+
             return list;
         }
-
-
 
         // Get MasterReadingData by part number
         public List<MasterReadingModel> GetMasterReadingByPart(string partNumber)
@@ -181,41 +196,46 @@ namespace EVMS.Service
             var list = new List<MasterReadingModel>();
 
             string query = @"
-                            SELECT 
-                                p.SrNo,
-                                p.Parameter,
-                                COALESCE(m.Nominal, p.Nominal) AS Nominal,
-                                COALESCE(m.RTolPlus, p.RTolPlus) AS RTolPlus,
-                                COALESCE(m.RTolMinus, p.RTolMinus) AS RTolMinus
-                            FROM PartConfig p
-                            LEFT JOIN MasterReadingData m
-                                ON p.Parameter = m.Parameter      -- match by parameter name
-                               AND m.Para_No = @PartNumber        -- use master data for this part
-                            WHERE p.Para_No = @PartNumber         -- only parameters for this part
-                            ORDER BY p.SrNo;                      -- preserve PartConfig order";
+        SELECT 
+            p.SrNo,
+            p.Parameter,
+            p.D_Name,
+            COALESCE(m.Nominal, p.Nominal)     AS Nominal,
+            COALESCE(m.RTolPlus, p.RTolPlus)   AS RTolPlus,
+            COALESCE(m.RTolMinus, p.RTolMinus) AS RTolMinus
+        FROM PartConfig p
+        LEFT JOIN MasterReadingData m
+               ON p.Parameter = m.Parameter
+              AND m.Para_No = @PartNumber
+        WHERE p.Para_No = @PartNumber
+        ORDER BY p.SrNo;
+    ";
 
             using SqlConnection conn = new(_connectionString);
             using SqlCommand cmd = new(query, conn);
-            cmd.Parameters.AddWithValue("@PartNumber", partNumber);
+            cmd.Parameters.Add("@PartNumber", SqlDbType.VarChar).Value = partNumber;
 
             conn.Open();
             using SqlDataReader reader = cmd.ExecuteReader();
+
             while (reader.Read())
             {
                 list.Add(new MasterReadingModel
                 {
-                    Para_No = partNumber,   // ✅ Part number
+                    Para_No = partNumber,
 
-                    Parameter = reader["Parameter"].ToString(),
-                    D_Name = reader["Parameter"].ToString(),
-                    Nominal = Convert.ToDouble(reader["Nominal"]),
-                    RTolPlus = Convert.ToDouble(reader["RTolPlus"]),
-                    RTolMinus = Convert.ToDouble(reader["RTolMinus"])
+                    Parameter = reader["Parameter"]?.ToString(),
+                    D_Name = reader["D_Name"]?.ToString(),   // ✅ FIXED
+
+                    Nominal = reader["Nominal"] != DBNull.Value ? Convert.ToDouble(reader["Nominal"]) : 0,
+                    RTolPlus = reader["RTolPlus"] != DBNull.Value ? Convert.ToDouble(reader["RTolPlus"]) : 0,
+                    RTolMinus = reader["RTolMinus"] != DBNull.Value ? Convert.ToDouble(reader["RTolMinus"]) : 0
                 });
             }
 
             return list;
         }
+
 
         // Get Active parts from Part_Entry table (ActivePart = 1)
         public List<PartEntryModel> GetActiveParts()
@@ -269,6 +289,74 @@ namespace EVMS.Service
             return list;
         }
 
+        public PartReadingDataModel? GetOLConfigByPartNumber(string partNumber)
+        {
+            const string query = @"
+ SELECT Parameter, Nominal
+ FROM PartConfig
+ WHERE Parameter = 'OL'
+   AND Para_No = @PartNumber";
+
+            using SqlConnection conn = new(_connectionString);
+            using SqlCommand cmd = new(query, conn);
+            cmd.Parameters.Add("@PartNumber", SqlDbType.VarChar).Value = partNumber;
+
+            conn.Open();
+            using SqlDataReader reader = cmd.ExecuteReader();
+
+            if (reader.Read())
+            {
+                return new PartReadingDataModel
+                {
+                    Parameter = reader["Parameter"].ToString(),
+                    Nominal = Convert.ToDouble(reader["Nominal"])
+                };
+            }
+
+            return null;
+        }
+        public string GetRoboBitByLength(decimal totalLength)
+        {
+            string roboBit = string.Empty;
+            string query = "SELECT RoboBit FROM RoboConfig WHERE TotalLength = @TotalLength";
+
+            using (SqlConnection conn = new SqlConnection(_connectionString))
+            using (SqlCommand cmd = new SqlCommand(query, conn))
+            {
+                cmd.Parameters.AddWithValue("@TotalLength", totalLength);
+                conn.Open();
+                object result = cmd.ExecuteScalar();
+                if (result != null)
+                    roboBit = result.ToString();
+            }
+
+            return roboBit;
+        }
+
+
+        public List<string> GetAllRoboBits()
+        {
+            var roboBits = new List<string>();
+            string query = "SELECT RoboBit FROM RoboConfig"; // No WHERE clause
+
+            using (SqlConnection conn = new SqlConnection(_connectionString))
+            using (SqlCommand cmd = new SqlCommand(query, conn))
+            {
+                conn.Open();
+
+                using (SqlDataReader reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        if (reader["RoboBit"] != DBNull.Value)
+                            roboBits.Add(reader["RoboBit"].ToString());
+                    }
+                }
+            }
+
+            return roboBits;
+        }
+
         public List<PartConfigInfo> GetPartConfigBits(string partNo)
         {
             var list = new List<PartConfigInfo>();
@@ -317,9 +405,9 @@ namespace EVMS.Service
         public List<(string Name, double Min, double Max)> GetMasterProbeRef(string partNo)
         {
             string query = @"
-                            SELECT Name, MinValue, MaxValue
-                            FROM MasterReadingProbeReference
-                            WHERE PartNo = @PartNo";
+        SELECT Name, MinValue, MaxValue
+        FROM MasterReadingProbeReference
+        WHERE PartNo = @PartNo";
 
             var result = new List<(string Name, double Min, double Max)>();
 
@@ -334,11 +422,11 @@ namespace EVMS.Service
                 string name = reader["Name"].ToString() ?? "";
 
                 double min = reader["MinValue"] != DBNull.Value
-                    ? Convert.ToDouble(reader["MinValue"])
+                    ? Math.Round(Convert.ToDouble(reader["MinValue"]), 3) // round to 3 decimals
                     : 0.0;
 
                 double max = reader["MaxValue"] != DBNull.Value
-                    ? Convert.ToDouble(reader["MaxValue"])
+                    ? Math.Round(Convert.ToDouble(reader["MaxValue"]), 3) // round to 3 decimals
                     : 0.0;
 
                 result.Add((name, min, max));
@@ -346,6 +434,7 @@ namespace EVMS.Service
 
             return result;
         }
+
 
 
         public void SaveProbeReadings(

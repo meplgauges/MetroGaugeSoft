@@ -1,29 +1,38 @@
 ﻿using ActUtlType64Lib;
 using Microsoft.Data.SqlClient;
-using System.Collections.Concurrent;
 using System.Configuration;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO.Ports;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 
-internal class PlcProbeService : IDisposable
+public sealed class PlcProbeService : IDisposable
 {
     private IActUtlType64 plc;
     private SerialPort? _serial;
-    private bool isPlcConnected = false;
-    private bool isSerialConnected = false;
+
     private CancellationTokenSource? _cts;
     private Task? _readTask;
+
+    private bool _isSerialConnected;
     private readonly string _connectionString;
 
-    // 🔥 ORIGINAL READ-ONLY COLLECTIONS (kept for compatibility)
-    public IReadOnlyDictionary<string, ProbeReading> ProbeReadings { get; private set; } = new Dictionary<string, ProbeReading>();
-    public IReadOnlyList<string> ProbeParameterNames => ProbeReadings.Keys.ToList();
+    private int _sampleIntervalMs;
+    private long _lastSampleTick;
+
+    private Dictionary<int, List<ProbeReading>> _probesByBox = new();
+
+    private static readonly Regex ValueRegex =
+        new Regex(@"C\d{2}([-+]?\d*\.?\d+)", RegexOptions.Compiled);
+
+    public bool IsConnected => _isSerialConnected && _serial?.IsOpen == true;
     public bool IsReadingLive { get; private set; }
 
-    // 🔥 NEW: Queue for continuous readings (EXACTLY like your MasterServices pattern)
-    public ConcurrentQueue<ProbeReadingQueueItem> CollectedReadings { get; } = new();
+    public IReadOnlyDictionary<string, ProbeReading> ProbeReadings { get; private set; }
+        = new Dictionary<string, ProbeReading>();
 
     public PlcProbeService()
     {
@@ -31,111 +40,54 @@ internal class PlcProbeService : IDisposable
         _connectionString = ConfigurationManager.ConnectionStrings["EVMSDb"].ConnectionString!;
     }
 
-    public bool IsConnected => isPlcConnected && isSerialConnected;  // ✅ Fixed
-
-    // 🔥 SEPARATE CONNECTION METHODS
+    // ================= SERIAL CONNECTION =================
     public async Task<bool> ConnectSerialAsync()
     {
         try
         {
             OpenSerialPort();
-            isSerialConnected = _serial?.IsOpen == true;
-            return isSerialConnected;
+            _isSerialConnected = _serial?.IsOpen == true;
+            return _isSerialConnected;
         }
         catch
         {
-            isSerialConnected = false;
+            _isSerialConnected = false;
             return false;
         }
     }
 
+    private void OpenSerialPort()
+    {
+        _serial?.Dispose();
+
+        var config = GetSerialPortConfig().FirstOrDefault()
+            ?? throw new InvalidOperationException("Serial port config missing");
+
+        _serial = new SerialPort(config.ComPort!, config.BaudRate, Parity.None, 8, StopBits.One)
+        {
+            ReadTimeout = 50,
+            WriteTimeout = 50
+        };
+
+        _serial.Open();
+    }
+
     public void StopAndCloseSerial()
     {
-        StopLiveReading();     // cancel task
-        Thread.Sleep(100);     // allow loop to exit
+        StopLiveReading();
 
-        try
-        {
-            if (_serial != null)
-            {
-                if (_serial.IsOpen)
-                    _serial.Close();
-
-                _serial.Dispose();
-                _serial = null;
-            }
-
-            isSerialConnected = false;
-        }
-        catch { }
-    }
-
-    //public async Task<bool> ConnectPlcAsync()
-    //{
-    //    try
-    //    {
-    //        plc.Close();                    // Close stale
-    //        plc.ActLogicalStationNumber = 1;
-
-    //        var openTask = Task.Run(() => plc.Open());
-    //        var completedTask = await Task.WhenAny(openTask, Task.Delay(3000));
-
-    //        if (completedTask == openTask)
-    //        {
-    //            bool success = openTask.Result == 0;
-    //            isPlcConnected = true;
-    //            return success;
-    //        }
-    //        plc.Close();
-    //        isPlcConnected = false;
-    //        return false;
-    //    }
-    //    catch
-    //    {
-    //        plc.Close();
-    //        isPlcConnected = false;
-    //        return false;
-    //    }
-    //}
-
-    // 🔥 FULL CONNECT (both)
-    public async Task<bool> ConnectAsync()
-    {
-        //bool plcOk = await ConnectPlcAsync();
-        bool serialOk = await ConnectSerialAsync();
-        return serialOk;
-    }
-
-    // 🔥 SEPARATE DISCONNECT
-    public void DisconnectSerial()
-    {
         try
         {
             _serial?.Close();
             _serial?.Dispose();
-            _serial = null;
-            isSerialConnected = false;
         }
         catch { }
+
+        _serial = null;
+        _isSerialConnected = false;
     }
 
-    public void DisconnectPlc()
-    {
-        try
-        {
-            plc.Close();
-            isPlcConnected = false;
-        }
-        catch { }
-    }
-
-    public void Disconnect()
-    {
-        DisconnectPlc();
-        DisconnectSerial();
-    }
-
-    // ---------- PUBLIC API ----------
+    // ================= LOAD PROBES =================
     public async Task LoadProbesAsync(string partNo)
     {
         var probes = new Dictionary<string, ProbeReading>();
@@ -143,304 +95,235 @@ internal class PlcProbeService : IDisposable
         using var con = new SqlConnection(_connectionString);
         await con.OpenAsync();
 
-        string query = @"
-        SELECT ProbeName, ParameterName, BoxId, ChannelId 
-        FROM ProbeInstallationData 
-        WHERE PartNo = @P
-        ORDER BY ProbeName, ChannelId";
+        var cmd = new SqlCommand(@"
+            SELECT ProbeName, ParameterName, BoxId, ChannelId
+            FROM ProbeInstallationData
+            WHERE PartNo = @P
+            ORDER BY ProbeName, ChannelId", con);
 
-        using var cmd = new SqlCommand(query, con);
         cmd.Parameters.AddWithValue("@P", partNo);
 
-        using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
+        using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
         {
-            string probeName = reader["ProbeName"]?.ToString() ?? "";
-            string paramName = reader["ParameterName"]?.ToString() ?? "";
-            int boxId = Convert.ToInt32(reader["BoxId"]);
-            int channel = Convert.ToInt32(reader["ChannelId"]);
-
-            string key = probeName;  // ✅ Unique key
-
-            probes[key] = new ProbeReading
+            string probeName = r["ProbeName"].ToString()!;
+            probes[probeName] = new ProbeReading
             {
-                ParameterName = paramName,
                 ProbeName = probeName,
-                BoxId = boxId,
-                Channel = channel,
-                Value = 0,
-                Status = "Not reading",
-                InRange = false
+                ParameterName = r["ParameterName"].ToString()!,
+                BoxId = Convert.ToInt32(r["BoxId"]),
+                Channel = Convert.ToInt32(r["ChannelId"]),
+                Status = "Idle"
             };
         }
 
         ProbeReadings = probes;
+
+        _probesByBox = ProbeReadings.Values
+            .Where(p => p.BoxId > 0)
+            .GroupBy(p => p.BoxId)
+            .ToDictionary(g => g.Key, g => g.ToList());
     }
 
-    public List<SerialPortConfigModel> GetSerialPortConfig()
+    // ================= START / STOP READING =================
+    public void StartLiveReading(int intervalMs, int sampleIntervalMs)
     {
-        var list = new List<SerialPortConfigModel>();
-        string query = "SELECT ID, ComPort, BaudRate FROM SerialSettings WHERE ID = 1";
-
-        using SqlConnection conn = new(_connectionString);
-        using SqlCommand cmd = new(query, conn);
-
-        conn.Open();
-        using SqlDataReader reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            list.Add(new SerialPortConfigModel
-            {
-                ID = Convert.ToInt32(reader["ID"]),
-                ComPort = reader["ComPort"].ToString(),
-                BaudRate = Convert.ToInt32(reader["BaudRate"])
-            });
-        }
-        return list;
-    }
-
-    // 🔥 LIVE READING
-    public void StartLiveReading(int intervalMs = 15)
-    {
-        if (!isSerialConnected)
-            throw new InvalidOperationException("Connect serial first.");
-
-        if (ProbeReadings.Count == 0)
-            throw new InvalidOperationException("Load probes first.");
-
-        OpenSerialPort();  // Ensure open
+        if (!IsConnected)
+            throw new InvalidOperationException("Serial not connected");
 
         StopLiveReading();
-        while (CollectedReadings.TryDequeue(out _)) { }
+
+        _sampleIntervalMs = sampleIntervalMs;
+        _lastSampleTick = 0;
 
         _cts = new CancellationTokenSource();
-        var token = _cts.Token;
-        _readTask = Task.Run(() => SerialLoopAsync(token, intervalMs));
+        _readTask = Task.Run(() => SerialLoopAsync(_cts.Token, intervalMs));
         IsReadingLive = true;
     }
 
     public void StopLiveReading()
     {
         _cts?.Cancel();
-        if (_readTask != null)
-            _ = Task.WhenAny(_readTask, Task.Delay(500));
-        _cts?.Dispose();
-        _cts = null;
-        _readTask = null;
         IsReadingLive = false;
     }
 
-    // 🔥 EXISTING API
-    public ProbeReading? GetProbeReading(string parameterName)
-    {
-        ProbeReadings.TryGetValue(parameterName, out var reading);
-        return reading;
-    }
-
-    public double? GetProbeValue(string parameterName)
-    {
-        if (ProbeReadings.TryGetValue(parameterName, out var reading))
-            return reading.Value;
-        return null;
-    }
-
-    // ---------- PRIVATE IMPLEMENTATION ----------
-    private void OpenSerialPort()
-    {
-        try
-        {
-            _serial?.Close();
-            _serial?.Dispose();
-            _serial = null;
-
-            var config = GetSerialPortConfig().FirstOrDefault();
-            if (config != null && !string.IsNullOrEmpty(config.ComPort))
-            {
-                string comPort = config.ComPort;
-                _serial = new SerialPort(comPort, 115200, Parity.None, 8, StopBits.One)
-                {
-                    ReadTimeout = 500,
-                    WriteTimeout = 500
-                };
-                _serial.Open();
-            }
-        }
-        catch { }
-    }
-
+    // ================= MAIN SERIAL LOOP =================
     private async Task SerialLoopAsync(CancellationToken token, int intervalMs)
     {
+        var boxes = _probesByBox.Keys.ToArray();
+        int boxIndex = 0;
+
         try
         {
-            var stopwatch = new System.Diagnostics.Stopwatch();
             while (!token.IsCancellationRequested)
             {
-                stopwatch.Restart();
+                int box = boxes[boxIndex];
+                boxIndex = (boxIndex + 1) % boxes.Length;
 
-                var boxes = ProbeReadings.Values.Select(p => p.BoxId).Distinct().Where(b => b > 0).ToList();
-                foreach (int box in boxes)
+                await ReadBoxOnceAsync(box, token);
+
+                // Optional: update a timestamp for each probe
+                long now = Environment.TickCount64;
+                if (now - _lastSampleTick >= _sampleIntervalMs)
                 {
-                    token.ThrowIfCancellationRequested();
-                    await ReadBoxOnceAsync(box, token);
-
-                    foreach (var kvp in ProbeReadings.Where(k => k.Value.BoxId == box))
+                    _lastSampleTick = now;
+                    foreach (var p in _probesByBox[box])
                     {
-                        var reading = kvp.Value;
-                        CollectedReadings.Enqueue(new ProbeReadingQueueItem
-                        {
-                            ParameterName = reading.ProbeName,  // "HD001"
-                            Value = reading.Value,
-                            Timestamp = DateTime.Now
-                        });
+                        p.LastUpdatedUtc = DateTime.UtcNow;
                     }
                 }
 
-                long elapsed = stopwatch.ElapsedMilliseconds;
-                int remaining = (int)(intervalMs - elapsed);
-                if (remaining > 0)
-                    await Task.Delay(remaining, token);
+                await Task.Delay(intervalMs, token);
             }
         }
         catch (OperationCanceledException) { }
     }
 
+    // ================= READ SINGLE BOX =================
     private async Task ReadBoxOnceAsync(int box, CancellationToken token)
     {
-        if (_serial == null || !_serial.IsOpen) return;
+        if (_serial == null || !_serial.IsOpen)
+            return;
 
-        string cmd = $"*{box:D3}VALL#\r";
         try
         {
             _serial.DiscardInBuffer();
-            _serial.DiscardOutBuffer();
-            _serial.Write(cmd);
+            _serial.Write($"*{box:D3}VALL#\r");
         }
         catch
         {
-            MarkBoxError(box, "ERR");
+            MarkBoxError(box);
             return;
         }
 
-        string resp = await Task.Run(() => ReadFullResponse(80, token), token);
-        if (string.IsNullOrEmpty(resp))
+        string resp = await ReadResponseAsync(70, token);
+        if (string.IsNullOrWhiteSpace(resp))
         {
-            MarkBoxError(box, "ERR");
+            MarkBoxError(box);
             return;
         }
 
-        double[] values = ParseResponse(resp);
-        UpdateProbesFromBox(box, values);
+        UpdateProbesFromBox(box, ParseResponse(resp));
     }
 
-    private void MarkBoxError(int box, string status)
+    private void MarkBoxError(int box)
     {
-        foreach (var kvp in ProbeReadings.Where(k => k.Value.BoxId == box).ToList())
-            UpdateProbeReading(kvp.Key, 0, status, false);
+        foreach (var p in _probesByBox[box])
+        {
+            p.Value = 0;
+            p.Status = "ERR";
+            p.InRange = false;
+            p.LastUpdatedUtc = DateTime.UtcNow;
+        }
     }
 
     private void UpdateProbesFromBox(int box, double[] values)
     {
-        foreach (var kvp in ProbeReadings.Where(k => k.Value.BoxId == box))
+        foreach (var p in _probesByBox[box])
         {
-            var reading = kvp.Value;
-            if (reading.Channel < 1 || reading.Channel > 4)
+            if (p.Channel < 1 || p.Channel > 4)
             {
-                UpdateProbeReading(kvp.Key, 0, "CH ERR", false);
+                p.Status = "CH ERR";
                 continue;
             }
 
-            double value = values[reading.Channel];
-            if (double.IsNaN(value))
+            double v = values[p.Channel];
+            if (double.IsNaN(v))
             {
-                UpdateProbeReading(kvp.Key, 0, "ERR", false);
+                p.Status = "ERR";
                 continue;
             }
 
-            bool ok = value >= 0.2 && value <= 1.2;
-            UpdateProbeReading(kvp.Key, value, $"{value:0.000}", ok);
+            p.Value = v;
+            p.Status = v.ToString("0.000", CultureInfo.InvariantCulture);
+            p.InRange = v >= 0.2 && v <= 1.2;
+            p.LastUpdatedUtc = DateTime.UtcNow;
         }
     }
 
-    private void UpdateProbeReading(string paramName, double value, string status, bool inRange)
+    // ================= SERIAL RESPONSE =================
+    private async Task<string> ReadResponseAsync(int timeoutMs, CancellationToken token)
     {
-        if (ProbeReadings.TryGetValue(paramName, out var reading))
-        {
-            reading.Value = value;
-            reading.Status = status;
-            reading.InRange = inRange;
-        }
-    }
+        var sw = Stopwatch.StartNew();
+        var sb = new StringBuilder();
 
-    private string ReadFullResponse(int timeoutMs, CancellationToken token)
-    {
-        if (_serial == null) return "";
-        string resp = "";
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-
-        try
+        while (sw.ElapsedMilliseconds < timeoutMs)
         {
-            while (sw.ElapsedMilliseconds < timeoutMs)
+            token.ThrowIfCancellationRequested();
+
+            if (_serial!.BytesToRead > 0)
             {
-                token.ThrowIfCancellationRequested();
-                if (_serial.BytesToRead > 0)
-                {
-                    resp += _serial.ReadExisting();
-                    if (resp.Contains("#")) break;
-                }
-                Thread.Sleep(1);
+                sb.Append(_serial.ReadExisting());
+                if (sb.ToString().Contains('#'))
+                    break;
             }
+
+            await Task.Yield(); // ✅ REQUIRED
         }
-        catch (OperationCanceledException) { return ""; }
-        catch { }
-        return resp;
+
+        return sb.ToString();
     }
+
+
 
     private double[] ParseResponse(string r)
     {
-        double[] ch = new double[5];
+        var ch = new double[5];
         for (int i = 1; i <= 4; i++) ch[i] = double.NaN;
 
-        if (string.IsNullOrWhiteSpace(r)) return ch;
-
-        int idx = r.IndexOf("VALL", StringComparison.OrdinalIgnoreCase);
-        if (idx >= 0) r = r[(idx + 4)..];
-
-        r = r.Replace("#", "").Replace("\r", "").Replace("\n", "").Trim();
-
-        var matches = Regex.Matches(r, @"C\d{2}([-+]?\d*\.?\d+)");
+        var matches = ValueRegex.Matches(r);
         for (int i = 0; i < matches.Count && i < 4; i++)
         {
-            string valueStr = matches[i].Groups[1].Value;
-            if (double.TryParse(valueStr, NumberStyles.Any, CultureInfo.InvariantCulture, out double v))
-                ch[i + 1] = v;
+            double.TryParse(matches[i].Groups[1].Value,
+                NumberStyles.Any,
+                CultureInfo.InvariantCulture,
+                out ch[i + 1]);
         }
         return ch;
+    }
+
+    // ================= DB =================
+    private List<SerialPortConfigModel> GetSerialPortConfig()
+    {
+        var list = new List<SerialPortConfigModel>();
+
+        using var con = new SqlConnection(_connectionString);
+        using var cmd = new SqlCommand("SELECT * FROM SerialSettings WHERE ID = 1", con);
+
+        con.Open();
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            list.Add(new SerialPortConfigModel
+            {
+                ID = (int)r["ID"],
+                ComPort = r["ComPort"].ToString(),
+                BaudRate = (int)r["BaudRate"]
+            });
+        }
+        return list;
     }
 
     public void Dispose()
     {
         StopLiveReading();
-        Disconnect();
-        try
-        {
-            plc?.Close();
-            _serial?.Close();
-            _serial?.Dispose();
-        }
-        catch { }
+        StopAndCloseSerial();
+        try { plc?.Close(); } catch { }
     }
 }
 
-// 🔥 DATA MODELS (unchanged)
+// ================= MODELS =================
 public class ProbeReading
 {
-    public string ParameterName { get; set; } = "";
+    public string ProbeName { get; set; } = string.Empty;
+    public string ParameterName { get; set; } = string.Empty;
     public int BoxId { get; set; }
     public int Channel { get; set; }
     public double Value { get; set; }
-    public string Status { get; set; } = "";
+    public string Status { get; set; } = string.Empty;
     public bool InRange { get; set; }
-    public string ProbeName { get; set; } = "";
+
+    public DateTime LastUpdatedUtc { get; set; } // optional timestamp
 }
 
 public class SerialPortConfigModel
@@ -448,11 +331,4 @@ public class SerialPortConfigModel
     public int ID { get; set; }
     public string? ComPort { get; set; }
     public int BaudRate { get; set; }
-}
-
-public class ProbeReadingQueueItem
-{
-    public string ParameterName { get; set; } = "";
-    public double Value { get; set; }
-    public DateTime Timestamp { get; set; }
 }

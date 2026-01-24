@@ -1168,10 +1168,53 @@ namespace EVMS
         {
             MainWindow.ShowStatusMessage(message);
         }
-        public void HandleEscKeyAction()
+        public async void HandleEscKeyAction()
         {
+
             try
             {
+                // Cancel serial reading task
+                _serialCts?.Cancel();
+
+                // Wait up to 500ms for reading task to end gracefully
+                if (_serialReadTask != null)
+                {
+                    await Task.WhenAny(_serialReadTask, Task.Delay(500));
+                    _serialReadTask = null;
+                }
+
+                _serialCts?.Dispose();
+                _serialCts = null;
+
+                // Check if port is open before closing
+                if (_serial != null && _serial.IsOpen)
+                {
+                    _serial.Close();
+                    _serial.Dispose();
+                    _serial = null;
+                }
+
+                System.Diagnostics.Debug.WriteLine("Serial port closed cleanly.");
+
+                // Optionally clear UI or reset probe values here
+                foreach (var p in Probes)
+                {
+                    p.Value = 0;
+                    p.Status = "";
+                    p.InRange = false;
+                }
+
+                if (_timer.IsEnabled)
+                    _timer.Stop();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error closing serial port: {ex.Message}");
+            }
+
+            try
+            {
+
                 foreach (var btn in outputButtons.Values)
                     btn.IsEnabled = false;
 

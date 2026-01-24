@@ -1,6 +1,7 @@
 ﻿using Microsoft.Data.SqlClient;
 using System.Configuration;
 using System.Data;
+using System.Data.Common;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -31,7 +32,9 @@ namespace EVMS
             // ✅ Register ESC key handler
             this.PreviewKeyDown += SettingsPage_PreviewKeyDown;
             LoadPartNumbers();   // Load PartNo values into ComboBox
-            LoadData();          // Initial load: load all or first part number's data
+            LoadData();
+            LoadParameters();  // New: Load static parameters
+                               // Initial load: load all or first part number's data
             ClearInputs();
         }
         private void SettingsPage_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -41,6 +44,34 @@ namespace EVMS
                 HandleEscKeyAction();
                 e.Handled = true;
             }
+        }
+
+
+        private void LoadParameters()
+        {
+            var parameters = new List<object>
+    {
+        new { DisplayText = "STEP OD1", Value = "OD1" },
+        new { DisplayText = "STEP RN1", Value = "RN1" },
+        new { DisplayText = "OD2", Value = "OD2" },
+        new { DisplayText = "RN2", Value = "RN2" },
+        new { DisplayText = "OD3", Value = "OD3" },
+        new { DisplayText = "RN3", Value = "RN3" },
+        new { DisplayText = "OD4", Value = "OD4" },
+        new { DisplayText = "RN4", Value = "RN4" },
+        new { DisplayText = "STEP OD2", Value = "OD5" },
+        new { DisplayText = "STEP RN2", Value = "RN5" },
+        new { DisplayText = "ID-1", Value = "ID-1" },
+        new { DisplayText = "RN6", Value = "RN6" },
+        new { DisplayText = "ID-2", Value = "ID-2" },
+        new { DisplayText = "RN7", Value = "RN7" },
+        new { DisplayText = "Total Lenght", Value = "OL" }
+    };
+
+            cmbParameter.ItemsSource = parameters;
+            cmbParameter.DisplayMemberPath = "DisplayText";
+            cmbParameter.SelectedValuePath = "Value";
+            cmbParameter.SelectedIndex = -1;
         }
 
 
@@ -83,7 +114,7 @@ namespace EVMS
                 using (SqlConnection con = new SqlConnection(connectionString))
                 {
                     con.Open();
-                    string query = "SELECT Para_No FROM PART_ENTRY";
+                    string query = "SELECT Para_No FROM PART_ENTRY  WHERE ActivePart = 1";
                     SqlCommand cmd = new SqlCommand(query, con);
                     SqlDataReader reader = cmd.ExecuteReader();
 
@@ -199,27 +230,27 @@ namespace EVMS
             ClearInputs();
         }
 
-        private bool IsParameterExists(string parameter)
-        {
-            try
-            {
-                using var con = new SqlConnection(connectionString);
-                con.Open();
+        //private bool IsParameterExists(string parameter)
+        //{
+        //    try
+        //    {
+        //        using var con = new SqlConnection(connectionString);
+        //        con.Open();
 
-                string checkQuery = "SELECT COUNT(*) FROM PartConfig WHERE Parameter = @Parameter";
-                using var cmd = new SqlCommand(checkQuery, con);
-                cmd.Parameters.AddWithValue("@Parameter", parameter);
+        //        string checkQuery = "SELECT COUNT(*) FROM PartConfig WHERE Parameter = @Parameter";
+        //        using var cmd = new SqlCommand(checkQuery, con);
+        //        cmd.Parameters.AddWithValue("@Parameter", parameter);
 
-                int count = (int)cmd.ExecuteScalar();
-                return count > 0;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error checking parameter existence: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
-                return true; // Treat error as existing to prevent inserts during DB issues
-            }
-        }
+        //        int count = (int)cmd.ExecuteScalar();
+        //        return count > 0;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        MessageBox.Show($"Error checking parameter existence: {ex.Message}", "Error",
+        //            MessageBoxButton.OK, MessageBoxImage.Error);
+        //        return true; // Treat error as existing to prevent inserts during DB issues
+        //    }
+        //}
 
 
         private void BtnAdd_Click(object sender, RoutedEventArgs e)
@@ -229,16 +260,12 @@ namespace EVMS
                 if (!ValidateInputs()) return;
 
                 string? Para_No = cmbPartNo.SelectedItem?.ToString() ?? "";
-                string? parameter = txtParameter.Text.Trim();
                 string? ShortName = txtShort.Text.Trim();
                 string? ShowPara = txtViewPara.Text.Trim();
 
-                if (IsParameterExists(parameter))
-                {
-                    MessageBox.Show("⚠️ Parameter already exists. Please use a different name.", "Duplicate Entry",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
+                // Get parameter from ComboBox SelectedValue (clean "OD1" value for DB)
+                string? parameter = cmbParameter.SelectedValue?.ToString();
+
 
                 decimal nominal = ParseDecimal(txtNominal.Text);
                 decimal rTolPlus = ParseDecimal(txtRTolPlus.Text);
@@ -297,7 +324,7 @@ namespace EVMS
 
                 int srNo = Convert.ToInt32(row["SrNo"]);
                 string Para_No = cmbPartNo.SelectedItem?.ToString() ?? "";
-                string parameter = txtParameter.Text.Trim();
+                string? parameter = cmbParameter.SelectedValue?.ToString();
                 string? ShortName = txtShort.Text.Trim();
                 string? ShowPara = txtViewPara.Text.Trim();
 
@@ -401,7 +428,7 @@ namespace EVMS
 
         private void ClearInputs()
         {
-            txtParameter.Clear();
+            cmbParameter.SelectedIndex = -1;  // Changed from Clear()
             txtShort.Clear();
             txtViewPara.Clear();
             txtNominal.Clear();
@@ -411,13 +438,11 @@ namespace EVMS
             txtYTolMinus.Clear();
             chkProbe.IsChecked = false;
 
-           
-            
-            txtParameter.IsEnabled = true;   // Enable for new inserts
-
+            cmbParameter.IsEnabled = true;
             btnUpdate.IsEnabled = false;
             btnDelete.IsEnabled = false;
         }
+
 
 
         private decimal ParseDecimal(string input)
@@ -427,9 +452,9 @@ namespace EVMS
 
         private bool ValidateInputs()
         {
-            if (string.IsNullOrWhiteSpace(txtParameter.Text))
-            {
-                MessageBox.Show("⚠️ Parameter cannot be empty.", "Validation Error",
+            if (cmbParameter.SelectedItem == null || string.IsNullOrWhiteSpace(cmbParameter.SelectedValue?.ToString()))
+            {  // Updated check
+                MessageBox.Show("⚠️ Please select a Parameter.", "Validation Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
@@ -450,36 +475,56 @@ namespace EVMS
         {
             if (dataGrid.SelectedItem is DataRowView row)
             {
-                // Set PartNo ComboBox selection if possible
-                string? Para_No = row["Para_No"].ToString();
+                // Set PartNo ComboBox selection
+                string? Para_No = row["Para_No"]?.ToString();
                 if (!string.IsNullOrEmpty(Para_No) && cmbPartNo.Items.Contains(Para_No))
                 {
                     cmbPartNo.SelectedItem = Para_No;
                 }
-                txtParameter.Text = row["Parameter"].ToString();
-                txtNominal.Text = row["Nominal"].ToString();
-                txtRTolPlus.Text = row["RTolPlus"].ToString();
-                txtRTolMinus.Text = row["RTolMinus"].ToString();
-                txtYTolPlus.Text = row["YTolPlus"].ToString();
-                txtYTolMinus.Text = row["YTolMinus"].ToString();
-                chkProbe.IsChecked = row["ProbeStatus"].ToString() == "Probe";
-                txtShort.Text = row["ShortName"].ToString();
-                txtViewPara.Text = row["D_Name"].ToString();
+
+                // ✅ Fixed: Properly iterate ComboBox Items
+                string dbParamValue = row["Parameter"]?.ToString() ?? "";
+                cmbParameter.SelectedItem = null;
+                foreach (var item in cmbParameter.Items.Cast<object>())
+                {
+                    if (item != null)
+                    {
+                        var valueProperty = item.GetType().GetProperty("Value");
+                        if (valueProperty != null)
+                        {
+                            string? itemValue = valueProperty.GetValue(item)?.ToString();
+                            if (itemValue == dbParamValue)
+                            {
+                                cmbParameter.SelectedItem = item;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+
+                // Populate other fields
+                txtNominal.Text = row["Nominal"]?.ToString() ?? "";
+                txtRTolPlus.Text = row["RTolPlus"]?.ToString() ?? "";
+                txtRTolMinus.Text = row["RTolMinus"]?.ToString() ?? "";
+                txtYTolPlus.Text = row["YTolPlus"]?.ToString() ?? "";
+                txtYTolMinus.Text = row["YTolMinus"]?.ToString() ?? "";
+                chkProbe.IsChecked = row["ProbeStatus"]?.ToString() == "Probe";
+                txtShort.Text = row["ShortName"]?.ToString() ?? "";
+                txtViewPara.Text = row["D_Name"]?.ToString() ?? "";
 
                 btnUpdate.IsEnabled = true;
                 btnDelete.IsEnabled = true;
-
-                // Disable txtParameter textbox to prevent editing during update
-               // txtParameter.IsEnabled = false;
             }
             else
             {
-                // If no selection, enable the txtParameter for inserting new entries
-                txtParameter.IsEnabled = true;
+                cmbParameter.SelectedItem = null;
+                cmbParameter.IsEnabled = true;
                 btnUpdate.IsEnabled = false;
                 btnDelete.IsEnabled = false;
             }
         }
+
 
 
 

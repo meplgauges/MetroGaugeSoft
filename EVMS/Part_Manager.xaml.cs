@@ -7,14 +7,13 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shapes;  // ✅ ADDED FOR ELLIPSE
 
 namespace EVMS
 {
     public partial class Part_Manager : UserControl
     {
         private readonly string connectionString;
-
-        // Combo static values
         private List<ComboItem> idItems;
         private List<ComboItem> botItems;
 
@@ -71,12 +70,12 @@ namespace EVMS
         private void LoadStaticComboData()
         {
             idItems = new List<ComboItem>
-    {
-        new ComboItem{ Value=0, Text="NOT REQ"},
-        new ComboItem{ Value=1, Text="ID-9.508"},
-        new ComboItem{ Value=2, Text="ID-12.642"},
-        new ComboItem{ Value=3, Text="ID-8.072"},
-    };
+            {
+                new ComboItem{ Value=0, Text="NOT REQ"},
+                new ComboItem{ Value=1, Text="ID-9.508"},
+                new ComboItem{ Value=2, Text="ID-12.642"},
+                new ComboItem{ Value=3, Text="ID-8.072"},
+            };
 
             cmbCategory.ItemsSource = idItems;
             cmbCategory.DisplayMemberPath = "Text";
@@ -84,12 +83,12 @@ namespace EVMS
             cmbCategory.SelectedIndex = 0;
 
             botItems = new List<ComboItem>
-    {
-        new ComboItem{ Value=0, Text="DIRECT"},
-        new ComboItem{ Value=1, Text="CYC1"},
-        new ComboItem{ Value=2, Text="CYC2"},
-        new ComboItem{ Value=3, Text="CYC3"}
-    };
+            {
+                new ComboItem{ Value=0, Text="DIRECT"},
+                new ComboItem{ Value=1, Text="CYC1"},
+                new ComboItem{ Value=2, Text="CYC2"},
+                new ComboItem{ Value=3, Text="CYC3"}
+            };
 
             cmbVendor.ItemsSource = botItems;
             cmbVendor.DisplayMemberPath = "Text";
@@ -97,14 +96,85 @@ namespace EVMS
             cmbVendor.SelectedIndex = 0;
         }
 
+        // ✅ FIXED: Click Handler for Ellipse (Wrapped in Grid)
+        private void StatusEllipse_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true; // prevent row selection conflict
+
+            if (sender is not Border border ||
+                border.DataContext is not DataRowView row)
+                return;
+
+            int clickedId = Convert.ToInt32(row["ID"]);
+            bool currentActive = Convert.ToBoolean(row["IsActive"]);
+
+            // If already active → do nothing
+            if (currentActive)
+                return;
+
+
+            // 🔔 Confirmation dialog
+            var result = MessageBox.Show(
+                $"Do you want to activate this part?\n\nPart No: {row["Para_No"]}",
+                "Confirm Activation",
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.OK)
+                return;
+
+            try
+            {
+                using SqlConnection con = new(connectionString);
+                con.Open();
+
+                using SqlTransaction tran = con.BeginTransaction();
+
+                try
+                {
+                    // 🔴 Deactivate ALL parts
+                    using SqlCommand resetAll = new(
+                        "UPDATE Part_Entry SET ActivePart = 0",
+                        con, tran);
+                    resetAll.ExecuteNonQuery();
+
+                    // 🟢 Activate clicked part
+                    using SqlCommand activate = new(
+                        "UPDATE Part_Entry SET ActivePart = 1 WHERE ID = @ID",
+                        con, tran);
+                    activate.Parameters.AddWithValue("@ID", clickedId);
+                    activate.ExecuteNonQuery();
+
+                    tran.Commit();
+                }
+                catch
+                {
+                    tran.Rollback();
+                    throw;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Failed to update status.\n\n{ex.Message}",
+                    "Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                return;
+            }
+
+            // 🔄 Refresh grid → 1 GREEN, others RED
+            LoadData();
+        }
+
+
 
         private void BtnAdd_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                int idValue = Convert.ToInt32(cmbCategory.SelectedValue); // ensures numeric
-                int botValue = Convert.ToInt32(cmbVendor.SelectedValue);  // ensures numeric
-
+                int idValue = Convert.ToInt32(cmbCategory.SelectedValue);
+                int botValue = Convert.ToInt32(cmbVendor.SelectedValue);
                 string paraNo = txtPartNumber.Text.Trim();
                 string paraName = txtPartName.Text.Trim();
                 bool activePart = chkActivePart.IsChecked == true;
@@ -118,7 +188,6 @@ namespace EVMS
                 using SqlConnection con = new(connectionString);
                 con.Open();
 
-                // Check duplicate
                 using SqlCommand check = new("SELECT COUNT(*) FROM Part_Entry WHERE Para_No=@Para_No", con);
                 check.Parameters.AddWithValue("@Para_No", paraNo);
                 int count = (int)check.ExecuteScalar();
@@ -168,7 +237,6 @@ namespace EVMS
                 using SqlConnection con = new(connectionString);
                 con.Open();
 
-                // Check duplicate
                 using SqlCommand check = new("SELECT COUNT(*) FROM Part_Entry WHERE Para_No=@Para_No AND ID!=@ID", con);
                 check.Parameters.AddWithValue("@Para_No", paraNo);
                 check.Parameters.AddWithValue("@ID", id);
@@ -233,8 +301,6 @@ namespace EVMS
             }
         }
 
-
-
         private void LoadData()
         {
             try
@@ -243,36 +309,34 @@ namespace EVMS
                 con.Open();
 
                 string query = @"
-        SELECT 
-            ID,
-            ROW_NUMBER() OVER (ORDER BY ID) AS SrNo,
-            Para_No,
-            Para_Name,
-            ActivePart,
-            ID_Value,
-            BOT_Value
-        FROM Part_Entry
-        ORDER BY ID";
+                        SELECT 
+                        ID,
+                        Para_No,
+                        Para_Name,
+                        CAST(ActivePart AS BIT) AS IsActive,
+                        ID_Value,
+                        BOT_Value
+                    FROM Part_Entry
+                    ORDER BY ID
+                    ";
 
                 SqlDataAdapter da = new(query, con);
                 DataTable dt = new();
                 da.Fill(dt);
 
+                // ✅ FIXED: Force refresh for color update
+                dataGrid.ItemsSource = null;
                 dataGrid.ItemsSource = dt.DefaultView;
+                dataGrid.Items.Refresh();
 
-                // Hide ID column safely
                 if (dataGrid.Columns.Count > 0)
                     dataGrid.Columns[0].Visibility = Visibility.Collapsed;
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
-
-
 
 
         private void ClearInputs()
@@ -292,12 +356,9 @@ namespace EVMS
             {
                 txtPartNumber.Text = row["Para_No"].ToString();
                 txtPartName.Text = row["Para_Name"].ToString();
-                chkActivePart.IsChecked = Convert.ToInt32(row["ActivePart"]) == 1;
-
-                // ✅ USE EXISTING INT COLUMNS
+                chkActivePart.IsChecked = Convert.ToBoolean(row["IsActive"]);
                 cmbCategory.SelectedValue = Convert.ToInt32(row["ID_Value"]);
                 cmbVendor.SelectedValue = Convert.ToInt32(row["BOT_Value"]);
-
                 btnUpdate.IsEnabled = true;
                 btnDelete.IsEnabled = true;
             }
@@ -307,11 +368,10 @@ namespace EVMS
             }
         }
 
-
         public class ComboItem
         {
-            public int Value { get; set; }     // Saved to DB
-            public string Text { get; set; }   // Display
+            public int Value { get; set; }
+            public string Text { get; set; }
         }
     }
 }

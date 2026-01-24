@@ -38,7 +38,7 @@ Margin="12">
                 <!-- Logo and Brand -->
                 <StackPanel Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Center" >
                     <Border Width="160" Height="160" CornerRadius="60"  >
-                        <Image Source="pack://application:,,,/Resource/logo.png" Stretch="Uniform" Width="160" Height="160"/>
+                        <Image Source="pack://application:,,,/Resource/logo.png" Stretch="Uniform" Margin="-22,-24,-22,-24"/>
 
                     </Border>
                     <TextBlock Text="MetroGaugeSoft"
@@ -47,7 +47,6 @@ Margin="12">
                                 >
                         <TextBlock.Foreground>
                             <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                <GradientStop Color="#367CFE" Offset="0"/>
                                 <GradientStop Color="#1A52FE" Offset="1"/>
                             </LinearGradientBrush>
                         </TextBlock.Foreground>
@@ -61,14 +60,14 @@ Margin="12">
                 </StackPanel>
                 <!-- Main Content -->
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="38,0,34,0" >
-                    <TextBlock Text="Valve Measurement System"
+                    <TextBlock Text="Valve Guide Measurement System"
                                FontSize="24"
                                FontWeight="Bold"
                                Foreground="#282D4F"
                                FontFamily="Segoe UI"
                                Margin="0,0,0,5" Width="414"/>
 
-                    <TextBlock Text="A precise and efficient system for measuring multiple parameters of valves using advanced Analog probes and automated control."
+                    <TextBlock Text="A precise and efficient system for measuring multiple parameters of valves Guide using Analog probes and automated control."
                                FontSize="15"
                                Foreground="#39355B"
                                Margin="0,0,0,2"

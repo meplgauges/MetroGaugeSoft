@@ -48,7 +48,11 @@
 
                     <!-- Using the reusable label style -->
                     <TextBlock Text="Parameter:" Style="{StaticResource FormLabelStyle}"/>
-                    <TextBox x:Name="txtParameter" Style="{StaticResource ModernFilledTextBox}"/>
+                    <ComboBox x:Name="cmbParameter"
+                              Style="{StaticResource ModernComboBoxStyle}"
+                              HorizontalAlignment="Stretch"
+                              DisplayMemberPath="DisplayText" />
+
 
 
 

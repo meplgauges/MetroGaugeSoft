@@ -113,18 +113,22 @@ namespace EVMS
         {
             try
             {
-                using var con = new SqlConnection(connectionString);
-                con.Open();
-                using var cmd = new SqlCommand("SELECT DISTINCT Para_No FROM PART_ENTRY", con);
-                using var reader = cmd.ExecuteReader();
-
-                cmbPartNo.Items.Clear();
-                while (reader.Read())
+                using (SqlConnection con = new SqlConnection(connectionString))
                 {
-                    cmbPartNo.Items.Add(reader["Para_No"].ToString());
+                    con.Open();
+                    string query = "SELECT Para_No FROM PART_ENTRY  WHERE ActivePart = 1";
+                    SqlCommand cmd = new SqlCommand(query, con);
+                    SqlDataReader reader = cmd.ExecuteReader();
+
+                    cmbPartNo.Items.Clear();
+                    while (reader.Read())
+                    {
+                        cmbPartNo.Items.Add(reader["Para_No"].ToString());
+                    }
+
+                    if (cmbPartNo.Items.Count > 0)
+                        cmbPartNo.SelectedIndex = 0;
                 }
-                if (cmbPartNo.Items.Count > 0)
-                    cmbPartNo.SelectedIndex = 0;
             }
             catch (Exception ex)
             {

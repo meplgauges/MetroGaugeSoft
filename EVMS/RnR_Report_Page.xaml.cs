@@ -145,24 +145,24 @@ namespace EVMS
 
         // PARAMETER → COLUMN MAP
         private static readonly Dictionary<string, string> ParameterToColumn =
-     new(StringComparer.OrdinalIgnoreCase)
-     {
-         ["STEP OD1"] = nameof(MeasurementReading.StepOd1),
-         ["STEP RUNOUT-1"] = nameof(MeasurementReading.StepRunout1),
-         ["OD-1"] = nameof(MeasurementReading.Od1),
-         ["RN-1"] = nameof(MeasurementReading.Rn1),
-         ["OD-2"] = nameof(MeasurementReading.Od2),
-         ["RN-2"] = nameof(MeasurementReading.Rn2),
-         ["OD-3"] = nameof(MeasurementReading.Od3),
-         ["RN-3"] = nameof(MeasurementReading.Rn3),
-         ["STEP OD2"] = nameof(MeasurementReading.StepOd2),
-         ["STEP RUNOUT-2"] = nameof(MeasurementReading.StepRunout2),
-         ["ID-1"] = nameof(MeasurementReading.Id1),
-         ["RN-4"] = nameof(MeasurementReading.Rn4),
-         ["ID-2"] = nameof(MeasurementReading.Id2),
-         ["RN-5"] = nameof(MeasurementReading.Rn5),
-         ["OL"] = nameof(MeasurementReading.Ol)
-     };
+ new(StringComparer.OrdinalIgnoreCase)
+ {
+     ["OD1"] = nameof(MeasurementReading.StepOd1),
+     ["RN1"] = nameof(MeasurementReading.StepRunout1),
+     ["OD2"] = nameof(MeasurementReading.Od1),
+     ["RN2"] = nameof(MeasurementReading.Rn1),
+     ["OD3"] = nameof(MeasurementReading.Od2),
+     ["RN3"] = nameof(MeasurementReading.Rn2),
+     ["OD4"] = nameof(MeasurementReading.Od3),
+     ["RN4"] = nameof(MeasurementReading.Rn3),
+     ["OD5"] = nameof(MeasurementReading.StepOd2),
+     ["RN5"] = nameof(MeasurementReading.StepRunout2),
+     ["ID-1"] = nameof(MeasurementReading.Id1),
+     ["RN6"] = nameof(MeasurementReading.Rn4),
+     ["ID-2"] = nameof(MeasurementReading.Id2),
+     ["RN7"] = nameof(MeasurementReading.Rn5),
+     ["OL"] = nameof(MeasurementReading.Ol)
+ };
 
         public ICommand SubmitCommand { get; }
         public ICommand CloseCommand { get; }
