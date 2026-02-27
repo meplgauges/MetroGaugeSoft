@@ -1,0 +1,189 @@
+====================================================
+METROGAUGESOFT – COMPLETE PROJECT SETUP GUIDE
+====================================================
+
+PROJECT TYPE:
+WPF Desktop Application
+
+TARGET FRAMEWORK:
+.NET 8.0
+net8.0-windows10.0.20348.0
+
+PLATFORM:
+AnyCPU
+
+====================================================
+DATABASE CONFIGURATION
+====================================================
+
+Database Name:
+MetroGaugeSoft
+
+Current SQL Server Instance:
+DESKTOP-1HO9NHN\SQLEXPRESS01
+
+Authentication:
+Windows Authentication
+
+Connection String:
+
+Data Source=DESKTOP-1HO9NHN\SQLEXPRESS01;
+Initial Catalog=MetroGaugeSoft;
+Integrated Security=True;
+TrustServerCertificate=True;
+
+IMPORTANT:
+On another system, change Data Source to that PC's SQL Server instance.
+
+Example:
+Data Source=NEWPC\SQLEXPRESS;
+
+====================================================
+COM COMPONENT REQUIRED
+====================================================
+
+ActUtlType64Lib
+Version: 5.0
+GUID: 719a5fab-eb1c-4b52-98bc-f8c9f6912d04
+
+Required Software:
+Mitsubishi MX Component (64-bit)
+
+If not installed → Build will fail.
+
+====================================================
+LOCAL DLL FILES REQUIRED
+====================================================
+
+1. Interop.OrbitCOM.dll
+2. OrbitLibrary.dll
+
+These must be present in project folder.
+If missing → Application will not run.
+
+====================================================
+NUGET PACKAGES USED 
+====================================================
+
+ClosedXML (0.105.0)
+DocumentFormat.OpenXml (3.3.0)
+Extended.Wpf.Toolkit (5.0.0)
+LiveChartsCore.SkiaSharpView.WPF (2.0.0-rc6.1)
+MathNet.Numerics (6.0.0-beta2)
+PdfSharpCore (1.3.67)
+ScottPlot.WPF (4.1.67)
+SkiaSharp (3.119.2-preview.1)
+SkiaSharp.Views.WPF (3.119.2-preview.1)
+SkiaSharp.NativeAssets.Win32 (3.119.2-preview.1)
+LoadingSpinner.WPF (1.0.0)
+Microsoft.Data.SqlClient (6.1.1)
+PMcProtocol (2.2.0)
+System.IO.Ports (9.0.8)
+WPF-UI (4.0.3)
+WPF-UI.DependencyInjection (4.0.3)
+
+====================================================
+HOW TO RUN THIS PROJECT ON NEW SYSTEM
+====================================================
+
+STEP 1:
+Install .NET 8 SDK (Windows Desktop)
+
+Verify installation:
+Open Command Prompt
+Type: dotnet --version
+It should show 8.x.x
+
+----------------------------------------------------
+
+STEP 2:
+Install SQL Server Express
+
+Also install:
+SQL Server Management Studio (SSMS)
+
+Create Database:
+MetroGaugeSoft
+
+----------------------------------------------------
+
+STEP 3:
+Update Connection String
+
+Open:
+appsettings.json (or App.config)
+
+Change SQL Server name to local machine instance.
+
+Example:
+Data Source=NEWPC\SQLEXPRESS;
+
+----------------------------------------------------
+
+STEP 4:
+Install Mitsubishi MX Component (64-bit)
+
+Required for:
+ActUtlType64Lib (PLC Communication)
+
+----------------------------------------------------
+
+STEP 5:
+Ensure Required DLL Files Exist
+
+Interop.OrbitCOM.dll
+OrbitLibrary.dll
+
+If missing → Copy from original system.
+
+----------------------------------------------------
+
+STEP 6:
+Restore NuGet Packages
+
+Open solution in Visual Studio.
+
+Right Click Solution → Restore NuGet Packages
+
+OR use command:
+
+dotnet restore
+
+----------------------------------------------------
+
+STEP 7:
+Build Project
+
+dotnet build
+
+OR press CTRL + SHIFT + B in Visual Studio.
+
+----------------------------------------------------
+
+STEP 8:
+Run Project
+
+Press F5
+OR
+
+dotnet run
+
+====================================================
+COMMON ERRORS & SOLUTIONS
+====================================================
+
+ERROR: SQL Connection Failed
+→ Check SQL Server Name
+
+ERROR: COM Component Not Registered
+→ Install Mitsubishi MX Component
+
+ERROR: Missing DLL
+→ Copy Interop.OrbitCOM.dll & OrbitLibrary.dll
+
+ERROR: NuGet Package Missing
+→ Run dotnet restore
+
+====================================================
+END OF DOCUMENT
+====================================================

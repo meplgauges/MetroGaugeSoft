@@ -20,7 +20,6 @@ namespace EVMS
             btnAdd.Click += BtnAdd_Click;
             btnUpdate.Click += BtnUpdate_Click;
             btnDelete.Click += BtnDelete_Click;
-
             cmbPartNo.SelectionChanged += CmbPartNo_SelectionChanged;
 
 

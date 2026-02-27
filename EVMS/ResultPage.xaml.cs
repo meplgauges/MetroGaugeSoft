@@ -610,7 +610,6 @@ namespace EVMS
             //}
         }
 
-        // Helper method to add timeout to PLC connection
 
 
 
