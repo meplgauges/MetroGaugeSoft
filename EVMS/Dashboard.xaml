@@ -3,10 +3,19 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
+             xmlns:scottplot="clr-namespace:ScottPlot;assembly=ScottPlot.WPF"
+             xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
              mc:Ignorable="d" 
              d:DesignHeight="850" d:DesignWidth="1400"
              Background="#F9FCFF">
     <UserControl.Resources>
+
+        <sys:String x:Key="gray">#c3c3c3
+        </sys:String>
+        <sys:String x:Key="gray1">#a0a0a0</sys:String>
+        <sys:String x:Key="gray2">#5a5a5a</sys:String>
+        <sys:String x:Key="gray3">#3c3c3c</sys:String>
         <DropShadowEffect x:Key="CardShadow" Color="#000000" ShadowDepth="2" Opacity="0.08" BlurRadius="6"/>
 
         <Style x:Key="InteractiveLinkTextBlock" TargetType="TextBlock">
@@ -25,45 +34,51 @@
 
         <Style x:Key="DashboardCardStyle" TargetType="Button">
             <Setter Property="Height" Value="120"/>
-            <Setter Property="Width" Value="310"/>
-            <Setter Property="Margin" Value="15"/>
+            <Setter Property="Width" Value="130"/>
+            <Setter Property="Margin" Value="10,10,10,10"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Background" Value="#FFFFFF"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="12" Effect="{StaticResource CardShadow}">
+                        <Border x:Name="CardBorder"
+                        Background="{TemplateBinding Background}" 
+                        CornerRadius="12" 
+                        Effect="{StaticResource CardShadow}">
                             <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
 
-                                <TextBlock Grid.Column="0"
-                                           Text="{TemplateBinding Content}"
-                                           FontSize="17" 
-                                           FontWeight="SemiBold"
-                                           Foreground="#1F2937"
-                                           VerticalAlignment="Center"
-                                           Margin="20,0,10,0"
-                                           TextWrapping="Wrap"/>
+                                <Image Grid.Row="0"
+                               Source="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Tag}"
+                               Height="70" Width="70" 
+                               VerticalAlignment="Center"
+                               Margin="0,10,0,0"
+                               HorizontalAlignment="Center"/>
 
-                                <Image Grid.Column="1"
-                                       Source="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Tag}"
-                                       Height="70" Width="70" 
-                                       VerticalAlignment="Center"
-                                       Margin="0,0,20,0"/>
+                                <TextBlock Grid.Row="1"
+                                   Text="{TemplateBinding Content}"
+                                   FontSize="13" 
+                                   FontWeight="SemiBold"
+                                   Foreground="#1F2937"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   Margin="5,0"/>
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#F9FAFB"/>
+                                <Setter TargetName="CardBorder" Property="Background" Value="#F9FAFB"/>
                                 <Setter Property="RenderTransform">
                                     <Setter.Value>
                                         <ScaleTransform ScaleX="1.02" ScaleY="1.02"/>
                                     </Setter.Value>
                                 </Setter>
+                                <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="False">
                                 <Setter Property="RenderTransform">
@@ -77,6 +92,7 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
     </UserControl.Resources>
 
     <Grid Margin="0">
@@ -87,14 +103,14 @@
 
         <Border Grid.Row="0"
                Background="{StaticResource PageBackgroundBrush}" 
-                Padding="30" Margin="20,20,20,0"
+                Padding="10" Margin="20,20,20,0"
                 CornerRadius="18"
                 Effect="{StaticResource CardShadow}">
 
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="1*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
@@ -102,107 +118,370 @@
                        Source="/Resource/generated-image.png"
                        Stretch="Uniform"
                        Height="80"
-                       Margin="0,0,30,0"
+                       Margin="0,0,20,0"
                        VerticalAlignment="Center"/>
 
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,30,0">
                     <TextBlock Text="Metrology Equipment Pvt. Ltd."
                                FontSize="28"
+                               FontFamily="Times New Roman"
                                FontWeight="Bold"
-                               Foreground="#102542"
+                               Foreground="Black"
                                Margin="0,0,0,4"/>
 
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="📍 Corporate Headquarters: "
                                    FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Foreground="#374151"/>
-                        <TextBlock Text="# 55/18, Bellahalli Village, Bangalore - 560 064"
-                                   Foreground="#6B7280"
+                                   FontWeight="Bold"
+                                   Foreground="LightCyan"/>
+                        <TextBlock Text="# 55/18, Bellahalli Village, Bangalore - 560064"
+                                   Foreground="AliceBlue"
                                    FontSize="14"/>
                     </StackPanel>
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
                     <TextBlock Text="✉️ info@meplgauges.com"
-                               Style="{StaticResource InteractiveLinkTextBlock}"
-                               HorizontalAlignment="Right"/>
+                               HorizontalAlignment="Right"
+                               Foreground="Black" FontWeight="ExtraBlack" FontSize="15" FontFamily="Times New Roman"/>
                     <TextBlock Text="🌐 Meplgauges.com"
-                               Style="{StaticResource InteractiveLinkTextBlock}"
                                Margin="0,6,0,0"
+                               Foreground="Black" FontWeight="ExtraBlack" FontSize="15" FontFamily="Times New Roman"
                                HorizontalAlignment="Right"/>
                 </StackPanel>
             </Grid>
         </Border>
         <Grid Grid.Row="1" Margin="20,20,20,20">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.2*"/>
+                <ColumnDefinition Width="3*"/>
+            </Grid.ColumnDefinitions>
 
-            <Border Grid.Row="0" Grid.RowSpan="2"
-               Background="{StaticResource PageBackgroundBrush}" 
-                    CornerRadius="12"
-                    Effect="{StaticResource CardShadow}"
-                    Padding="30">
-
+            <!-- Left Panel: Buttons -->
+            <!-- FIXED Left Panel: Replace your current left Border content with this -->
+            <Border Grid.Column="0" 
+                        Background="{StaticResource PageBackgroundBrush}" 
+                        CornerRadius="12"
+                        Effect="{StaticResource CardShadow}"
+                        Padding="30"
+                        Margin="0,0,20,0"
+                        MinWidth="280">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0"
-                               Text="Dashboard"
-                               FontSize="28"
-                               FontWeight="SemiBold"
-                               Foreground="#1F2937"
-                               HorizontalAlignment="Left"
-                               Margin="0,0,0,25"/>
 
-                    <UniformGrid Grid.Row="1" Rows="4" Columns="4" 
-                                 HorizontalAlignment="Center"
-                                 VerticalAlignment="Top" 
-                                 Width="1500">
+                    <ScrollViewer Grid.Row="1" 
+                                  VerticalScrollBarVisibility="Hidden" 
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  HorizontalAlignment="Center"
+                                  Focusable="True">
+                        <UniformGrid Rows="7" Columns="3" 
+                                     HorizontalAlignment="Left"
+                                     VerticalAlignment="Top">
 
-                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/measument.png" Content="Measurement"
-                                Click="DashboardCard_Click" Background="#EAF5FF"/>
-                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/report.png" Content="Report View"
-                                Click="DashboardCard_Click" Background="#F0FFEE"/>
-                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/graph.png" Content="Report Graph"
-                                Click="DashboardCard_Click" Background="#FFF0F5"/>
-                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/report.png" Content="RnR Report"
-                                Click="DashboardCard_Click" Background="#FFFFFF"/>
-                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/Part Manager.png" Content="Part Manager"
-                                Click="DashboardCard_Click" Background="#FFFBEA"/>
+                            <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/measument.png" Content="Measurement" Click="DashboardCard_Click" Background="#EAF5FF"/>
+                            <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/report.png" Content="Report View" Click="DashboardCard_Click" Background="#F0FFEE"/>
 
-                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/Part Manager.png" Content="Part Config"
-                                Click="DashboardCard_Click" Background="#F7EFFB"/>
-                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/Part Manager.png" Content="Master Reading"
-                                Click="DashboardCard_Click" Background="#F5F5FC"/>
-                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/re.png" Content="Repeatability"
-                                Click="DashboardCard_Click" Background="#FDF4F8"/>
-                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/cal.png" Content="Calculation"
-                                Click="DashboardCard_Click" Background="#EFFBF6"/>
+                            <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/graph.png" Content="Report Graph" Click="DashboardCard_Click" Background="#FFF0F5"/>
+                            <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/report.png" Content="RnR Report" Click="DashboardCard_Click" Background="#FFFFFF"/>
 
-                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/probe set.png" Content="Probe Setup"
-                                Click="DashboardCard_Click" Background="#FCFBF2"/>
-                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/controle.png" Content="IO Control"
-                                Click="DashboardCard_Click" Background="#F5F9F6"/>
-                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/admin.png" Content="Login/Setup"
-                                Click="DashboardCard_Click" Background="#FCEFEF"/>
-                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/sett.png" Content="Settings"
-                                Click="DashboardCard_Click" Background="#E8F4FF"/>
+                            <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/Part Manager.png" Content="Part Manager" Click="DashboardCard_Click" Background="#FFFBEA"/>
+                            <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/Part Manager.png" Content="Part Config" Click="DashboardCard_Click" Background="#F7EFFB"/>
 
-                        <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/inst.png" Content="Probes"
-                                Click="DashboardCard_Click" Background="#FFFFFF"/>
+                            <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/Part Manager.png" Content="Master Reading" Click="DashboardCard_Click" Background="#F5F5FC"/>
+                            <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/re.png" Content="Repeatability" Click="DashboardCard_Click" Background="#FDF4F8"/>
+
+                            <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/cal.png" Content="Calculation" Click="DashboardCard_Click" Background="#EFFBF6"/>
+                            <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/probe set.png" Content="Probe Setup" Click="DashboardCard_Click" Background="#FCFBF2"/>
+
+                            <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/controle.png" Content="IO Control" Click="DashboardCard_Click" Background="#F5F9F6"/>
+                            <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/admin.png" Content="Login/Setup" Click="DashboardCard_Click" Background="#FCEFEF"/>
+
+                            <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/sett.png" Content="Settings" Click="DashboardCard_Click" Background="#E8F4FF"/>
+                            <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/inst.png" Content="Probes" Click="DashboardCard_Click" Background="#FFFFFF"/>
+                            <Button Style="{StaticResource DashboardCardStyle}" Tag="pack://application:,,,/icon/inst.png" Content="Maintenance" Click="DashboardCard_Click" Background="#FFFFFF"/>
+
+                        </UniformGrid>
+
+                    </ScrollViewer>
+                </Grid>
+            </Border>
 
 
+
+            <Border Grid.Column="1"
+                    Background="{StaticResource PageBackgroundBrush}" 
+                    CornerRadius="12"
+                    Effect="{StaticResource CardShadow}"
+                    Padding="40">
+
+                <!-- 🔽 REPLACE CONTENT BELOW 🔽 -->
+
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+
+                    </Grid.RowDefinitions>
+
+                    <!-- ===== Top Stats Cards ===== -->
+                    <UniformGrid Rows="1" Columns="3" Margin="-10,0,0,20">
+                        <Border CornerRadius="12" Background="#FFFFFF" Margin="8" Padding="20" Effect="{StaticResource CardShadow}">
+                            <StackPanel>
+                                <TextBlock Text="Total Measured Parts" FontSize="14" Foreground="#6B7280" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding TotalProduction}" FontSize="26" FontWeight="Bold" Foreground="#3B82F6" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border CornerRadius="12" Background="#FFFFFF" Margin="8" Padding="20" Effect="{StaticResource CardShadow}">
+                            <StackPanel>
+                                <TextBlock Text="OK PARTS" FontSize="14" Foreground="#6B7280" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding OKParts}" FontSize="26" FontWeight="Bold"  Foreground="#10B981" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border CornerRadius="12" Background="#FFFFFF" Margin="8" Padding="20" Effect="{StaticResource CardShadow}">
+                            <StackPanel>
+                                <TextBlock Text="NG PARTS" FontSize="14" Foreground="#6B7280" HorizontalAlignment="Center"/>
+                                <!-- FIXED -->
+                                <TextBlock Text="{Binding NGParts}" FontSize="26" FontWeight="Bold" Foreground="#EF4444" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
 
 
                     </UniformGrid>
+
+                    <!-- ===== Charts Section ===== -->
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2.3*" />
+                            <ColumnDefinition Width="1.2*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- ===== OK / NG Trend ===== -->
+                        <Border Grid.Column="0"
+                                VerticalAlignment="Top"
+                                Height="440"
+                                Background="#FFFFFF"
+                                CornerRadius="12"
+                                Margin="0,0,10,0"
+                                Padding="20"
+                                Effect="{StaticResource CardShadow}">
+
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- Title -->
+                                <TextBlock Text="OK / NG Trend"
+                                           FontSize="16"
+                                           FontWeight="Bold"
+                                           HorizontalAlignment="Center"
+                                           Foreground="#111827"
+                                           Margin="0,0,0,0"/>
+
+                                <!-- Period Selection -->
+                                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
+                                    <TextBlock Text="Period : "
+                                               VerticalAlignment="Center"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,10,0"/>
+
+                                    <ComboBox Width="120"
+                                              SelectedIndex="0"
+                                              SelectionChanged="PeriodCombo_SelectionChanged">
+                                        <ComboBoxItem Content="Day"/>
+                                        <ComboBoxItem Content="Month"/>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <!-- Chart + Axis Titles -->
+                                <Grid Grid.Row="2">
+
+                                    <!-- X Axis Title -->
+                                    <TextBlock Text="Time Period"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Bottom"
+                                               Margin="0,0,0,-15"
+                                               FontSize="14"
+                                               FontWeight="SemiBold"
+                                               Foreground="#374151"/>
+
+                                    <!-- Y Axis Title -->
+                                    <TextBlock Text="Part Count"
+                                               HorizontalAlignment="Left"
+                                               VerticalAlignment="Center"
+                                               Margin="-15,0,0,0"
+                                               FontSize="14"
+                                               FontWeight="SemiBold"
+                                               Foreground="#374151">
+                                        <TextBlock.RenderTransform>
+                                            <RotateTransform Angle="-90"/>
+                                        </TextBlock.RenderTransform>
+                                    </TextBlock>
+
+                                    <!-- Real Chart -->
+                                    <lvc:CartesianChart>
+
+                                        <lvc:CartesianChart.Series>
+                                            <lvc:SeriesCollection>
+                                                <lvc:XamlLineSeries Values="{Binding OkValues}" Name="OK"/>
+                                                <lvc:XamlLineSeries Values="{Binding NgValues}" Name="NG"/>
+                                            </lvc:SeriesCollection>
+                                        </lvc:CartesianChart.Series>
+
+                                        <lvc:CartesianChart.XAxes>
+                                            <lvc:AxesCollection>
+                                                <lvc:XamlAxis Labels="{Binding PeriodLabels}" />
+                                            </lvc:AxesCollection>
+                                        </lvc:CartesianChart.XAxes>
+
+                                        <lvc:CartesianChart.YAxes>
+                                            <lvc:AxesCollection>
+                                                <lvc:XamlAxis />
+                                            </lvc:AxesCollection>
+                                        </lvc:CartesianChart.YAxes>
+
+                                    </lvc:CartesianChart>
+
+                                </Grid>
+                            </Grid>
+                        </Border>
+
+
+
+                        <!-- ===== Gauge ===== -->
+                        <Border Grid.Column="1"
+                                VerticalAlignment="Top"
+                                Height="440"
+                                Background="#FFFFFF"
+                                CornerRadius="12"
+                                Padding="15"
+                                Effect="{StaticResource CardShadow}">
+
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- Title -->
+                                <TextBlock Text="Measured Ratio"
+                                           FontSize="16"
+                                           FontWeight="Bold"
+                                           Foreground="#111827"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,5,0,10"/>
+
+                                <!-- Gauge Area -->
+                                <Grid Grid.Row="1">
+
+                                    <!-- Gauge -->
+                                    <lvc:PieChart
+                                        InitialRotation="45"
+                                        MaxAngle="270"
+                                        MinValue="0"
+                                        MaxValue="100">
+
+                                        <lvc:PieChart.Series>
+                                            <lvc:SeriesCollection>
+
+                                                <lvc:XamlGaugeSeries
+                                                    GaugeValue="{Binding Ana}"
+                                                    SeriesName="NG"
+                                                    Fill="#F44336"
+                                                    Stroke="#F44336"
+                                                    DataLabelsFormatter="{Binding LabelFormatter1}"
+                                                    DataLabelsPosition="Start"
+                                                    InnerRadius="20"
+                                                    RelativeOuterRadius="8"
+                                                    RelativeInnerRadius="8"/>
+
+                                                <lvc:XamlGaugeSeries
+                                                    GaugeValue="{Binding Charles}"
+                                                    SeriesName="OK"
+                                                    Fill="#2196F3"
+                                                    Stroke="#2196F3"
+                                                    DataLabelsFormatter="{Binding LabelFormatter1}"
+                                                    DataLabelsPosition="Start"
+                                                    InnerRadius="20"
+                                                    RelativeOuterRadius="8"
+                                                    RelativeInnerRadius="8"/>
+
+                                                <lvc:XamlGaugeBackgroundSeries InnerRadius="20"/>
+
+                                            </lvc:SeriesCollection>
+                                        </lvc:PieChart.Series>
+                                    </lvc:PieChart>
+
+                                </Grid>
+
+                                <!-- Legend -->
+                                <StackPanel Grid.Row="2"
+                                            Orientation="Horizontal"
+                                            HorizontalAlignment="Center"
+                                            Margin="0,10,0,0">
+
+                                    <StackPanel Orientation="Horizontal" Margin="10,0">
+                                        <Ellipse Width="12" Height="12" Fill="#2196F3" Margin="0,0,6,0"/>
+                                        <TextBlock Text="OK" FontWeight="SemiBold"/>
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Margin="10,0">
+                                        <Ellipse Width="12" Height="12" Fill="#F44336" Margin="0,0,6,0"/>
+                                        <TextBlock Text="NG" FontWeight="SemiBold"/>
+                                    </StackPanel>
+
+                                </StackPanel>
+
+                            </Grid>
+                        </Border>
+
+                    </Grid>
+
+
+
+                    <!-- ===== Top Stats Cards ===== 
+                    <UniformGrid Grid.Row="2" Columns="3" Margin="-10,0,-10,60">
+                        <Border CornerRadius="12" Background="#FFFFFF" Margin="8" Padding="20" Effect="{StaticResource CardShadow}">
+                            <StackPanel>
+                                <TextBlock Text="Probe Cycle" FontSize="14" Foreground="#6B7280"/>
+                                <TextBlock Text="00" FontSize="26" FontWeight="Bold" Foreground="#10B981"/>
+                            </StackPanel>
+                        </Border>
+
+
+                        <Border CornerRadius="12" Background="#FFFFFF" Margin="8" Padding="20" Effect="{StaticResource CardShadow}">
+                            <StackPanel>
+                                <TextBlock Text="OK PART" FontSize="14" Foreground="#6B7280"/>
+                                <TextBlock Text="321" FontSize="26" FontWeight="Bold" Foreground="#3B82F6"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border CornerRadius="12" Background="#FFFFFF" Margin="8" Padding="20" Effect="{StaticResource CardShadow}" Height="200">
+                            <StackPanel>
+                                <TextBlock Text="NG PARTS" FontSize="14" Foreground="#6B7280" />
+                                <TextBlock Text="254" FontSize="26" FontWeight="Bold" Foreground="#EF4444"/>
+                            </StackPanel>
+                        </Border>
+                        
+                    </UniformGrid>-->
+
                 </Grid>
+
+
+
             </Border>
+
         </Grid>
+
     </Grid>
 </UserControl>

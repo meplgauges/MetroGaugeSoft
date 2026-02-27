@@ -1,5 +1,6 @@
 ﻿using ClosedXML.Excel;
 using EVMS.Service;
+using MathNet.Numerics.Distributions;
 using Microsoft.Data.SqlClient;
 using PdfSharpCore.Drawing;
 using PdfSharpCore.Pdf;
@@ -14,6 +15,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using static EVMS.Login_Page;
+using static SkiaSharp.HarfBuzz.SKShaper;
 
 namespace EVMS
 {
@@ -31,11 +33,13 @@ namespace EVMS
 
         public ObservableCollection<string> NgOkCountOptions { get; set; } = new ObservableCollection<string> { "No", "Yes" };
 
+        public ObservableCollection<string> MinMaxOptions { get; set; } = new ObservableCollection<string> { "MAX", "MIN" };
+
         public ObservableCollection<string> ReportTypeOptions { get; set; } = new ObservableCollection<string> { "All", "NG", "OK" };
 
         public ObservableCollection<NgOkSummaryItem> NgOkSummaryItems { get; set; } = new ObservableCollection<NgOkSummaryItem>();
 
-        
+
         private string _selectedPartNo;
         public string SelectedPartNo
         {
@@ -79,7 +83,7 @@ namespace EVMS
             set { _selectedOperator = value; OnPropertyChanged(nameof(SelectedOperator)); }
         }
 
-        private DateTime? _selectedDateTimeFrom = DateTime.Now.AddDays(-7);
+        private DateTime? _selectedDateTimeFrom = DateTime.Now;
         public DateTime? SelectedDateTimeFrom
         {
             get => _selectedDateTimeFrom;
@@ -108,6 +112,21 @@ namespace EVMS
             }
         }
 
+
+
+        private string _showMinMax = "MAX";
+        public string ShowMinMax
+        {
+            get => _showMinMax;
+            set
+            {
+                if (_showMinMax != value)
+                {
+                    _showMinMax = value;
+                    OnPropertyChanged(nameof(ShowMinMax));
+                }
+            }
+        }
 
         private string selectedReportType = "All";
         public string SelectedReportType
@@ -204,7 +223,7 @@ namespace EVMS
         {
             var parts = _dataService?.GetActiveParts();
             ActiveParts.Clear();
-            ActiveParts.Add("All");
+            ActiveParts.Add("Select Part");
 
             foreach (var part in parts)
             {
@@ -223,11 +242,10 @@ namespace EVMS
             if (string.IsNullOrEmpty(SelectedPartNo)) return;
 
             var exampleParams = _dataService
-                .GetPartConfig(SelectedPartNo)
-                .Select(p => p.Parameter)
-                .Distinct()
-                .Where(p => !string.IsNullOrWhiteSpace(p))
-                .ToList();
+                     .GetPartConfigParameterNames(SelectedPartNo)
+                     .Distinct()   // keeps DB order
+                     .ToList();
+
 
             foreach (var p in exampleParams)
                 ParametersOptions.Add(p);
@@ -311,17 +329,43 @@ namespace EVMS
             string? lotFilter = SelectedLotNo == "All" ? null : SelectedLotNo;
             string? operatorFilter = SelectedOperator == "All" ? null : SelectedOperator;
 
-            var results = await _dataService.GetMeasurementReadingsAsync(
+            List<MeasurementReading>? results = null;
+
+
+            if (_showMinMax == "MAX")
+            {
+                results = await _dataService.GetMeasurementReadingsAsync(
+                        partFilter ?? string.Empty,
+                        lotFilter ?? string.Empty,
+                        operatorFilter ?? string.Empty,
+                        _selectedDateTimeFrom,
+                        _selectedDateTimeTo);
+            }
+            else if (_showMinMax == "MIN")
+            {
+                results = await _dataService.GetMeasurementMinReadingsAsync(
                         partFilter ?? string.Empty,
                         lotFilter ?? string.Empty,
                         operatorFilter ?? string.Empty,
                         _selectedDateTimeFrom,
                         _selectedDateTimeTo);
 
+            }
+
+            // Safety check
+            if (results == null || !results.Any())
+            {
+                MessageBox.Show("No data found for the selected filters.");
+                return;
+            }
+
+            // 🔹 2. Apply OK / NG filter
+            List<MeasurementReading> filteredResults = results;
+
+
 
             if (results != null && results.Any())
             {
-                List<MeasurementReading> filteredResults = results.ToList();
 
                 if (SelectedReportType == "NG")
                 {
@@ -339,7 +383,10 @@ namespace EVMS
                 }
 
                 var partConfigs = _dataService.GetPartConfig(partFilter ?? filteredResults.First().PartNo);
-                var allParameters = partConfigs.Select(c => c.Parameter).Distinct().ToList();
+                var allParameters = _dataService
+                                    .GetPartConfigParameterNames(partFilter)
+                                    .Distinct()
+                                    .ToList();
 
                 List<string> finalParams = SelectedParameter == "All"
                     ? allParameters
@@ -390,11 +437,11 @@ namespace EVMS
                                 isAnyParamOutOfRange = true;
                         }
 
-                        item.Parameters[param] = Math.Round(measuredValue, 4);  
+                        item.Parameters[param] = Math.Round(measuredValue, 4);
                     }
 
                     item.Status = isAnyParamOutOfRange ? "NG" : "OK";
-
+                    //  item.StatusColor = isAnyParamOutOfRange ? Brushes.Green : Brushes.Black;
                     ReportTableItems.Add(item);
                 }
             }
@@ -498,6 +545,10 @@ namespace EVMS
             var centerStyle = new Style(typeof(TextBlock));
             centerStyle.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center));
             centerStyle.Setters.Add(new Setter(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center));
+            centerStyle.Setters.Add(new Setter(TextBlock.FontWeightProperty, FontWeights.DemiBold));
+            centerStyle.Setters.Add(new Setter(TextBlock.FontFamilyProperty, new FontFamily("Consolas")));
+            centerStyle.Setters.Add(new Setter(TextBlock.FontSizeProperty, 15.0));
+
 
             // Keep fixed columns and remove existing parameter columns
             while (ReportDataGrid.Columns.Count > 5)
@@ -520,13 +571,39 @@ namespace EVMS
             }
 
             // Add Status column always at the end
-            ReportDataGrid.Columns.Add(new DataGridTextColumn
+            // Add Status column always at the end
+            var statusColumn = new DataGridTextColumn
             {
                 Header = "Status",
                 Binding = new Binding("Status"),
                 Width = 65,
-                ElementStyle = centerStyle
-            });
+                ElementStyle = new Style(typeof(TextBlock))
+                {
+                    Setters =
+        {
+            new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center),
+            new Setter(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center),
+            new Setter(TextBlock.ForegroundProperty, Brushes.Black) // default
+        },
+                    Triggers =
+        {
+            new DataTrigger
+            {
+                Binding = new Binding("Status"),
+                Value = "NG",
+                Setters = { new Setter(TextBlock.ForegroundProperty, Brushes.Red) }
+            },
+            new DataTrigger
+            {
+                Binding = new Binding("Status"),
+                Value = "OK",
+                Setters = { new Setter(TextBlock.ForegroundProperty, Brushes.Green) }
+            }
+        }
+                }
+            };
+
+            ReportDataGrid.Columns.Add(statusColumn);
         }
 
 
@@ -733,6 +810,12 @@ namespace EVMS
                     ws.Cell("E6").Style.Font.SetBold();
                     ws.Cell("G6").Value = ReportTableItems.FirstOrDefault()?.LotNo ?? "N/A";
 
+
+                    // Lot No
+                    ws.Cell("K6").Value = "Min/Max:";
+                    ws.Cell("K6").Style.Font.SetBold();
+                    ws.Cell("N6").Value = _showMinMax;
+
                     // Operator
                     ws.Cell("A7").Value = "Operator:";
                     ws.Cell("A7").Style.Font.SetBold();
@@ -928,14 +1011,29 @@ namespace EVMS
                         }
 
                         // Status column
+                        // Status column - COLOR CODING BASED ON STATUS VALUE
                         var statusCell = ws.Cell(row, col++);
                         statusCell.Value = item.Status;
                         statusCell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
                         statusCell.Style.Font.SetBold();
-                        if (item.Status == "PASS")
-                            statusCell.Style.Font.SetFontColor(XLColor.FromHtml("#2F7C31"));
-                        else
-                            statusCell.Style.Font.SetFontColor(XLColor.FromHtml("#C5504F"));
+
+                        // Green for OK, Red for NG or other statuses
+                        if (!string.IsNullOrWhiteSpace(item.Status))
+                        {
+                            if (item.Status.Equals("OK", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // Green background and text for OK
+                                statusCell.Style.Font.SetFontColor(XLColor.FromHtml("#2F7C31"));
+                                statusCell.Style.Fill.BackgroundColor = XLColor.FromHtml("#E8F5E9");
+                            }
+                            else
+                            {
+                                // Red background and text for NG or any other status
+                                statusCell.Style.Font.SetFontColor(XLColor.FromHtml("#C5504F"));
+                                statusCell.Style.Fill.BackgroundColor = XLColor.FromHtml("#FEE8E6");
+                            }
+                        }
+
 
                         // Alternating row colors
                         if (row % 2 == 0)
@@ -1325,15 +1423,37 @@ namespace EVMS
                         x += w;
                     }
 
-                    // Status column
+                    // Status column - COLOR CODING BASED ON STATUS VALUE
                     if (!isSingleParameter)
                     {
                         double w = colWidths["Status"];
                         var rect = new XRect(x, y, w, rowHeight);
-                        gfx.DrawRectangle(XPens.Black, bg, rect);
-                        DrawCentered(gfx, item.Status, bodyFont, XBrushes.Black, rect);
+
+                        // Determine status color
+                        XBrush statusBackBrush = bg;
+                        XBrush statusTextBrush = XBrushes.Black;
+
+                        if (!string.IsNullOrWhiteSpace(item.Status))
+                        {
+                            if (item.Status.Equals("OK", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // Green for OK
+                                statusBackBrush = XBrushes.White;
+                                statusTextBrush = XBrushes.Black;
+                            }
+                            else
+                            {
+                                // Red for NG (or any non-OK status)
+                                statusBackBrush = XBrushes.MistyRose;
+                                statusTextBrush = XBrushes.Red;
+                            }
+                        }
+
+                        gfx.DrawRectangle(XPens.Black, statusBackBrush, rect);
+                        DrawCentered(gfx, item.Status, bodyFont, statusTextBrush, rect);
                         x += w;
                     }
+
 
                     y += rowHeight;
                     rowIndex++;

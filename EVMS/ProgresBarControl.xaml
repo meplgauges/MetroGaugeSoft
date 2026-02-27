@@ -59,7 +59,7 @@
     <Viewbox Stretch="Uniform">
         <Border CornerRadius="20"
         BorderThickness="1.2"
-        Padding="15"
+        Padding="5"
         Width="130"
         SnapsToDevicePixels="True"
         Effect="{StaticResource DropShadow}">
@@ -75,15 +75,36 @@
                     <GradientStop Color="#BAFBFD" Offset="1"/>
                 </LinearGradientBrush>
             </Border.Background>
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+            <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Center">
+
+                <TextBlock x:Name="BarValue"
+     Text="{Binding Value, ElementName=root, StringFormat={}{0:F3}}"
+     HorizontalAlignment="Center"
+     FontSize="14"
+     FontWeight="Bold"
+     Margin="0,0,0,0"
+     Foreground="Black" />
+                
+               
+
+
+
+                <!-- Below Mean fill -->
+
+
+
+                <!-- Slightly darker green text -->
+                <TextBlock Foreground="Black"
+             FontSize="8"
+             Text="MAX" Width="20"/>
                 <Grid>
+                    
                     <!-- Background track -->
-                    <Border Width="15" Height="160" CornerRadius="6"
+                    <Border Width="15" Height="170" CornerRadius="6"
                             Background="{StaticResource TrackGradient}"
                             BorderThickness="0"
                             Effect="{StaticResource InnerShadow}" />
-
-                    <!-- Below Mean fill -->
+                   
                     <Rectangle x:Name="BelowFill"
                                Width="17"
                                Height="0"
@@ -107,46 +128,53 @@
                             Height="150"
                             HorizontalAlignment="Left"
                             VerticalAlignment="Top">
-                        <Line X1="0" X2="40" Y1="150" Y2="150"
+                        <Line X1="20" X2="50" Y1="170" Y2="170"
                               Stroke="Black"
                               StrokeThickness="1"
                               StrokeDashArray="3,2"/>
                         <TextBlock Foreground="Black"
                                    FontSize="15"
-                                   Canvas.Right="95"
-                                   Canvas.Top="130"
+                                   Canvas.Right="85"
+                                   Canvas.Top="150"
                                    Text="{Binding Min, ElementName=root, StringFormat={}{0:F3}}"/>
 
-                        <Line X1="0" X2="40" Y1="75" Y2="75"
+                        <Line X1="20" X2="50" Y1="85" Y2="85"
                               Stroke="Black"
                               StrokeThickness="1"
                               StrokeDashArray="3,2"/>
                         <TextBlock Foreground="Black"
                                    FontSize="15"
-                                   Canvas.Right="95"
-                                   Canvas.Top="74"
+                                   Canvas.Right="85"
+                                   Canvas.Top="84"
                                    Text="{Binding Mean, ElementName=root, StringFormat={}{0:F3}}"/>
 
-                        <Line X1="0" X2="40" Y1="0" Y2="0"
+                        <Line X1="20" X2="50" Y1="0" Y2="0"
                               Stroke="Black"
                               StrokeThickness="1"
                               StrokeDashArray="3,2"/>
                         <TextBlock Foreground="Black"
                                    FontSize="15"
                                    Canvas.Top="0"
-                                   Canvas.Right="95"
+                                   Canvas.Right="85"
                                    Text="{Binding Max, ElementName=root, StringFormat={}{0:F3}}"/>
                     </Canvas>
                 </Grid>
+                <TextBlock x:Name="MinLabel"
+                            Foreground="Black"
+                            FontSize="8"
+                            Text="MIN"
+                            Width="20"/>
 
-                <TextBlock x:Name="BarValue"
-                           Text="{Binding Value, ElementName=root, StringFormat={}{0:F3}}"
-                           HorizontalAlignment="Center"
-                           FontSize="23"
-                           FontWeight="Bold"
-                           Margin="0,10,0,0"
-                           Foreground="Black" />
-                <!-- Slightly darker green text -->
+                <TextBlock x:Name="MinValue"
+                Text="{Binding MValue, ElementName=root, StringFormat={}{0:F3}}"
+                HorizontalAlignment="Center"
+                FontSize="14"
+                FontWeight="Bold"
+                Margin="0,0,0,0"
+                Foreground="Black" />       
+
+
+
 
                 <!-- Title display -->
                 <TextBlock x:Name="TitleBox"
@@ -159,6 +187,7 @@
                            HorizontalAlignment="Center"   
                            FontWeight="Bold"                 
                            TextAlignment="Center"/>
+                
                 <!-- ✅ Text itself centered -->
 
             </StackPanel>

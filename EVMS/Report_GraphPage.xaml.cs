@@ -3,6 +3,8 @@ using PdfSharpCore.Drawing;
 using PdfSharpCore.Pdf;
 using ScottPlot;
 using System.Collections.ObjectModel;
+using System.Configuration;
+
 using System.ComponentModel;
 using System.Drawing;
 using System.IO;
@@ -14,6 +16,7 @@ namespace EVMS
     public partial class Report_GraphPage : UserControl, INotifyPropertyChanged
     {
         private readonly DataStorageService _dataService;
+        private readonly string connectionString;
 
         // Observable collections bound to UI
         public ObservableCollection<string> ActiveParts { get; set; } = new();
@@ -69,9 +72,13 @@ namespace EVMS
             InitializeComponent();
 
             _dataService = new DataStorageService();
+            connectionString = ConfigurationManager.ConnectionStrings["EVMSDb"].ConnectionString;
 
-            LoadDesignOptions();
+
+
+
             LoadActiveParts();
+            LoadDesignOptions();
 
             Loaded += Report_GraphPage_Loaded;
 
@@ -82,6 +89,10 @@ namespace EVMS
             this.Focusable = true;
             this.Focus();
         }
+
+
+
+
 
         #region Properties (bindings)
         public string SelectedPartNo
@@ -187,7 +198,7 @@ namespace EVMS
             DesignOptions.Clear();
 
             // Existing
-            DesignOptions.Add("Line Chart");
+           // DesignOptions.Add("Line Chart");
             DesignOptions.Add("Histogram");
 
             // NEW GRAPH TYPES
@@ -295,7 +306,7 @@ namespace EVMS
         {
             if (string.IsNullOrEmpty(SelectedPartNo)) return;
             await LoadLotNumbersAsync(SelectedPartNo);
-            LoadParameters(SelectedPartNo);
+            await LoadParameters(SelectedPartNo);
             await LoadOperatorsAsync(SelectedPartNo);
         }
 
@@ -362,7 +373,7 @@ namespace EVMS
             catch { return Enumerable.Empty<string>(); }
         }
 
-        private void LoadParameters(string part)
+        private async Task LoadParameters(string part)
         {
             try
             {

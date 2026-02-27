@@ -234,6 +234,7 @@ namespace EVMS
                 Application.Current.Dispatcher.Invoke(() => StatusText.Text = $"❌ Error: {ex.Message}");
             }
             finally
+
             {
                 StopSerial(); // stop serial only when test completed
             }

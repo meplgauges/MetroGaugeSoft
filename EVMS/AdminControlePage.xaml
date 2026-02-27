@@ -241,7 +241,7 @@ LoadingRow="dataGrid_LoadingRow"-->
                     <DataGridTextColumn Header="User ID" Binding="{Binding UserID}" Width="*"
                             ElementStyle="{StaticResource CenterCellStyle}"
                             EditingElementStyle="{StaticResource CenterCellStyle}" />
-                    <DataGridTextColumn Header="Name" Binding="{Binding UserName}" Width="*"
+                    <DataGridTextColumn Header="User Name" Binding="{Binding UserName}" Width="*"
                             ElementStyle="{StaticResource CenterCellStyle}"
                             EditingElementStyle="{StaticResource CenterCellStyle}" />
                     <DataGridTextColumn Header="Password" Binding="{Binding Password}" Width="*"

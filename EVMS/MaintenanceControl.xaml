@@ -1,0 +1,102 @@
+﻿<UserControl x:Class="MetroGaugeSoft.MaintenanceControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#F3F4F6">
+
+    <Grid Margin="25">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <TextBlock Text="Maintenance Management"
+                   FontSize="24"
+                   FontWeight="Bold"
+                   Margin="0,0,0,15"/>
+
+        <!-- FORM SECTION -->
+        <Border Grid.Row="1"
+                Background="White"
+                Padding="20"
+                CornerRadius="10"
+                Margin="0,0,0,15">
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition Width="1*"/>
+                    <ColumnDefinition Width="2*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Part Name -->
+                <StackPanel>
+                    <TextBlock Text="Part Name"/>
+                    <TextBox x:Name="txtPartName" Height="30"/>
+                </StackPanel>
+
+                <!-- Last Changed -->
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="Last Changed Date"/>
+                    <DatePicker x:Name="dpLastChanged"/>
+                </StackPanel>
+
+                <!-- Months -->
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="Months"/>
+                    <TextBox x:Name="txtMonths" Height="30"/>
+                </StackPanel>
+
+                <!-- Buttons -->
+                <StackPanel Grid.Column="3"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Bottom"
+                            HorizontalAlignment="Right">
+
+                    <Button Content="Add"
+                            Width="80"
+                            Margin="5"
+                           />
+
+                    <Button Content="Update"
+                            Width="80"
+                            Margin="5"
+                          />
+
+                    <Button Content="Clear"
+                            Width="80"
+                            Margin="5"
+                           />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- DATAGRID -->
+        <DataGrid x:Name="MaintenanceGrid"
+                  Grid.Row="2"
+                  AutoGenerateColumns="False"
+                  SelectionMode="Single"
+                  >
+
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="60"/>
+                <DataGridTextColumn Header="Part Name" Binding="{Binding PartName}" Width="*"/>
+                <DataGridTextColumn Header="Last Changed" Binding="{Binding LastChangedDate}" Width="180"/>
+                <DataGridTextColumn Header="Months" Binding="{Binding PeriodMonths}" Width="100"/>
+                <DataGridTextColumn Header="Next Due" Binding="{Binding NextDueDate}" Width="180"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- DELETE BUTTON -->
+        <Button Grid.Row="2"
+                Content="Delete Selected"
+                Width="150"
+                Height="35"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Margin="0,10"
+             />
+    </Grid>
+</UserControl>

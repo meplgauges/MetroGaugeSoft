@@ -15,7 +15,7 @@
     </UserControl.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="1.5*"/>
+            <ColumnDefinition Width="1.2*"/>
             <ColumnDefinition Width="5*"/>
         </Grid.ColumnDefinitions>
         <!-- LEFT PANEL -->
@@ -65,11 +65,6 @@
                     <TextBlock Text="R_Tol(-):" Style="{StaticResource FormLabelStyle}"/>
                     <TextBox x:Name="txtRTolMinus" Style="{StaticResource ModernFilledTextBox}"/>
 
-                    <TextBlock Text="Y_Tol(+):" Style="{StaticResource FormLabelStyle}"/>
-                    <TextBox x:Name="txtYTolPlus" Style="{StaticResource ModernFilledTextBox}"/>
-
-                    <TextBlock Text="Y_Tol(-):" Style="{StaticResource FormLabelStyle}"/>
-                    <TextBox x:Name="txtYTolMinus" Style="{StaticResource ModernFilledTextBox}"/>
 
                     <TextBlock Text="Display Name:" Style="{StaticResource FormLabelStyle}"/>
                     <TextBox x:Name="txtViewPara" Style="{StaticResource ModernFilledTextBox}"/>
@@ -100,7 +95,7 @@
             <!-- DataGrid -->
             <DataGrid x:Name="dataGrid"
                       AutoGenerateColumns="False"
-                      IsReadOnly="False"
+                      IsReadOnly="True"
                       SelectionChanged="dataGrid_SelectionChanged"
                       CanUserAddRows="False"
                       CanUserDeleteRows="False"
@@ -111,7 +106,7 @@
                       AlternatingRowBackground="#F4F6F8"
                       GridLinesVisibility="None"
                       RowHeaderWidth="0"
-                      FontSize="14"
+                      FontSize="20"
                       Background="Transparent"
                       BorderBrush="Transparent"
                       HorizontalAlignment="Stretch"
@@ -125,7 +120,7 @@
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Sr No" Binding="{Binding RowNo}" IsReadOnly="True" Width="60" 
                         ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
-                    <DataGridTextColumn Header="Parameter" Binding="{Binding Parameter}" Width="1.5*" 
+                    <DataGridTextColumn Header="Parameter" Binding="{Binding Parameter}" Width="1*" 
                         ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
                     <DataGridTextColumn Header="Nominal" Binding="{Binding Nominal}" Width="*" 
                         ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
@@ -133,17 +128,14 @@
                         ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
                     <DataGridTextColumn Header="R_Tol(-)" Binding="{Binding RTolMinus}" Width="*" 
                         ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
-                    <DataGridTextColumn Header="Y_Tol(+)" Binding="{Binding YTolPlus}" Width="*" 
-                        ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
-                    <DataGridTextColumn Header="Y_Tol(-)" Binding="{Binding YTolMinus}" Width="*" 
-                        ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
+
                     <DataGridTextColumn Header="Type" Binding="{Binding ProbeStatus}" Width="*" 
                         ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
                     <DataGridTextColumn Header="Short Name" Binding="{Binding ShortName}" Width="*" 
                         ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
                     <DataGridTextColumn Header="Display Name" Binding="{Binding D_Name}" Width="*" 
                                 ElementStyle="{StaticResource CenterCellStyle}" EditingElementStyle="{StaticResource CenterCellStyle}" />
-                    <DataGridTemplateColumn Header="Enable" Width="60">
+                    <DataGridTemplateColumn Header="Enable" Width="150">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <CheckBox HorizontalAlignment="Center"

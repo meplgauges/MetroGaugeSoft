@@ -576,8 +576,8 @@
         <!-- ================= ROW 2 : DATAGRID CARD ================= -->
         <Border Grid.Row="2"
                 Grid.ColumnSpan="4"
-                Margin="9,5,9,5"
-                Padding="8"
+                Margin="9,2,9,5"
+                Padding="0"
                 Style="{StaticResource InfoCardStyle}"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch">
@@ -597,6 +597,7 @@
                           AutoGenerateColumns="True"
                           AutoGeneratingColumn="ValveReadingsGrid_AutoGeneratingColumn"
                           CanUserAddRows="False"
+                          CanUserSortColumns="False"
                           CanUserDeleteRows="False"
                           IsReadOnly="True"
                           GridLinesVisibility="None"
@@ -607,9 +608,9 @@
                           AlternatingRowBackground="#F3F4F6"
                           HorizontalGridLinesBrush="#E5E7EB"
                           VerticalGridLinesBrush="#E5E7EB"
-                          RowHeight="28"
+                          RowHeight="18"
                           ColumnHeaderHeight="25"
-                          FontSize="15"
+                          FontSize="14"
                           FontWeight="Bold"
                           FontFamily="Segoe UI"
                           ColumnWidth="*"
@@ -626,8 +627,8 @@
                             <Setter Property="Background" Value="#1F2937"/>
                             <Setter Property="Foreground" Value="White"/>
                             <Setter Property="FontWeight" Value="SemiBold"/>
-                            <Setter Property="FontSize" Value="14"/>
-                            <Setter Property="Padding" Value="8"/>
+                            <Setter Property="FontSize" Value="10"/>
+                            <Setter Property="Padding" Value="5"/>
                             <Setter Property="BorderBrush" Value="#374151"/>
                             <Setter Property="BorderThickness" Value="0,0,1,1"/>
                             <Setter Property="HorizontalContentAlignment" Value="Center"/>
@@ -656,7 +657,7 @@
 
                         <!-- CELL -->
                         <Style TargetType="DataGridCell">
-                            <Setter Property="Padding" Value="6,2"/>
+                            <Setter Property="Padding" Value="2,2"/>
                             <Setter Property="BorderThickness" Value="0"/>
                             <Setter Property="TextBlock.TextAlignment" Value="Center"/>
                             <Setter Property="HorizontalContentAlignment" Value="Center"/>

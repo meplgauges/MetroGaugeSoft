@@ -1,4 +1,5 @@
-﻿using System.Windows;
+﻿using System;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 
@@ -6,23 +7,31 @@ namespace EVMS
 {
     public partial class ProgresBarControl : UserControl
     {
+        private bool _isInitialized;
+        private bool _showMin;
+
         public ProgresBarControl()
         {
             InitializeComponent();
-            SizeChanged += ProgresBarControl_SizeChanged;
             Loaded += ProgresBarControl_Loaded;
-
+            SizeChanged += ProgresBarControl_SizeChanged;
         }
+
         private void ProgresBarControl_Loaded(object sender, RoutedEventArgs e)
         {
-            // Initialize Value to Min or 0, depending on your range
-            Value = Min;
+            // Decide visibility ONCE
+            DecideInitialMinVisibility();
+            ApplyMinVisibility();
 
-            // Set fills to zero height initially
+            // Initial visuals
+            Value = Min;
             AboveFill.Height = 0;
             BelowFill.Height = 0;
-
             BarValue.Text = "0.000";
+            MinValue.Text = "0.000";
+
+
+            _isInitialized = true; // 🔒 LOCK VISIBILITY
         }
 
         private void ProgresBarControl_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -30,27 +39,62 @@ namespace EVMS
             UpdateFill(Value);
         }
 
-        public static readonly DependencyProperty MinProperty =
-            DependencyProperty.Register(nameof(Min), typeof(double), typeof(ProgresBarControl), new PropertyMetadata(0.0));
+        // ---------------- DEPENDENCY PROPERTIES ----------------
 
-        public static readonly DependencyProperty MeanProperty =
-            DependencyProperty.Register(nameof(Mean), typeof(double), typeof(ProgresBarControl), new PropertyMetadata(50.0));
+        public static readonly DependencyProperty MinProperty =
+            DependencyProperty.Register(
+                nameof(Min),
+                typeof(double),
+                typeof(ProgresBarControl),
+                new PropertyMetadata(0.0));
 
         public static readonly DependencyProperty MaxProperty =
-            DependencyProperty.Register(nameof(Max), typeof(double), typeof(ProgresBarControl), new PropertyMetadata(100.0));
+            DependencyProperty.Register(
+                nameof(Max),
+                typeof(double),
+                typeof(ProgresBarControl),
+                new PropertyMetadata(100.0));
+
+        public static readonly DependencyProperty MeanProperty =
+            DependencyProperty.Register(
+                nameof(Mean),
+                typeof(double),
+                typeof(ProgresBarControl),
+                new PropertyMetadata(50.0));
+
+        public static readonly DependencyProperty MinValueProperty =
+            DependencyProperty.Register(
+                nameof(MValue),
+                typeof(double),
+                typeof(ProgresBarControl),
+                new PropertyMetadata(0.0, OnValueChanged));
 
         public static readonly DependencyProperty ValueProperty =
-            DependencyProperty.Register(nameof(Value), typeof(double), typeof(ProgresBarControl),
+            DependencyProperty.Register(
+                nameof(Value),
+                typeof(double),
+                typeof(ProgresBarControl),
                 new PropertyMetadata(0.0, OnValueChanged));
 
         public static readonly DependencyProperty TitleProperty =
-            DependencyProperty.Register(nameof(Title), typeof(string), typeof(ProgresBarControl),
+            DependencyProperty.Register(
+                nameof(Title),
+                typeof(string),
+                typeof(ProgresBarControl),
                 new PropertyMetadata(string.Empty));
+
+        // ---------------- PROPERTIES ----------------
 
         public double Min
         {
             get => (double)GetValue(MinProperty);
             set => SetValue(MinProperty, value);
+        }
+
+        public double Max
+        {
+            get => (double)GetValue(MaxProperty);
+            set => SetValue(MaxProperty, value);
         }
 
         public double Mean
@@ -59,10 +103,10 @@ namespace EVMS
             set => SetValue(MeanProperty, value);
         }
 
-        public double Max
+        public double MValue
         {
-            get => (double)GetValue(MaxProperty);
-            set => SetValue(MaxProperty, value);
+            get => (double)GetValue(MinValueProperty);
+            set => SetValue(MinValueProperty, value);
         }
 
         public double Value
@@ -77,123 +121,154 @@ namespace EVMS
             set => SetValue(TitleProperty, value);
         }
 
+        // ---------------- VISIBILITY LOGIC ----------------
+
+        private void DecideInitialMinVisibility()
+        {
+            // Rule 1: Min == Max → SHOW
+            if (Min == Max)
+            {
+                _showMin = true;
+                return;
+            }
+
+            // Rule 2: Title-based
+            if (string.IsNullOrWhiteSpace(Title))
+            {
+                _showMin = true;
+                return;
+            }
+
+            string title = Title.Trim().ToUpperInvariant();
+
+            _showMin = !(
+                title.StartsWith("RN") ||
+                title.StartsWith("TL") ||
+                title.StartsWith("STEP") ||
+                title.Contains("RUNOUT")
+            );
+        }
+
+        private void ApplyMinVisibility()
+        {
+            var visibility = _showMin
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+            MinLabel.Visibility = visibility;
+            MinValue.Visibility = visibility;
+        }
+
+        // ---------------- VALUE / FILL LOGIC ----------------
+
         private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            if (d is ProgresBarControl control)
-            {
-                control.UpdateFill((double)e.NewValue);
-            }
+            if (d is ProgresBarControl c)
+                c.UpdateFill((double)e.NewValue);
         }
-
-        public void ResetVisuals()
-        {
-            AboveFill.Height = 0;
-            AboveFill.Margin = new Thickness(0);
-            BelowFill.Height = 0;
-            BelowFill.Margin = new Thickness(0);
-
-            // Optional: reset the fill color to a neutral or transparent color
-            SolidColorBrush neutralBrush = new SolidColorBrush(Colors.Transparent);
-            AboveFill.Fill = neutralBrush;
-            BelowFill.Fill = neutralBrush;
-
-            // Reset the text display
-            BarValue.Text = "0.000";
-        }
-
 
         private void UpdateFill(double value)
         {
-
-            if (value == 0)
-            {
-                // Reset fills
-                AboveFill.Height = 0;
-                AboveFill.Margin = new Thickness(0);
-                BelowFill.Height = 0;
-                BelowFill.Margin = new Thickness(0);
-
-                // Optional: reset color to transparent or some neutral color
-                //var neutralBrush = new SolidColorBrush(Colors.Transparent); // Or choose another neutral
-                //AboveFill.Fill = neutralBrush;
-                //BelowFill.Fill = neutralBrush;
-
-                // Set value display to zero with appropriate formatting
-                BarValue.Text = "0.000";
-                return;
-            }
-            // Validate range
-            if (Max <= Min || Mean < Min || Mean > Max)
-            {
-                AboveFill.Height = 0;
-                BelowFill.Height = 0;
-                BarValue.Text = value.ToString("0.###");
-                return;
-            }
-
-            // Check if value is out of range
-            bool isOutOfRange = value < Min || value > Max;
-
-            // Clamp value for drawing
-            double clampedValue = Math.Max(Min, Math.Min(Max, value));
+            // ----- TEXT -----
             BarValue.Text = value.ToString("F3");
+            MinValue.Text = MValue.ToString("F3");
 
-            // ---- determine total height of the visual track ----
-            double totalHeight = 150.0; // fallback (matches your XAML track height)
+            // ----- ALWAYS RESET VISUALS FIRST -----
+            AboveFill.Height = 0;
+            BelowFill.Height = 0;
+            AboveFill.Margin = new Thickness(0);
+            BelowFill.Margin = new Thickness(0);
 
-            if (AboveFill.Parent is FrameworkElement parent)
+            var transparent = new SolidColorBrush(Colors.Transparent);
+            AboveFill.Fill = transparent;
+            BelowFill.Fill = transparent;
+
+            // 🔥 1. RESET STATE (VERY IMPORTANT)
+            if (value == 0)
+                return;
+
+            // 🔥 2. INVALID RANGE
+            if (Max <= Min || Mean < Min || Mean > Max)
+                return;
+
+            // 🔥 3. OUT OF RANGE → RED, NO FILL
+            // 🔥 3. OUT OF RANGE → RED, FULL BAR
+            // 🔥 3. OUT OF RANGE → RED (DIRECTION AWARE)
+            if (value < Min || value > Max)
             {
-                if (parent.ActualHeight > 0)
-                    totalHeight = parent.ActualHeight;
-                else if (parent is Panel panel)
+                double rTotalHeight = 150.0;
+                if (AboveFill.Parent is FrameworkElement rFe && rFe.ActualHeight > 0)
+                    rTotalHeight = rFe.ActualHeight;
+
+                double rHalfHeight = rTotalHeight / 2.0;
+
+                if (value > Max)
                 {
-                    foreach (UIElement child in panel.Children)
-                    {
-                        if (child is Border b && b.ActualHeight > 0)
-                        {
-                            totalHeight = b.ActualHeight;
-                            break;
-                        }
-                    }
+                    // 🔴 ABOVE
+                    AboveFill.Height = rHalfHeight;
+                    AboveFill.VerticalAlignment = VerticalAlignment.Bottom;
+                    AboveFill.Margin = new Thickness(0, 0, 0, rHalfHeight);
+                    AboveFill.Fill = new SolidColorBrush(Colors.Red);
                 }
+                else
+                {
+                    // 🔴 BELOW
+                    BelowFill.Height = rHalfHeight;
+                    BelowFill.VerticalAlignment = VerticalAlignment.Top;
+                    BelowFill.Margin = new Thickness(0, rHalfHeight, 0, 0);
+                    BelowFill.Fill = new SolidColorBrush(Colors.Red);
+                }
+
+                return;
             }
 
-            if (totalHeight <= 0) totalHeight = 150.0;
+
+            // 🔥 4. ZERO TOLERANCE (Min == Max) → SHOW MIDPOINT MARKER
+            if (Min == Max)
+            {
+                double zTotalHeight = 150.0;
+                if (AboveFill.Parent is FrameworkElement zFe && zFe.ActualHeight > 0)
+                    zTotalHeight = zFe.ActualHeight;
+
+                double zHalfHeight = zTotalHeight / 2.0;
+                double markerHeight = 8;
+
+                AboveFill.Height = markerHeight;
+                AboveFill.VerticalAlignment = VerticalAlignment.Bottom;
+                AboveFill.Margin = new Thickness(0, 0, 0, zHalfHeight - markerHeight / 2);
+                AboveFill.Fill = new SolidColorBrush(Colors.Green);
+
+                return;
+            }
+
+
+            // 🔥 4. IN RANGE → GREEN FILL
+            double totalHeight = 150.0;
+            if (AboveFill.Parent is FrameworkElement fe && fe.ActualHeight > 0)
+                totalHeight = fe.ActualHeight;
+
             double halfHeight = totalHeight / 2.0;
 
-            // ---- compute fill fractions ----
-            double fillAboveFraction = 0.0, fillBelowFraction = 0.0;
+            double above = 0, below = 0;
 
-            if (clampedValue > Mean)
-                fillAboveFraction = (clampedValue - Mean) / (Max - Mean);
-            else if (clampedValue < Mean)
-                fillBelowFraction = (Mean - clampedValue) / (Mean - Min);
+            if (value > Mean)
+                above = (value - Mean) / (Max - Mean);
+            else if (value < Mean)
+                below = (Mean - value) / (Mean - Min);
 
-            fillAboveFraction = Math.Clamp(fillAboveFraction, 0, 1);
-            fillBelowFraction = Math.Clamp(fillBelowFraction, 0, 1);
+            AboveFill.Height = Math.Clamp(above, 0, 1) * halfHeight;
+            BelowFill.Height = Math.Clamp(below, 0, 1) * halfHeight;
 
-            double pixelAboveHeight = fillAboveFraction * halfHeight;
-            double pixelBelowHeight = fillBelowFraction * halfHeight;
-
-            // ---- POSITIONING ----
             AboveFill.VerticalAlignment = VerticalAlignment.Bottom;
-            AboveFill.Height = pixelAboveHeight;
-            AboveFill.Margin = new Thickness(0, 0, 0, halfHeight);
-
             BelowFill.VerticalAlignment = VerticalAlignment.Top;
-            BelowFill.Height = pixelBelowHeight;
+
+            AboveFill.Margin = new Thickness(0, 0, 0, halfHeight);
             BelowFill.Margin = new Thickness(0, halfHeight, 0, 0);
 
-            // ---- COLOR LOGIC ----
-            SolidColorBrush fillColor = isOutOfRange
-                ? new SolidColorBrush(Colors.Red)   // out of range
-                : new SolidColorBrush(Colors.Green); // within range
-
-            AboveFill.Fill = fillColor;
-            BelowFill.Fill = fillColor;
-
-            AboveFill.InvalidateMeasure();
-            BelowFill.InvalidateMeasure();
+            var green = new SolidColorBrush(Colors.Green);
+            AboveFill.Fill = green;
+            BelowFill.Fill = green;
         }
+
     }
 }

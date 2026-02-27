@@ -85,11 +85,13 @@ namespace EVMS
             Keyboard.Focus(this);
             this.Focus();
 
-            this.PreviewKeyDown += Repeatbilty_Page_PreviewKeyDown;
 
             _dataService = new DataStorageService();
             DataContext = this;
 
+
+            this.Loaded += Page_Loaded;
+            this.PreviewKeyDown += Page_PreviewKeyDown;
             // ✅ Set fixed options for number of records
             RecordsCountOptions.Clear();
             foreach (var n in new[] { 5, 10, 15, 20, 25, 30 })
@@ -101,6 +103,48 @@ namespace EVMS
         }
 
 
+
+        private void Page_Loaded(object? sender, RoutedEventArgs e)
+        {
+            this.Focusable = true;
+            this.IsTabStop = true;
+            Keyboard.Focus(this);
+            FocusManager.SetFocusedElement(Window.GetWindow(this)!, this);
+        }
+
+
+
+        private void Page_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape)
+            {
+                HandleEscKeyAction();
+                e.Handled = true;
+            }
+        }
+
+
+
+        private void HandleEscKeyAction()
+        {
+            Window currentWindow = Window.GetWindow(this);
+            if (currentWindow != null)
+            {
+                var mainContentGrid = currentWindow.FindName("MainContentGrid") as Grid;
+                if (mainContentGrid != null)
+                {
+                    mainContentGrid.Children.Clear();
+
+                    var resultPage = new Dashboard
+                    {
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        VerticalAlignment = VerticalAlignment.Stretch
+                    };
+
+                    mainContentGrid.Children.Add(resultPage);
+                }
+            }
+        }
         private void LoadActiveParts()
         {
             ActiveParts.Clear();
@@ -227,44 +271,7 @@ namespace EVMS
                 vm.SelectedPartNo = (sender as ComboBox)?.SelectedItem?.ToString();
         }
 
-        private void Repeatbilty_Page_PreviewKeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Escape)
-            {
-                HandleEscKeyAction();
-                e.Handled = true;
-            }
-        }
-
-        private void HandleEscKeyAction()
-        {
-            try
-            {
-                Window currentWindow = Window.GetWindow(this);
-                if (currentWindow != null)
-                {
-                    var mainContentGrid = currentWindow.FindName("MainContentGrid") as Grid;
-                    if (mainContentGrid != null)
-                    {
-                        mainContentGrid.Children.Clear();
-
-                        var homePage = new Dashboard
-                        {
-                            HorizontalAlignment = HorizontalAlignment.Stretch,
-                            VerticalAlignment = VerticalAlignment.Stretch
-                        };
-
-                        mainContentGrid.Children.Add(homePage);
-                        mainContentGrid.UpdateLayout();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error navigating to home page: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
+      
 
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged(string name) =>

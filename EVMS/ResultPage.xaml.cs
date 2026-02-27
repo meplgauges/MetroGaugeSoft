@@ -207,15 +207,21 @@ namespace EVMS
             Dispatcher.Invoke(() =>
             {
                 // --- Update UI ---
-                UpdateProgressBarsWithStatus(resultsWithStatus);
-                UpdateMeasurementFields(resultsWithStatus);
+                if (_currentMode == ProcedureMode.Mastering)
+                {
+                    UpdateMeasurementFields(resultsWithStatus);
 
-                var latestValues = resultsWithStatus.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Value);
+                }
+                else
+                {
+                    UpdateProgressBarsWithStatus(resultsWithStatus);
+                    UpdateMeasurementFields(resultsWithStatus);
+                }
+                var latestValues = resultsWithStatus.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Value);  // ✅ WORKS
                 LoadDataGrid(latestValues, resultsWithStatus);
                 UpdateInspectionCounts(resultsWithStatus);
 
                 string status = resultsWithStatus.All(r => r.Value.IsOk) ? "OK" : "NG";
-                // Build MeasurementDataModel from current data
                 var measurement = new MeasurementDataModel
                 {
                     PartNo = _model,
@@ -223,95 +229,67 @@ namespace EVMS
                     Operator = _userId,
                     Date = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                     Status = status,
-                    Parameters = resultsWithStatus.ToDictionary(kvp => kvp.Key, kvp => (double)kvp.Value.Value)
+                    Parameters = resultsWithStatus.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Value)  // ✅ Max only (double)
                 };
 
-                // Export to Excel asynchronously without blocking UI
+                // Export to Excel asynchronously (now includes Min/Max)
                 if (_currentMode == ProcedureMode.Measurement && status == "OK")
                 {
-                    _ = Task.Run(() =>
-                    {
-                        ExportOrAppendMeasurementToExcel(measurement);
-                    });
+                    _ = Task.Run(() => ExportOrAppendMeasurementToExcel(measurement));
                 }
-
 
                 // --- Save data asynchronously ---
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        // ✅ Get only enabled parameters directly from DB (already filtered)
-                        var enabledParams = dataStorageService
-                            .GetPartConfig(_model) // query already has IsEnabled = 1
-                            .Select(p => p.Parameter.ToLower())
-                            .ToHashSet();
+                        var enabledParams = dataStorageService.GetPartConfig(_model)
+                            .Select(p => p.Parameter.ToLower()).ToHashSet();
 
-                        // ✅ Safe getter: returns 0 for missing or disabled parameters
-                        float GetValue(string key)
+                        (decimal min, decimal max) GetMinMax(string key)
                         {
                             string lowerKey = key.ToLower();
-                            return enabledParams.Contains(lowerKey)
-                                ? resultsWithStatus.TryGetValue(key, out var param) ? (float)param.Value : 0f
-                                : 0f;
+                            return enabledParams.Contains(lowerKey) && resultsWithStatus.TryGetValue(key, out var param)
+                                ? (Convert.ToDecimal(Math.Round(param.Min, 3)), Convert.ToDecimal(Math.Round(param.Value, 3)))
+                                : (0m, 0m);
                         }
+
 
                         if (_currentMode == ProcedureMode.MasterInspection)
                         {
-                            await dataStorageService.InsertMasterInspectionAsync(
-                                                     _model, _userId, _lotNo,
-                                                    Convert.ToDecimal(GetValue("OD1")),
-                                                     Convert.ToDecimal(GetValue("RN1")),
-                                                     Convert.ToDecimal(GetValue("OD2")),
-                                                     Convert.ToDecimal(GetValue("RN2")),
-                                                     Convert.ToDecimal(GetValue("OD3")),
-                                                     Convert.ToDecimal(GetValue("RN3")),
-                                                     Convert.ToDecimal(GetValue("OD4")),
-                                                     Convert.ToDecimal(GetValue("RN4")),
-                                                     Convert.ToDecimal(GetValue("OD5")),
-                                                     Convert.ToDecimal(GetValue("RN5")),
-                                                     Convert.ToDecimal(GetValue("ID-1")),
-                                                     Convert.ToDecimal(GetValue("RN6")),
-                                                     Convert.ToDecimal(GetValue("ID-2")),
-                                                     Convert.ToDecimal(GetValue("RN6")),
-                                                     Convert.ToDecimal(GetValue("OL")),
-                                                     status);
-
+                            await dataStorageService.InsertMeasurementResultAsync(
+                                   _model, _userId, _lotNo,
+                                   GetMinMax("OD1").min, GetMinMax("OD1").max, GetMinMax("RN1").max,
+                                   GetMinMax("OD2").min, GetMinMax("OD2").max, GetMinMax("RN2").max,
+                                   GetMinMax("OD3").min, GetMinMax("OD3").max, GetMinMax("RN3").max,
+                                   GetMinMax("OD4").min, GetMinMax("OD4").max, GetMinMax("RN4").max,
+                                   GetMinMax("OD5").min, GetMinMax("OD5").max, GetMinMax("RN5").max,
+                                   GetMinMax("ID-1").min, GetMinMax("ID-1").max, GetMinMax("RN6").max,
+                                   GetMinMax("ID-2").min, GetMinMax("ID-2").max, GetMinMax("RN7").max,
+                                   GetMinMax("OL").max,
+                                   status);
                         }
                         else if (_currentMode == ProcedureMode.Measurement)
                         {
-                            await dataStorageService.InsertMeasurementReadingAsync(
-                                                     _model, _userId, _lotNo,
-                                                     Convert.ToDecimal(GetValue("OD1")),
-                                                     Convert.ToDecimal(GetValue("RN1")),
-                                                     Convert.ToDecimal(GetValue("OD2")),
-                                                     Convert.ToDecimal(GetValue("RN2")),
-                                                     Convert.ToDecimal(GetValue("OD3")),
-                                                     Convert.ToDecimal(GetValue("RN3")),
-                                                     Convert.ToDecimal(GetValue("OD4")),
-                                                     Convert.ToDecimal(GetValue("RN4")),
-                                                     Convert.ToDecimal(GetValue("OD5")),
-                                                     Convert.ToDecimal(GetValue("RN5")),
-                                                     Convert.ToDecimal(GetValue("ID-1")),
-                                                     Convert.ToDecimal(GetValue("RN6")),
-                                                     Convert.ToDecimal(GetValue("ID-2")),
-                                                     Convert.ToDecimal(GetValue("RN7")),
-                                                     Convert.ToDecimal(GetValue("OL")),
-                                                     status);
+                            await dataStorageService.InsertMeasurementResultAsync(
+                                    _model, _userId, _lotNo,
+                                    GetMinMax("OD1").min, GetMinMax("OD1").max, GetMinMax("RN1").max,
+                                    GetMinMax("OD2").min, GetMinMax("OD2").max, GetMinMax("RN2").max,
+                                    GetMinMax("OD3").min, GetMinMax("OD3").max, GetMinMax("RN3").max,
+                                    GetMinMax("OD4").min, GetMinMax("OD4").max, GetMinMax("RN4").max,
+                                    GetMinMax("OD5").min, GetMinMax("OD5").max, GetMinMax("RN5").max,
+                                    GetMinMax("ID-1").min, GetMinMax("ID-1").max, GetMinMax("RN6").max,
+                                    GetMinMax("ID-2").min, GetMinMax("ID-2").max, GetMinMax("RN7").max,
+                                    GetMinMax("OL").max,
+                                    status);
                         }
+            
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"❌ Error saving results: {ex.Message}");
+                        Debug.WriteLine($"❌ Error saving Min/Max results: {ex.Message}");
                     }
                 });
-
-                // --- Reset UI after delay ---
-                //_ = Task.Run(async () =>
-                //{
-                //    await Task.Delay(3500);
-                //    Dispatcher.Invoke(ResetMeasurementFieldsAndProgressBars);
-                //});
             });
         }
 
@@ -398,9 +376,9 @@ namespace EVMS
                     // USL, MEAN, LSL rows
                     var labelFormats = new (string Label, XLColor Color)[]
                     {
-                ("USL", XLColor.Red),
-                ("MEAN", XLColor.ForestGreen),
-                ("LSL", XLColor.Red)
+                            ("USL", XLColor.Red),
+                            ("MEAN", XLColor.ForestGreen),
+                            ("LSL", XLColor.Red)
                     };
 
                     for (int idx = 0; idx < labelFormats.Length; idx++)
@@ -613,23 +591,23 @@ namespace EVMS
             InitializeValveDataAndUI();
             InitializeDataGrid();
             NotifyStatus("Initialization....");
-            try
-            {
-                // Ensure PLC and Probe Connection asynchronously when page loads
-                bool connected = await _masterService.EnsureConnectionAsync();
-                if (connected)
-                {
-                    NotifyStatus("PLC and Probe Connected Successfully");
-                }
-                else
-                {
-                    MessageBox.Show("Failed to connect to PLC and Probe", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error during connection: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            //try
+            //{
+            //    // Ensure PLC and Probe Connection asynchronously when page loads
+            //    bool connected = await _masterService.EnsureConnectionAsync();
+            //    if (connected)
+            //    {
+            //        NotifyStatus("PLC and Probe Connected Successfully");
+            //    }
+            //    else
+            //    {
+            //        MessageBox.Show("Failed to connect to PLC and Probe", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            //    }
+            //}
+            //catch (Exception ex)
+            //{
+            //    MessageBox.Show($"Error during connection: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            //}
         }
 
         // Helper method to add timeout to PLC connection
@@ -639,6 +617,9 @@ namespace EVMS
 
         private void ResultPage_Unloaded(object sender, RoutedEventArgs e)
         {
+            _masterService.SetPlcDevice("M5", 0);
+            _masterService.SetPlcDevice("M6", 0);
+
             ResetRoboBits();
             _masterService.ResetRequested -= HandleResetRequested;
             _masterService.Dispose();
@@ -784,10 +765,11 @@ namespace EVMS
                     }
                 }
 
-                _measurementDataTable.Rows.InsertAt(row, 0);
+                _measurementDataTable.Rows.Add(row);
 
-                while (_measurementDataTable.Rows.Count > MaxRows) // MaxRows = 10 in your code
-                    _measurementDataTable.Rows.RemoveAt(_measurementDataTable.Rows.Count - 1);
+                while (_measurementDataTable.Rows.Count > MaxRows)
+                    _measurementDataTable.Rows.RemoveAt(0);
+
 
                 // No need to reassign ItemsSource repeatedly - just update layout
                 ValveReadingsGrid.UpdateLayout();
@@ -795,12 +777,13 @@ namespace EVMS
                 // Highlight cells with NG status in red
                 ValveReadingsGrid.Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    int rowIndex = 0; // Only color newest row
+                    int rowIndex = ValveReadingsGrid.Items.Count - 1; // newest row
 
                     foreach (var kvp in fullToShortMap)
                     {
                         string shortHeader = kvp.Value;
-                        var column = ValveReadingsGrid.Columns.FirstOrDefault(c => c.Header.ToString() == shortHeader);
+                        var column = ValveReadingsGrid.Columns
+                            .FirstOrDefault(c => c.Header?.ToString() == shortHeader);
                         if (column == null) continue;
 
                         var cellContent = column.GetCellContent(ValveReadingsGrid.Items[rowIndex]);
@@ -809,16 +792,15 @@ namespace EVMS
                         var cell = FindParent<DataGridCell>(cellContent);
                         if (cell == null) continue;
 
-                        // Default color (reset first)
                         cell.Foreground = Brushes.Black;
 
-                        // Now apply red if NG
                         if (resultsWithStatus.TryGetValue(kvp.Key, out var result) && !result.IsOk)
                         {
                             cell.Foreground = Brushes.Red;
                         }
                     }
-                }), System.Windows.Threading.DispatcherPriority.Background);
+                }), DispatcherPriority.Background);
+
 
             });
         }
@@ -842,10 +824,7 @@ namespace EVMS
 
         // Dictionary to hold references to dynamically created progress bar controls keyed by parameter name
 
-        /// <summary>
-        /// Dynamically load progress bars into ProgressBarContainer based on parameterData.
-        /// Tracks controls in _progressBarControls dictionary for later value updates.
-        /// </summary>
+     
         private void LoadProgressBars()
         {
             ProgressBarContainer.Children.Clear();
@@ -881,6 +860,7 @@ namespace EVMS
                     pb.Mean = mean;
                     pb.Max = max;
                     pb.Value = 0;
+                    pb.MValue = 0;
                     pb.Title = param.D_Name;
 
                     progressBar = pb;
@@ -912,7 +892,8 @@ namespace EVMS
 
 
 
-        private void UpdateProgressBarsWithStatus(Dictionary<string, ParameterResult> resultsWithStatus)
+        private void UpdateProgressBarsWithStatus(
+    Dictionary<string, ParameterResult> resultsWithStatus)
         {
             foreach (var kvp in resultsWithStatus)
             {
@@ -920,12 +901,14 @@ namespace EVMS
                 {
                     if (control is ResultProgressBar pb)
                     {
+                        // Result bar: value + status
                         pb.UpdateValue(kvp.Value.Value, kvp.Value.IsOk);
                     }
                     else if (control is ProgresBarControl pb2)
                     {
-                        pb2.Value = kvp.Value.Value;
-                        // Optional: add IsOk property and color logic to ProgresBarControl if desired
+                        // 🔥 ONLY UPDATE VALUES — NEVER VISIBILITY
+                        pb2.MValue = kvp.Value.Min;     // Min text
+                        pb2.Value = kvp.Value.Value;   // Measured value
                     }
                 }
             }
@@ -936,8 +919,16 @@ namespace EVMS
 
 
 
+
+
         private void ToggleBtn_Click(object sender, RoutedEventArgs e)
         {
+
+            if (ToggleBtn.IsChecked == true)
+            {
+                SwitchProgressBarBtn.IsChecked = false;  // Force other off when this is on
+            }
+
             if (_showLeft)
             {
                 LeftColumn.Width = new GridLength(0);
@@ -953,11 +944,16 @@ namespace EVMS
 
         private void SwitchProgressBar_Click(object sender, RoutedEventArgs e)
         {
+            if (SwitchProgressBarBtn.IsChecked == true)
+            {
+                ToggleBtn.IsChecked = false;  // Force other off when this is on
+
+            }
+
             useFirstDesign = !useFirstDesign;
             LoadProgressBars();
-            SwitchProgressBarBtn.Content = useFirstDesign ? "Switch to Design 2" :  "Switch to Design 1";
+            SwitchProgressBarBtn.Content = useFirstDesign ? "Switch to Design 2" : "Switch to Design 1";
         }
-
 
         // Mastering toggle
         private ToggleButton? _activeToggleButton = null;
@@ -970,6 +966,7 @@ namespace EVMS
             MasterToggle.IsEnabled = true;
             MasterInspectionToggleButton.IsEnabled = true;
             MeasurementToggle.IsEnabled = true;
+            ClearBit.IsEnabled = true;
 
             // Re-enable Auto/Manual toggle only when no operation is active
             AutoManualToggle.IsEnabled = true;
@@ -981,7 +978,7 @@ namespace EVMS
             MasterToggle.IsEnabled = (active == MasterToggle);
             MasterInspectionToggleButton.IsEnabled = (active == MasterInspectionToggleButton);
             MeasurementToggle.IsEnabled = (active == MeasurementToggle);
-
+            ClearBit.IsEnabled= (active == ClearBit);
             // Disable Auto/Manual toggle whenever an operation toggle is active
             AutoManualToggle.IsEnabled = false;
         }
@@ -1008,8 +1005,10 @@ namespace EVMS
             try
             {
                 ResetAllResult();
-                _masterService.IsMasteringStage = true;
+               // _masterService.IsMasteringStage = true;
                 _masterService._continueMeasurement = false;
+               // _masterService._continueMastring = true;
+
                 ResetMeasurementFieldsAndProgressBars();
 
                 _currentMode = ProcedureMode.Mastering;
@@ -1058,15 +1057,9 @@ namespace EVMS
             {
 
                 LoadMasterInspectionProgressBars(activePartNumber);
-                Dispatcher.Invoke(() =>
-                {
-                    _measurementDataTable?.Clear();
-                    _globalSerialCounter = 1;
-
-                });
-
+               
                 ResetAllResult();
-                _masterService.IsMasteringStage = false;
+               // _masterService.IsMasteringStage = false;
                 _masterService._continueMeasurement = false;
                 ResetMeasurementFieldsAndProgressBars();
                 _currentMode = ProcedureMode.MasterInspection;
@@ -1125,7 +1118,7 @@ namespace EVMS
                 //_masterService.SetPlcDevice("M101", 0);
                 //_masterService.SetPlcDevice("M102", 0); // General rejection
 
-                _masterService.IsMasteringStage = false;
+               // _masterService.IsMasteringStage = false;
                 _masterService._continueMeasurement = true;
                 ResetMeasurementFieldsAndProgressBars();
 
@@ -1174,6 +1167,8 @@ namespace EVMS
                 ResetAllPlcBits();
             }
 
+          
+
             //if (toggleButton == MasterInspectionToggle)
             //{
             //    // Terminate Master Inspection operation
@@ -1188,6 +1183,9 @@ namespace EVMS
 
             try
             {
+               // _masterService._continueMastring = false;
+
+                ResetAllResult();
                 ResetAllPlcBits();
                 //_masterService.SetPlcDevice("M300", 0);
                 NotifyStatus(".");
@@ -1257,17 +1255,7 @@ namespace EVMS
             set { _ngCount = value; OnPropertyChanged(nameof(NgCount)); }
         }
 
-        //public void AddPartInspectionResults(Dictionary<string, ParameterResult> parameterResults)
-        //{
-        //    InspectionQty++; // increment total parts inspected
-
-        //    bool partIsOk = parameterResults.All(r => r.Value.IsOk);
-        //    if (partIsOk)
-        //        OkCount++;
-        //    else
-        //        NgCount++;
-        //}
-
+        
 
 
         private async void ToggleBtn_Click1(object sender, RoutedEventArgs e)
@@ -1465,6 +1453,7 @@ namespace EVMS
                 else if (control is ProgresBarControl pb2)
                 {
                     pb2.Value = 0;
+                    pb2.MValue = 0;
                 }
             }
         }
@@ -1478,8 +1467,9 @@ namespace EVMS
             {
                 ResetRoboBits();
 
+                _masterService.SetPlcDevice("M5", 0);
+                _masterService.SetPlcDevice("M6", 0);
 
-                // MessageBox.Show("ESC pressed in Result Page", "Key Pressed", MessageBoxButton.OK, MessageBoxImage.Information);
                 _masterService._continueMeasurement = false; // Stop measurement
                 e.Handled = true;
                 ResetAllPlcBits();
@@ -1520,26 +1510,37 @@ namespace EVMS
         {
             _masterService.SetPlcDevice("M30", 0); // General rejection
             _masterService.SetPlcDevice("M31", 0); // SRO rejection
-            //_masterService.SetPlcDevice("M303", 0); // STDIA rejection
-            //_masterService.SetPlcDevice("M304", 0); // Seat Height rejection
-            //_masterService.SetPlcDevice("M305", 0); // Groove Diameter/Position rejection
-            //_masterService.SetPlcDevice("M306", 0); // Groove Diameter/Position rejection
+            
 
         }
 
 
         private void ResetRoboBits()
         {
-            List<string> allRoboBits = dataStorageService.GetAllRoboBits();
-
-            // Loop through and reset each bit to 0
-            foreach (var bit in allRoboBits)
+            try
             {
+                // Reset master control bit first
 
-                _masterService.SetPlcDevice(bit, 0);
+                // Get ALL RoboBits AND LaserBits
+                var allBits = dataStorageService.GetAllBits(); // Returns BitConfiguration list
 
+                // Reset each RoboBit AND LaserBit to 0
+                foreach (var bitConfig in allBits)
+                {
+                    if (!string.IsNullOrEmpty(bitConfig.RoboBit))
+                        _masterService.SetPlcDevice(bitConfig.RoboBit, 0);
+
+                    if (!string.IsNullOrEmpty(bitConfig.LaserBit))
+                        _masterService.SetPlcDevice(bitConfig.LaserBit, 0);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error resetting bits: {ex.Message}", "Reset Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
 
         private void ResetAllPlcBits()
         {
@@ -1549,40 +1550,6 @@ namespace EVMS
             _masterService.SetPlcDevice("M16", 0);
             _masterService.SetPlcDevice("M26", 0);
 
-
-
-            //string[] bitsToReset =
-            //{
-            //        "M400", "M100", "M300", "M10", "M14", "M301"
-            //    };
-
-            //try
-            //{
-            //    foreach (var bit in bitsToReset)
-            //    {
-            //        _masterService.SetPlcDevice(bit, 0);
-            //    }
-            //}
-            //catch (Exception ex)
-            //{
-            //    // Show a single message for all errors
-            //    MessageBox.Show(
-            //        $"PLC Reset Failed.\nError: {ex.Message}",
-            //        "PLC Error",
-            //        MessageBoxButton.OK,
-            //        MessageBoxImage.Error
-            //    );
-
-            //    // Close current window/page
-            //    Application.Current.Dispatcher.Invoke(() =>
-            //    {
-            //        Window currentWindow = Window.GetWindow(this);
-            //        if (currentWindow != null)
-            //        {
-            //            currentWindow.Close();
-            //        }
-            //    });
-            //}
         }
 
 
@@ -1655,13 +1622,7 @@ namespace EVMS
 
         private DispatcherTimer expirationTimer1;
 
-        /// <summary>
-        /// Checks master expiration: stops on count, starts (and stops) timer for time.
-        /// Call at the start of measurement and after each cycle.
-        /// </summary>
-        // Automatically turns off mastering when inspection count reaches expiration limit
-        // Master expiration using only Count mode
-        // Call this method after each inspection count update (e.g., after each measurement)
+       
         private int currentMasterCount = 0;
 
         public void CheckMasterExpirationDuringMeasurement()
@@ -1698,8 +1659,7 @@ namespace EVMS
 
 
         private DispatcherTimer bitMatchCheckTimer;
-        //private int? lastSoftwareBitValue = null;
-        //private int? lastPlcBitValue = null;
+       
         private bool wasPreviousMismatch = false;
 
         private void StartBitMatchCheck()

@@ -12,15 +12,15 @@
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="/EVMS;component/Style/ReportPageDesign.xaml"/>
+                <ResourceDictionary Source="/Style/ReportPageDesign.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
-        
+
     </UserControl.Resources>
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="100"/>
-            <RowDefinition Height="*"/> 
+            <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
         <!-- Header -->
@@ -35,7 +35,7 @@
                 BorderBrush="#D1D9E6" 
                 BorderThickness="1"
                 HorizontalAlignment="Stretch"
-                VerticalAlignment="Top">    
+                VerticalAlignment="Top">
 
             <Grid HorizontalAlignment="Stretch" VerticalAlignment="Center">
                 <Grid.ColumnDefinitions>
@@ -48,6 +48,8 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
@@ -57,7 +59,7 @@
                     <xctk:DateTimePicker Margin="5" Width="180" Height="33"
                                         BorderBrush="#1976D2" BorderThickness="1" Padding="4"
                                         Value="{Binding SelectedDateTimeFrom, Mode=TwoWay}" 
-                                        Format="Custom" FormatString="MM/dd/yyyy HH:mm:ss"/>    
+                                        Format="Custom" FormatString="MM/dd/yyyy HH:mm:ss"/>
                 </StackPanel>
 
                 <TextBlock Text="TO" Grid.Column="1" Margin="1,15,1,1" 
@@ -69,76 +71,89 @@
                     <xctk:DateTimePicker Margin="4" Width="180" Height="33"
                                         BorderBrush="#1976D2" BorderThickness="1" Padding="4"
                                         Value="{Binding SelectedDateTimeTo, Mode=TwoWay}" 
-                                        Format="Custom" FormatString="MM/dd/yyyy HH:mm:ss"/>    
+                                        Format="Custom" FormatString="MM/dd/yyyy HH:mm:ss"/>
                 </StackPanel>
 
                 <!-- PartNo ComboBox -->
                 <StackPanel Grid.Column="3">
                     <TextBlock Text="Part Number" Margin="2,0,2,2" FontWeight="Bold"/>
-                    <ComboBox x:Name="PartNo"
+                    <ComboBox x:Name="PartNo" Width="180"
                               ItemsSource="{Binding ActiveParts}"
                               SelectedItem="{Binding SelectedPartNo, Mode=TwoWay}"
                               Background="White"
                               Foreground="Black"
                               Style="{StaticResource ModernComboBoxStyle}"
                               VerticalContentAlignment="Center"
-                              Margin="4"/>  
+                              Margin="4"/>
+                </StackPanel>
+
+
+                <!-- Operator ComboBox -->
+                <StackPanel Grid.Column="4">
+                    <TextBlock Text="Operator" Margin="2,0,2,2" FontWeight="Bold"/>
+                    <ComboBox x:Name="Operator" Width="180"
+                           ItemsSource="{Binding Operators}"
+                           SelectedItem="{Binding SelectedOperator, Mode=TwoWay}"
+                           Style="{DynamicResource ModernComboBoxStyle}"
+                           Margin="4"/>
                 </StackPanel>
 
                 <!-- LotNo ComboBox -->
-                <StackPanel Grid.Column="4">
+                <StackPanel Grid.Column="5">
                     <TextBlock Text="Lot Number" Margin="2,0,2,2" FontWeight="Bold"/>
-                    <ComboBox x:Name="LotNo"
+                    <ComboBox x:Name="LotNo" Width="180"
                               ItemsSource="{Binding LotNumbers}"
                               SelectedItem="{Binding SelectedLotNo, Mode=TwoWay}"
-                              Style="{DynamicResource ModernComboBoxStyle}"
+                              Style="{StaticResource ModernComboBoxStyle}"
                               VerticalContentAlignment="Center"
-                              Margin="4"/>  
+                              Margin="4"/>
                 </StackPanel>
 
                 <!-- Parameter ComboBox -->
-                <StackPanel Grid.Column="5">
+                <StackPanel Grid.Column="6">
                     <TextBlock Text="Parameter" Margin="2,0,2,2" FontWeight="Bold"/>
-                    <ComboBox x:Name="Parameter"
-                              Style="{DynamicResource ModernComboBoxStyle}"
+                    <ComboBox x:Name="Parameter" Width="180"
+                              Style="{StaticResource ModernComboBoxStyle}"
                               VerticalContentAlignment="Center"
                               ItemsSource="{Binding ParametersOptions}"
                               SelectedItem="{Binding SelectedParameter, Mode=TwoWay}"
                               Margin="4"/>
                 </StackPanel>
 
-                <!-- Operator ComboBox -->
-                <StackPanel Grid.Column="6">
-                    <TextBlock Text="Operator" Margin="2,0,2,2" FontWeight="Bold"/>
-                    <ComboBox x:Name="Operator"
-                              ItemsSource="{Binding Operators}"
-                              SelectedItem="{Binding SelectedOperator, Mode=TwoWay}"
-                              Style="{DynamicResource ModernComboBoxStyle}"
-                              Margin="4"/>
+                <!-- Show NG/OK Count ComboBox -->
+                <StackPanel Grid.Column="7" >
+                    <TextBlock Text="Show Min/Max" Margin="2,0,2,2" FontWeight="Bold" />
+                    <ComboBox x:Name="MinMax"  Width="180"
+                           ItemsSource="{Binding MinMaxOptions}"
+                              SelectedItem="{Binding ShowMinMax, Mode=TwoWay}"
+                           Style="{StaticResource ModernComboBoxStyle}"
+                           Margin="4" />
                 </StackPanel>
 
+
+
                 <!-- Show NG/OK ComboBox -->
-                <StackPanel Grid.Column="7" Margin="10,0,0,0">
+                <StackPanel Grid.Column="8" >
                     <TextBlock Text="Show NG/OK" Margin="2,0,2,2" FontWeight="Bold" />
-                    <ComboBox x:Name="ReportTypeDropdown"
+                    <ComboBox x:Name="ReportTypeDropdown" Width="170"
                               ItemsSource="{Binding ReportTypeOptions}"
                               SelectedItem="{Binding SelectedReportType, Mode=TwoWay}"
-                              Style="{DynamicResource ModernComboBoxStyle}"
+                              Style="{StaticResource ModernComboBoxStyle}"
                               Margin="4" />
                 </StackPanel>
 
                 <!-- Show NG/OK Count ComboBox -->
-                <StackPanel Grid.Column="8" Margin="10,0,0,0">
+                <StackPanel Grid.Column="9" >
                     <TextBlock Text="Show NG/OK Count" Margin="2,0,2,2" FontWeight="Bold" />
-                    <ComboBox x:Name="NgOkCountDropdown"
+                    <ComboBox x:Name="NgOkCountDropdown" Width="170"
                               ItemsSource="{Binding NgOkCountOptions}"
                               SelectedItem="{Binding ShowNgOkSummary, Mode=TwoWay}"
-                              Style="{DynamicResource ModernComboBoxStyle}"
+                              Style="{StaticResource ModernComboBoxStyle}"
                               Margin="4" />
                 </StackPanel>
 
                 <!-- Submit Button -->
-                <Button Grid.Column="9"
+                <Button Grid.Column="10"
                         Width="90"
                         Height="34"
                         Margin="2,15,1,0"               
@@ -148,8 +163,8 @@
                         FontWeight="Bold"
                         Cursor="Hand"
                         Click="OnSubmitClicked"
-                        Style="{DynamicResource ModernButtonStyle1}" />
-            </Grid> 
+                        Style="{StaticResource ModernButtonStyle1}" />
+            </Grid>
         </Border>
 
 
@@ -194,7 +209,7 @@
                             FontSize="14"
                             FontWeight="SemiBold"
                             Click="ExportPdf_Click"
-                            Style="{DynamicResource ModernButtonStyle1}" /> 
+                            Style="{DynamicResource ModernButtonStyle1}" />
 
                     <Button Content="📊 Excel"
                             Width="130"
@@ -229,7 +244,7 @@
                           ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                           ScrollViewer.VerticalScrollBarVisibility="Auto"
                           PreviewKeyDown="ReportDataGrid_PreviewKeyDown"
-                          LoadingRow="ReportDataGrid_LoadingRow">       
+                          LoadingRow="ReportDataGrid_LoadingRow">
 
                     <DataGrid.Resources>
 
@@ -281,6 +296,10 @@
                         <!-- PERFECT CENTER TEXT FOR DATAGRID TEXT COLUMNS -->
                         <Style x:Key="CenteredTextBlockStyle" TargetType="TextBlock">
                             <Setter Property="TextAlignment" Value="Center"/>
+                            <Setter Property="FontSize" Value="14"/>
+                            <Setter Property="FontFamily" Value="Consolas"/>
+                            <Setter Property="FontWeight" Value="DemiBold"/>
+                            <Setter Property="FontStyle" Value="Normal"/>
                             <Setter Property="VerticalAlignment" Value="Center"/>
                             <Setter Property="HorizontalAlignment" Value="Center"/>
                             <Setter Property="Padding" Value="0"/>
@@ -291,27 +310,27 @@
                     <!-- Columns -->
                     <DataGrid.Columns>
 
-                    <DataGridTextColumn Header="No"
+                        <DataGridTextColumn Header="No"
                                         Binding="{Binding SerialNo}"
                                         Width="0.6*"
                                         ElementStyle="{StaticResource CenteredTextBlockStyle}" />
 
-                    <DataGridTextColumn Header="Part No"
+                        <DataGridTextColumn Header="Part No"
                                         Binding="{Binding PartNo}"
                                         Width="1*"
                                         ElementStyle="{StaticResource CenteredTextBlockStyle}" />
 
-                   <DataGridTextColumn Header="Lot No"
+                        <DataGridTextColumn Header="Lot No"
                                         Binding="{Binding LotNo}"
                                         Width="1*"
                                         ElementStyle="{StaticResource CenteredTextBlockStyle}" />
 
-                    <DataGridTextColumn Header="Operator"
+                        <DataGridTextColumn Header="Operator"
                                         Binding="{Binding Operator}"
                                         Width="1*"
                                         ElementStyle="{StaticResource CenteredTextBlockStyle}" />
 
-                    <DataGridTextColumn Header="Date"
+                        <DataGridTextColumn Header="Date"
                                         Binding="{Binding Date}"
                                         Width="1.4*"
                                         ElementStyle="{StaticResource CenteredTextBlockStyle}" />

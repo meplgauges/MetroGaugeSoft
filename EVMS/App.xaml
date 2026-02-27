@@ -36,7 +36,7 @@
             <!-- Gradient Brush Resource -->
             <LinearGradientBrush x:Key="PageBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
             <GradientStop Color="#8AA4DB" Offset="0"/>
-                <GradientStop Color="#e0fbfc" Offset="1"/>
+            <GradientStop Color="#8AA4DB" Offset="1"/>
             </LinearGradientBrush>
 
             <!-- Style for blurred window background -->

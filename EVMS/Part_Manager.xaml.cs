@@ -31,6 +31,7 @@ namespace EVMS
 
             this.Loaded += Part_Manager_Loaded;
             this.PreviewKeyDown += Part_Manager_PreviewKeyDown;
+            dataGrid.LoadingRow += DataGrid_LoadingRow;
 
             LoadStaticComboData();
             LoadData();
@@ -43,6 +44,10 @@ namespace EVMS
                 NavigateToDashboard();
         }
 
+        private void DataGrid_LoadingRow(object sender, DataGridRowEventArgs e)
+        {
+            e.Row.Header = (e.Row.GetIndex() + 1).ToString();
+        }
         private void Part_Manager_Loaded(object sender, RoutedEventArgs e)
         {
             this.Focusable = true;
@@ -96,6 +101,19 @@ namespace EVMS
             cmbVendor.SelectedIndex = 0;
         }
 
+
+
+        private void OnActivePartChanged()
+        {
+            // Get the parent MainWindow
+            if (Window.GetWindow(this) is MainWindow mainWindow)
+            {
+                // If MainWindow carries its own DataContext or state,
+                // you could also refresh that here.
+                _ = mainWindow.RefetchActivePartAndGenerateReport(); // fire and forget async
+            }
+        }
+
         // ✅ FIXED: Click Handler for Ellipse (Wrapped in Grid)
         private void StatusEllipse_Click(object sender, MouseButtonEventArgs e)
         {
@@ -146,6 +164,9 @@ namespace EVMS
                     activate.ExecuteNonQuery();
 
                     tran.Commit();
+
+                    OnActivePartChanged();
+
                 }
                 catch
                 {
@@ -310,27 +331,38 @@ namespace EVMS
 
                 string query = @"
                         SELECT 
-                        ID,
-                        Para_No,
-                        Para_Name,
-                        CAST(ActivePart AS BIT) AS IsActive,
-                        ID_Value,
-                        BOT_Value
-                    FROM Part_Entry
-                    ORDER BY ID
-                    ";
+                            ID,
+                            Para_No,
+                            Para_Name,
+                            CAST(ActivePart AS BIT) AS IsActive,
+                            ID_Value,
+                            BOT_Value
+                        FROM Part_Entry
+                        ORDER BY ID
+            ";
 
                 SqlDataAdapter da = new(query, con);
                 DataTable dt = new();
                 da.Fill(dt);
 
-                // ✅ FIXED: Force refresh for color update
-                dataGrid.ItemsSource = null;
+                //// ✅ ADD SERIAL COLUMN "No" to DataTable
+                //if (!dt.Columns.Contains("No"))
+                //{
+                //    dt.Columns.Add("No", typeof(int));
+                //}
+
+                //// ✅ SET SERIAL VALUE FOR EACH ROW (1-based)
+                //int index = 1;
+                //foreach (DataRow row in dt.Rows)
+                //{
+                //    row["No"] = index++;
+                //}
+
+                // ✅ Bind the updated DataTable
                 dataGrid.ItemsSource = dt.DefaultView;
-                dataGrid.Items.Refresh();
 
                 if (dataGrid.Columns.Count > 0)
-                    dataGrid.Columns[0].Visibility = Visibility.Collapsed;
+                    dataGrid.Columns[0].Visibility = Visibility.Collapsed; // hide original auto‑ID if needed
             }
             catch (Exception ex)
             {

@@ -132,24 +132,24 @@ namespace EVMS
         {
             NotifyStatus("🔄 Connecting PLC...");
 
-            plc.ActLogicalStationNumber = 1;
-            var openTask = Task.Run(() => plc.Open());
-            var completed = await Task.WhenAny(openTask, Task.Delay(3000));
+            //plc.ActLogicalStationNumber = 1;
+            //var openTask = Task.Run(() => plc.Open());
+            //var completed = await Task.WhenAny(openTask, Task.Delay(3000));
 
-            if (completed == openTask && openTask.Result == 0)
-            {
-                isPlcConnected = true;
-                NotifyStatus("✅ PLC Connected");
+            //if (completed == openTask && openTask.Result == 0)
+            //{
+            //    isPlcConnected = true;
+            //    NotifyStatus("✅ PLC Connected");
 
-                // ✅ Enable buttons immediately after connect
-                foreach (var btn in outputButtons.Values)
-                    btn.IsEnabled = true;
-            }
-            else
-            {
-                isPlcConnected = false;
-                NotifyStatus("❌ PLC Failed");
-            }
+            //    // ✅ Enable buttons immediately after connect
+            //    foreach (var btn in outputButtons.Values)
+            //        btn.IsEnabled = true;
+            //}
+            //else
+            //{
+            //    isPlcConnected = false;
+            //    NotifyStatus("❌ PLC Failed");
+            //}
             NotifyStatus("Probe Setup");
 
         }

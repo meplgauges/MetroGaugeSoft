@@ -4,9 +4,12 @@ using DocumentFormat.OpenXml.Drawing;
 using DocumentFormat.OpenXml.Spreadsheet;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net.Sockets;
+using System.Text;
 using System.Windows;
 using System.Windows.Input.Manipulations;
 using System.Windows.Navigation;
+using Windows.Media.Protection.PlayReady;
 using WinRT;
 
 namespace EVMS.Service
@@ -29,6 +32,7 @@ namespace EVMS.Service
 
     public class ParameterResult
     {
+        public double Min { get; set; }
         public double Value { get; set; }
         public bool IsOk { get; set; }
     }
@@ -40,8 +44,12 @@ namespace EVMS.Service
         public event Action? MeasurementStopped;
 
         public bool _continueMeasurement = false;
+        public bool _continueMastring = false;
+        private bool _isCameraReady = false;
 
         public bool IsMeasurementRunning { get; set; } = false;
+        private TcpClient _client;
+        private NetworkStream _stream;
 
 
 
@@ -95,7 +103,6 @@ namespace EVMS.Service
             plc = new ActUtlType64Class { ActLogicalStationNumber = 1 };
             ArraySize = _dataStorageService.GetReadingCount();
             //SetPlcDevice("M1", 1); //Software Ready
-
             //LoadProbeConfigurationsforMasterInspection(_currentPartCode);
             // ApplyActiveIdPlcBits();
         }
@@ -116,8 +123,145 @@ namespace EVMS.Service
         }
         public bool IsConnected => _plcProbeService?.IsConnected ?? false;
 
+        // 🔹 Connect with timeout
+        private async Task<TcpClient?> ConnectIPAsync(string ip, int port, int timeoutMs = 3000)
+        {
+            try
+            {
+                var client = new TcpClient();
+                var connectTask = client.ConnectAsync(ip, port);
+                var timeoutTask = Task.Delay(timeoutMs);
 
-        
+                var completedTask = await Task.WhenAny(connectTask, timeoutTask);
+
+                if (completedTask == timeoutTask || !client.Connected)
+                {
+                    client.Dispose();
+                    return null;
+                }
+
+                return client;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+
+
+        public async Task<bool> TestConnectionAsync(string productCode)
+        {
+            _isCameraReady = false;
+
+            try
+            {
+                var config = _dataStorageService.GetCameraConfiguration();
+
+                if (config == null)
+                {
+                    MessageBox.Show(
+                        "Camera configuration not found in database.",
+                        "Configuration Error",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                    return false;
+                }
+
+                string ip1 = config.Camera1IP;
+                string ip2 = config.Camera2IP;
+                int port = config.Port;
+
+                string command = $"do productchange \"{productCode}\"\r\n";
+
+                var connectTask1 = ConnectIPAsync(ip1, port);
+                var connectTask2 = ConnectIPAsync(ip2, port);
+
+                await Task.WhenAll(connectTask1, connectTask2);
+
+                TcpClient? client1 = connectTask1.Result;
+                TcpClient? client2 = connectTask2.Result;
+
+                // ❌ Connection error
+                if (client1 == null || client2 == null)
+                {
+                    MessageBox.Show(
+                        $"Connection failed.\n" +
+                        $"{(client1 == null ? $"Device1 ({ip1}) not reachable.\n" : "")}" +
+                        $"{(client2 == null ? $"Device2 ({ip2}) not reachable." : "")}",
+                        "Connection Error",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+
+                    client1?.Dispose();
+                    client2?.Dispose();
+                    return false;
+                }
+
+                using (client1)
+                using (client2)
+                using (NetworkStream stream1 = client1.GetStream())
+                using (NetworkStream stream2 = client2.GetStream())
+                {
+                    byte[] data = Encoding.ASCII.GetBytes(command);
+
+                    await Task.WhenAll(
+                        stream1.WriteAsync(data, 0, data.Length),
+                        stream2.WriteAsync(data, 0, data.Length)
+                    );
+
+                    byte[] buffer1 = new byte[1024];
+                    byte[] buffer2 = new byte[1024];
+
+                    var readTask1 = stream1.ReadAsync(buffer1, 0, buffer1.Length);
+                    var readTask2 = stream2.ReadAsync(buffer2, 0, buffer2.Length);
+
+                    await Task.WhenAll(readTask1, readTask2);
+
+                    bool device1Ok = false;
+                    bool device2Ok = false;
+
+                    if (readTask1.Result > 0)
+                    {
+                        string response1 = Encoding.ASCII.GetString(buffer1, 0, readTask1.Result);
+                        device1Ok = response1.Contains("OK");
+                    }
+
+                    if (readTask2.Result > 0)
+                    {
+                        string response2 = Encoding.ASCII.GetString(buffer2, 0, readTask2.Result);
+                        device2Ok = response2.Contains("OK");
+                    }
+
+                    // ❌ Command error
+                    if (!device1Ok || !device2Ok)
+                    {
+                        MessageBox.Show(
+                            $"{(!device1Ok ? $"Device1 ({ip1}) did not acknowledge.\n" : "")}" +
+                            $"{(!device2Ok ? $"Device2 ({ip2}) did not acknowledge." : "")}",
+                            "Command Error",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+
+                        return false;
+                    }
+
+                    // ✅ SUCCESS → NO MESSAGE BOX
+                    _isCameraReady = true;
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Communication error:\n" + ex.Message,
+                    "Communication Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+
+                return false;
+            }
+        }
 
         public async Task<bool> EnsureConnectionAsync()
         {
@@ -132,8 +276,35 @@ namespace EVMS.Service
 
                 if (completed == openTask && openTask.Result == 0)
                 {
-                    Debug.WriteLine("✅ Local PLC ready");
-                    ProcessActivePartAndSetRoboBit();
+                   // Debug.WriteLine("✅ Local PLC ready");
+
+                    var autoList = _dataStorageService.GetActiveBit();
+
+                    // Find the control with Code "LS"
+                    var shControl = autoList.FirstOrDefault(c => c.Code == "LS");
+                    var CLControl = autoList.FirstOrDefault(c => c.Code == "CL");
+
+
+                    // Check if shControl exists and its value is 1
+                    if (shControl != null && shControl.Bit == 1)
+                    {
+                        // Set PLC bit to 1
+                        SetPlcDevice("M5", 1);
+                    }
+
+                    //if (CLControl != null && CLControl.Bit == 1)
+                    //{
+
+
+                            
+                    //        SetPlcDevice("M6", 1);
+
+                    //    await TestConnectionAsync();
+
+                        
+                    //}
+
+                   await ProcessActivePartAndSetRoboBit();
 
                     return true;
                 }
@@ -155,6 +326,7 @@ namespace EVMS.Service
         }
 
 
+
         public void ResetAll()
         {
            
@@ -165,58 +337,82 @@ namespace EVMS.Service
         //    _collectedReadings.Enqueue((e.ModuleId, e.Value));
         //}
 
-        public void ProcessActivePartAndSetRoboBit()
+        public async Task ProcessActivePartAndSetRoboBit()
         {
-            // 1️⃣ Get active parts
-
-            // Determine current mode
+            // 1️⃣ Determine Auto/Manual mode
             var autoList = _dataStorageService.GetActiveBit();
-            var autoControl = autoList?.FirstOrDefault(c => string.Equals(c.Description, "Auto/Manual", StringComparison.OrdinalIgnoreCase));
-            int bitValue = GetPlcDeviceBit("X0"); // PLC Auto/Manual bit
+            var autoControl = autoList?.FirstOrDefault(c =>
+                string.Equals(c.Description, "Auto/Manual", StringComparison.OrdinalIgnoreCase));
+            //int bitValue = GetPlcDeviceBit("X0"); // PLC Auto/Manual bit
 
-            bool isAuto = autoControl != null && autoControl.Bit == 1 && bitValue == 1;
+            bool isAuto = autoControl != null && autoControl.Bit == 1;
 
-            if (isAuto)
+            if (!isAuto)
             {
-                var activeParts = _dataStorageService.GetActiveParts();
-                if (activeParts == null || activeParts.Count == 0)
-                {
-                    MessageBox.Show("No active parts found.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return;
-                }
-
-                // Take the first active part
-                string partNumber = activeParts[0]?.Para_No ?? "";
-                if (string.IsNullOrEmpty(partNumber))
-                {
-                    MessageBox.Show("Active part has no Para_No.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return;
-                }
-
-                // 2️⃣ Get OL (TotalLength) for this part
-                PartReadingDataModel? olConfig = _dataStorageService.GetOLConfigByPartNumber(partNumber);
-                if (olConfig == null)
-                {
-                    MessageBox.Show($"No OL configuration found for part {partNumber}.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return;
-                }
-
-                decimal totalLength = Convert.ToDecimal(olConfig.Nominal);
-
-                // 3️⃣ Get RoboBit from RoboConfig based on TotalLength
-                string roboBit = _dataStorageService.GetRoboBitByLength(totalLength);
-                if (string.IsNullOrEmpty(roboBit))
-                {
-                    MessageBox.Show($"No RoboBit found for TotalLength {totalLength}.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return;
-                }
-
-                // 4️⃣ Set the RoboBit on PLC
-                SetPlcDevice(roboBit, 1);  // Assuming this is your method to write to PLC
+                return; // Manual mode - skip auto processing
             }
-            // Optional: log for debugging
-           // Console.WriteLine($"Active part {partNumber}, TotalLength {totalLength}, RoboBit {roboBit} set on PLC.");
+
+            // 2️⃣ Get active parts
+            var activeParts = _dataStorageService.GetActiveParts();
+            if (activeParts == null || activeParts.Count == 0)
+            {
+                MessageBox.Show("No active parts found.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            // Take first active part
+            var activePart = activeParts[0];
+            string partNumber = activePart?.Para_No ?? "";
+            if (string.IsNullOrEmpty(partNumber))
+            {
+                MessageBox.Show("Active part has no Para_No.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            // 3️⃣ Get BOTH RoboBit and LaserBit configuration
+            var bitConfig = _dataStorageService.GetBitConfigByPartNo(partNumber);
+            if (!bitConfig.HasRoboBit)
+            {
+                MessageBox.Show($"No RoboBit found for part {partNumber}.", "Info",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+
+            var CLControl = autoList.FirstOrDefault(c => c.Code == "CL");
+
+            if (CLControl != null && CLControl.Bit == 1)
+            {
+
+
+
+                SetPlcDevice("M6", 1);
+
+               // await TestConnectionAsync(partNumber);
+
+
+            }
+            try
+            {
+                // Set RoboBit (primary probe)
+                if (bitConfig.HasRoboBit)
+                {
+                    SetPlcDevice(bitConfig.RoboBit, 1);
+                }
+
+                // Set LaserBit (secondary measurement)
+                if (bitConfig.HasLaserBit)
+                {
+                    SetPlcDevice(bitConfig.LaserBit, 1);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to set bits for {partNumber}: {ex.Message}", "PLC Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
+
 
         public bool SetPlcDevice(string device, int value)
         {
@@ -286,14 +482,16 @@ namespace EVMS.Service
 
                 var activeIdPart = _dataStorageService
                     .GetActiveID()
-                    .FirstOrDefault(p => p.BOT_Value > 0);
+                    .FirstOrDefault(p => p.BOT_Value >= 0);
+
+                var CLControl = autoList.FirstOrDefault(c => c.Code == "CL");
 
                 ActiveIdNo = activeIdPart?.Para_No;
 
                 ActiveIdValue = activeIdPart?.ID_Value ?? 0;
                 ActiveBotValue = activeIdPart?.BOT_Value ?? 0;
 
-
+                
                 if (autoList == null || autoList.Count == 0)
                 {
                     MessageBox.Show("No Settings Found.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -321,14 +519,6 @@ namespace EVMS.Service
                 }
 
 
-                
-                //  int clear = GetPlcDeviceBit("M3");
-
-                //if (clear != 0)
-                //{
-                // MessageBox.Show("Clear the cycle First!!.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
-
-                //}
                 var activeParts = _dataStorageService.GetActiveParts();
                 if (activeParts == null || activeParts.Count == 0)
                 {
@@ -350,7 +540,6 @@ namespace EVMS.Service
                         SetPlcDevice("M129", 0);
                         SetPlcDevice("M130", 0);
                         SetPlcDevice("M128", 1);
-
                         break;
 
                     case 2:
@@ -379,10 +568,27 @@ namespace EVMS.Service
                     SetPlcDevice("M26", 0);
                     SetPlcDevice("M11", 0);
 
+
+                    if (CLControl != null && CLControl.Bit == 1)
+                    {
+                        // CL is ON → Camera check required WHEN THE CAMERA INTERLOCK IS ON
+
+                        if (!_isCameraReady)
+                        {
+                            MessageBox.Show("Camera is not ready. Operation blocked.",
+                                            "Camera Error",
+                                            MessageBoxButton.OK,
+                                            MessageBoxImage.Warning);
+                            return;   
+                        }
+                    }
+
+
                     if (GetPlcDeviceBit("M3") != 0)
                     {
                         MessageBox.Show(
-                            "Previous cycle is not cleared.\nPlease clear the cycle before starting.",
+                            "Previous cycle is not cleared.\n" +
+                            "Please clear the cycle before starting.",
                             "Auto Mode",
                             MessageBoxButton.OK,
                             MessageBoxImage.Warning);
@@ -407,7 +613,7 @@ namespace EVMS.Service
                     }
                 }
 
-               
+
 
 
                 if (mode == ProcedureMode.MasterInspection)
@@ -432,7 +638,6 @@ namespace EVMS.Service
                 if (mode == ProcedureMode.Measurement)
                 {
                     // Start the measurement cycle asynchronously her
-                    // Optionally handle any post-measurement processing her
                     return;
                 }
 
@@ -441,9 +646,9 @@ namespace EVMS.Service
                 if (mode == ProcedureMode.Mastering || mode == ProcedureMode.MasterInspection)
                 {
                     if (autoControl?.Bit == 0)
-                    {
+                    { 
 
-                        string loadMsg = mode == ProcedureMode.Mastering ? "Load The Value in fixture..." : "Place part for measurement...";
+                        string loadMsg = mode == ProcedureMode.Mastering ? "LOAD THE VALUE IN FIXTURE..." : " PLACE PART FOR MEASUREMENT...";
                         await NotifyOnUIAsync(loadMsg);
                         while (GetPlcDeviceBit("X46") != 1) await Task.Delay(100);
                         int Check = GetPlcDeviceBit("M4");
@@ -458,12 +663,12 @@ namespace EVMS.Service
                         while (GetPlcDeviceBit("X1") != 1) await Task.Delay(100);
                         await NotifyOnUIAsync("START BUTTON PRESSED");
 
-                        
 
-
+                        await NotifyOnUIAsync("MOTOR BLOCK CYCLE ON");
                         await WaitForPlcBitAsync("X51");
                         SetPlcDevice("M114", 1);
 
+                        await NotifyOnUIAsync("MOTOR DOWN SIGNAL ON");
                         await WaitForPlcBitAsync("X50");
                         SetPlcDevice("M127", 1);
 
@@ -471,45 +676,61 @@ namespace EVMS.Service
                         {
 
                             case 1:
-                                await WaitForPlcBitAsync("X65");
-                                await WaitForPlcBitAsync("X75");
-                                await WaitForPlcBitAsync("X71");
-                                await WaitForPlcBitAsync("X101");
-                                SetPlcDevice("M131", 1);
-                                SetPlcDevice("M132", 1);
+                                await NotifyOnUIAsync("RIGHT_ID_CYL 9.508 AND LEFT_ID_CYL 9.508 ON ");
+
+                                await WaitForPlcBitAsync("X65"); //Right_Block_ID-12.642
+                                await WaitForPlcBitAsync("X75"); //Right_Block_ID-8.072
+                                await WaitForPlcBitAsync("X71"); //LEFT_BLOCK_ID-12.642
+                                await WaitForPlcBitAsync("X101"); //LEFT_BLOCK_ID-8.072
+                                SetPlcDevice("M131", 1);//Right_Block_ID-9.508
+                                SetPlcDevice("M132", 1);//LEFT_BLOCK_ID-9.508
                                 break;
                             case 2:
+
+                                await NotifyOnUIAsync("RIGHT_BLOCK_CYL 12.642 AND LEFT_BLOCK_CYL 12.642 ON");
+
                                 await WaitForPlcBitAsync("X67");
-                                await WaitForPlcBitAsync("X61");
-                                await WaitForPlcBitAsync("X75");
-                                await WaitForPlcBitAsync("X101");
-                                await WaitForPlcBitAsync("X63");
-                                await WaitForPlcBitAsync("X73");
+                                await WaitForPlcBitAsync("X61");//Right_Block_ID-9.508
+                                await WaitForPlcBitAsync("X75"); //Right_Block_ID-8.072
+                                await WaitForPlcBitAsync("X101");//LEFT_BLOCK_ID-8.072
+                                await WaitForPlcBitAsync("X63");//LEFT_BLOCK_ID-9.508
+                                await WaitForPlcBitAsync("X73");//LEFT_BLOCK_ID-12.642
 
-                                if (ActiveIdNo == "44497118")
-                                {
-                                    SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
+                                SetPlcDevice("M116", 1);//Right Cylinder ID-12.642
+                                SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
 
-                                    await WaitForPlcBitAsync("X72");
+                                await NotifyOnUIAsync("RIGHT_ID 12.642 AND LEFT_ID 12.642 ON");
 
-                                    SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
+                                await WaitForPlcBitAsync("X66");
+                                await WaitForPlcBitAsync("X72");
 
-                                }
-                                else
-                                {
-                                    SetPlcDevice("M116", 1);//Right Cylinder ID-12.642
-                                    SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
+                                SetPlcDevice("M133", 1);//Right Cylinder ID-12.642
+                                SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
 
-                                    // Wait sequence – must complete before setting M
-                                    await WaitForPlcBitAsync("X66");
-                                    await WaitForPlcBitAsync("X72");
-
-                                    SetPlcDevice("M133", 1);//Right Cylinder ID-12.642
-                                    SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
-                                }
                                 break;
+
                             case 3:
-                                
+                                await NotifyOnUIAsync("RIGHT_BLOCK_CYL 8.072 AND LEFT_BLOCK_CYL 8.072 ON");
+
+                                await WaitForPlcBitAsync("X77");//Right_CYC_ID-8.072
+                                await WaitForPlcBitAsync("X61");//Right_Block_ID-9.508
+                                await WaitForPlcBitAsync("X65");//Right_Block_ID-12.642
+                                await WaitForPlcBitAsync("X103");//LEFT_CYC_ID-8.072
+                                await WaitForPlcBitAsync("X73");//LEFT_BLOCK_ID-12.642
+                                await WaitForPlcBitAsync("X63");//LEFT_BLOCK_ID-9.508
+
+
+                                SetPlcDevice("M120", 1);//Right_Block_ID-8.072 ON
+                                SetPlcDevice("M122", 1);//LEFT_BLOCK_ID-8.072
+
+                                await NotifyOnUIAsync("RIGHT_ID 8.072 AND LEFT_ID  8.072 ON");
+
+                                await WaitForPlcBitAsync("X76"); //Right_CYC_ID - 8.072 
+                                await WaitForPlcBitAsync("X102");//LEFT_CYC_ID-8.072
+
+                                SetPlcDevice("M135", 1);//Right_ID-8.072 ON
+                                SetPlcDevice("M136", 1);//LEFT_ID-8.072 ON
+
                                 break;
 
                             case 0:
@@ -541,35 +762,32 @@ namespace EVMS.Service
                         }
 
                         // 2️⃣ Check previous cycle cleared
-                        
+
 
                         // ✅ All checks passed → Auto mode can continue
 
 
-                        string startMsg = mode == ProcedureMode.Mastering ? "Press Robo start button to start mastering." : "Press Robo start button to start MasterInspection.";
-                         await NotifyOnUIAsync(startMsg);
+                        string startMsg = mode == ProcedureMode.Mastering ? "PRESS THE ROBO START BUTTON TO BEGIN MASTERING.  \r\n" : "PRESS THE ROBO START BUTTON TO BEGIN MASTER INSPECTION";
+                        await NotifyOnUIAsync(startMsg);
                         while (GetPlcDeviceBit("B2") != 1) await Task.Delay(100);
                         //await NotifyOnUIAsync("Robo start button Pressed");//DIRECTLY GETTING THE ROBO START
 
                         //SetPlcDevice("M101", 1); //Robo Start Bit
+                        //if (!_continueMastring) return;
 
-                        await NotifyOnUIAsync("Waiting Robot to Load Part and reched safe position...");
+                        await NotifyOnUIAsync("WAITING FOR ROBOT TO LOAD PART AND REACH SAFE POSITION...");
 
                         while (GetPlcDeviceBit("M18") != 1) await Task.Delay(100);
 
-                        if (_continueMeasurement)
-                            while (GetPlcDeviceBit("X46") != 1) await Task.Delay(100);
+                        //if (_continueMeasurement)
+                      while (GetPlcDeviceBit("X46") != 1) await Task.Delay(100);
 
 
-                        SetPlcDevice("M18", 0);
-                        await NotifyOnUIAsync("Gauge Sequence Start...");
-
-                        // await NotifyOnUIAsync("Waiting Robot for Safe Position...");
-                        // while (GetPlcDeviceBit("X46") != 1) await Task.Delay(100);
-
+                        await NotifyOnUIAsync("MOTOR BLOCK CYCLE ON");
                         await WaitForPlcBitAsync("X51");
                         SetPlcDevice("M114", 1);
 
+                        await NotifyOnUIAsync("MOTOR DOWN ");
                         await WaitForPlcBitAsync("X50");
                         SetPlcDevice("M127", 1);
 
@@ -577,17 +795,63 @@ namespace EVMS.Service
                         {
 
                             case 1:
-                                await WaitForPlcBitAsync("X65");
-                                await WaitForPlcBitAsync("X75");
-                                await WaitForPlcBitAsync("X71");
-                                await WaitForPlcBitAsync("X101");
-                                SetPlcDevice("M131", 1);
-                                SetPlcDevice("M132", 1);
+                                await NotifyOnUIAsync("RIGHT_ID_CYL 9.508 AND LEFT_ID_CYL 9.508 ON ");
+
+                                await WaitForPlcBitAsync("X65"); //Right_Block_ID-12.642
+                                await WaitForPlcBitAsync("X75"); //Right_Block_ID-8.072
+                                await WaitForPlcBitAsync("X71"); //LEFT_BLOCK_ID-12.642
+                                await WaitForPlcBitAsync("X101"); //LEFT_BLOCK_ID-8.072
+                                SetPlcDevice("M131", 1);//Right_Block_ID-9.508
+                                SetPlcDevice("M132", 1);//LEFT_BLOCK_ID-9.508
                                 break;
                             case 2:
 
-                            case 3:
+                                await NotifyOnUIAsync("RIGHT_BLOCK_CYL 12.642 AND LEFT_BLOCK_CYL 12.642 ON");
+
+                                await WaitForPlcBitAsync("X67");
+                                await WaitForPlcBitAsync("X61");
+                                await WaitForPlcBitAsync("X75");
+                                await WaitForPlcBitAsync("X101");
+                                await WaitForPlcBitAsync("X63");
+                                await WaitForPlcBitAsync("X73");
+
+                                SetPlcDevice("M116", 1);//Right Cylinder ID-12.642
+                                SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
+
                                 // Wait sequence – must complete before setting M
+                                await NotifyOnUIAsync("RIGHT_ID 12.642 AND LEFT_ID 12.642 ON");
+
+                                await WaitForPlcBitAsync("X66");
+                                await WaitForPlcBitAsync("X72");
+
+                                SetPlcDevice("M133", 1);//Right Cylinder ID-12.642
+                                SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
+
+                                break;
+
+                            case 3:
+                                //CHECK ALL HAVE TO HOME POSITION
+                                await NotifyOnUIAsync("RIGHT_BLOCK_CYL 8.072 AND LEFT_BLOCK_CYL 8.072 ON");
+
+                                await WaitForPlcBitAsync("X77");//Right_CYC_ID-8.072
+                                await WaitForPlcBitAsync("X61");//Right_Block_ID-9.508
+                                await WaitForPlcBitAsync("X65");//Right_Block_ID-12.642
+                                await WaitForPlcBitAsync("X103");//LEFT_CYC_ID-8.072
+                                await WaitForPlcBitAsync("X73");//LEFT_BLOCK_ID-12.642
+                                await WaitForPlcBitAsync("X63");//LEFT_BLOCK_ID-9.508
+
+
+                                SetPlcDevice("M120", 1);//Right_Block_ID-8.072 ON
+                                SetPlcDevice("M122", 1);//LEFT_BLOCK_ID-8.072
+
+                                //// Wait sequence – must complete before setting M
+                                await NotifyOnUIAsync("RIGHT_ID 8.072 AND LEFT_ID 8.072 ON");
+
+                                await WaitForPlcBitAsync("X76"); //Right_CYC_ID - 8.072 
+                                await WaitForPlcBitAsync("X102");//LEFT_CYC_ID-8.072
+
+                                SetPlcDevice("M135", 1);//Right_ID-8.072 ON
+                                SetPlcDevice("M136", 1);//LEFT_ID-8.072 ON
 
                                 break;
 
@@ -595,15 +859,20 @@ namespace EVMS.Service
                                 // Do nothing
                                 break;
 
+
                             default:
                                 // Optional: handle unexpected values
                                 break;
                         }
                     }
+       
 
                     await RunMotorAndCollectReadingsAsync(sortedProbeMeasurements, mode);
 
+             
+
                     await HandleProcedurePostProcessingAsync(mode, sortedProbeMeasurements, firstMeasurementCycle);
+                    
                 }
             }
             catch (Exception ex)
@@ -611,7 +880,6 @@ namespace EVMS.Service
                 MessageBox.Show($"Error in MasterCheckProcedure: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
 
         // Helper should continue method
 
@@ -625,9 +893,9 @@ namespace EVMS.Service
             if (!(autoControl != null && (autoControl.Bit == bitValue)))
             {
                 if (autoControl?.Bit == 0 && bitValue == 1)
-                    await NotifyOnUIAsync("Software is in Manual mode. Please switch PLC to Manual mode.");
+                    await NotifyOnUIAsync("SOFTWARE IS IN MANUAL MODE. PLEASE SWITCH PLC TO MANUAL MODE.");
                 else if (autoControl?.Bit == 1 && bitValue == 0)
-                    await NotifyOnUIAsync("Software is in Auto mode. Change PLC to Auto mode.");
+                    await NotifyOnUIAsync("SOFTWARE IS IN AUTO MODE. PLEASE SWITCH PLC TO AUTO MODE");
                 return;
             }
 
@@ -653,9 +921,9 @@ namespace EVMS.Service
                 // Wait for robot safe position if not the first cycle
                 if (!firstMeasurementCycle)
                 {
-                    await NotifyOnUIAsync("Waiting for Robot to reach safe position...");
+                    await NotifyOnUIAsync("WAITING FOR ROBOT TO REACH SAFE POSITION...");
                     while (GetPlcDeviceBit("M28") != 0) await Task.Delay(100);
-                    await NotifyOnUIAsync("Robot is in safe position. Ready to load next part.");
+                    await NotifyOnUIAsync("ROBOT IS IN SAFE POSITION. READY TO LOAD NEXT PART.");
                 }
 
                 // ===== Start Cycle =====
@@ -664,27 +932,29 @@ namespace EVMS.Service
                     if (autoControl?.Bit == 0)
                     {
 
-                        await NotifyOnUIAsync("Load The Part");
+                        await NotifyOnUIAsync("LOAD THE PART...");
 
                         while (GetPlcDeviceBit("X46") != 1) await Task.Delay(100);
                         int Check = GetPlcDeviceBit("M4");
                         if (Check != 1)
                         {
-                            MessageBox.Show("Some Cylinders not at home.");
+                            MessageBox.Show("SOME CYLINDERS ARE NOT AT HOME!");
                             SetPlcDevice("L25", 1);// hOME BIT FORFCE
                             return;
                         }
 
                         if (!_continueMeasurement) break;
 
-                        await NotifyOnUIAsync("Press the Start switch to begin measurement");
+                        await NotifyOnUIAsync("PRESS THE START SWITCH TO BEGIN MEASUREMENT");
                         while (GetPlcDeviceBit("X1") != 1 && _continueMeasurement) await Task.Delay(100);
 
                         if (!_continueMeasurement) break;
 
+                        await NotifyOnUIAsync("MOTOR BLOCK CYCLE ON");
                         await WaitForPlcBitAsync("X51");
                         SetPlcDevice("M114", 1);
 
+                        await NotifyOnUIAsync("MOTOR DOWN SIGNAL ON");
                         await WaitForPlcBitAsync("X50");
                         SetPlcDevice("M127", 1);
 
@@ -692,14 +962,19 @@ namespace EVMS.Service
                         {
 
                             case 1:
-                                await WaitForPlcBitAsync("X65");
-                                await WaitForPlcBitAsync("X75");
-                                await WaitForPlcBitAsync("X71");
-                                await WaitForPlcBitAsync("X101");
-                                SetPlcDevice("M131", 1);
-                                SetPlcDevice("M132", 1);
+                                await NotifyOnUIAsync("RIGHT_ID_CYL 9.508 AND LEFT_ID_CYL 9.508 ON ");
+
+                                await WaitForPlcBitAsync("X65"); //Right_Block_ID-12.642
+                                await WaitForPlcBitAsync("X75"); //Right_Block_ID-8.072
+                                await WaitForPlcBitAsync("X71"); //LEFT_BLOCK_ID-12.642
+                                await WaitForPlcBitAsync("X101"); //LEFT_BLOCK_ID-8.072
+                                SetPlcDevice("M131", 1);//Right_Block_ID-9.508
+                                SetPlcDevice("M132", 1);//LEFT_BLOCK_ID-9.508
                                 break;
                             case 2:
+
+                                await NotifyOnUIAsync("RIGHT_BLOCK_CYL 12.642 AND LEFT_BLOCK_CYL 12.642 ON");
+
                                 await WaitForPlcBitAsync("X67");
                                 await WaitForPlcBitAsync("X61");
                                 await WaitForPlcBitAsync("X75");
@@ -707,37 +982,47 @@ namespace EVMS.Service
                                 await WaitForPlcBitAsync("X63");
                                 await WaitForPlcBitAsync("X73");
 
-                                if (ActiveIdNo == "44497118")
-                                {
-                                    SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
+                                SetPlcDevice("M116", 1);//Right Cylinder ID-12.642
+                                SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
 
-                                    await WaitForPlcBitAsync("X72");
+                                await NotifyOnUIAsync("RIGHT_ID 12.642 AND LEFT_ID 12.642 ON");
 
-                                    SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
+                                await WaitForPlcBitAsync("X66");
+                                await WaitForPlcBitAsync("X72");
 
-                                }
-                                else
-                                {
-                                    SetPlcDevice("M116", 1);//Right Cylinder ID-12.642
-                                    SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
+                                SetPlcDevice("M133", 1);//Right Cylinder ID-12.642
+                                SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
 
-                                    // Wait sequence – must complete before setting M
-                                    await WaitForPlcBitAsync("X66");
-                                    await WaitForPlcBitAsync("X72");
-
-                                    SetPlcDevice("M133", 1);//Right Cylinder ID-12.642
-                                    SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
-                                }
                                 break;
-                            case 3:
-                                // Wait sequence – must complete before setting M
 
+                            case 3:
+                                await NotifyOnUIAsync("RIGHT_BLOCK_CYL 8.072 AND LEFT_BLOCK_CYL 8.072 ON");
+
+                                await WaitForPlcBitAsync("X77");//Right_CYC_ID-8.072
+                                await WaitForPlcBitAsync("X61");//Right_Block_ID-9.508
+                                await WaitForPlcBitAsync("X65");//Right_Block_ID-12.642
+                                await WaitForPlcBitAsync("X103");//LEFT_CYC_ID-8.072
+                                await WaitForPlcBitAsync("X73");//LEFT_BLOCK_ID-12.642
+                                await WaitForPlcBitAsync("X63");//LEFT_BLOCK_ID-9.508
+
+
+                                SetPlcDevice("M120", 1);//Right_Block_ID-8.072 ON
+                                SetPlcDevice("M122", 1);//LEFT_BLOCK_ID-8.072
+
+                                await NotifyOnUIAsync("RIGHT_ID 8.072 AND LEFT_ID 8.072 ON");
+
+                                await WaitForPlcBitAsync("X76"); //Right_CYC_ID - 8.072 
+                                await WaitForPlcBitAsync("X102");//LEFT_CYC_ID-8.072
+
+                                SetPlcDevice("M135", 1);//Right_ID-8.072 ON
+                                SetPlcDevice("M136", 1);//LEFT_ID-8.072 ON
 
                                 break;
 
                             case 0:
                                 // Do nothing
                                 break;
+
 
                             default:
                                 // Optional: handle unexpected values
@@ -751,8 +1036,17 @@ namespace EVMS.Service
 
 
                         // ================= AUTO MODE PRE-CHECK =================
+                        if (GetPlcDeviceBit("M3") != 0)
+                        {
+                            //MessageBox.Show(
+                            //    "Previous cycle is not cleared.\nPlease clear the cycle before starting.",
+                            //    "Auto Mode",
+                            //    MessageBoxButton.OK,
+                            //    MessageBoxImage.Warning);
 
-                        
+                            return;
+                        }
+
                         // 1️⃣ Check cylinders at home
                         if (GetPlcDeviceBit("M4") != 1)
                         {
@@ -766,23 +1060,13 @@ namespace EVMS.Service
                             return;
                         }
 
-                        // 2️⃣ Check previous cycle cleared
-                        //if (GetPlcDeviceBit("M3") != 0)
-                        //{
-                        //    MessageBox.Show(
-                        //        "Previous cycle is not cleared.\nPlease clear the cycle before starting.",
-                        //        "Auto Mode",
-                        //        MessageBoxButton.OK,
-                        //        MessageBoxImage.Warning);
 
-                        //    return;
-                        //}
 
-                        
+
                         // === AUTO MODE ===
                         if (!_continueMeasurement) break;
 
-                        await NotifyOnUIAsync("Press the Robo Start button to begin measurement..");
+                        await NotifyOnUIAsync("PRESS THE ROBO START BUTTON TO BEGIN MEASUREMENT.");
                         while (GetPlcDeviceBit("B2") != 1 && _continueMeasurement) await Task.Delay(100);
 
                         if (!_continueMeasurement) break;
@@ -791,8 +1075,9 @@ namespace EVMS.Service
                         //SetPlcDevice("M301", 1);
 
 
-                        await NotifyOnUIAsync("Waiting Robot to Load Part and reched safe position...");
+                        await NotifyOnUIAsync("WAITING FOR ROBOT TO REACH SAFE POSITION...");
 
+                        //
                         while (GetPlcDeviceBit("M28") != 1) await Task.Delay(100);
 
                         if (_continueMeasurement)
@@ -806,11 +1091,13 @@ namespace EVMS.Service
 
                         SetPlcDevice("M28", 0);
 
-                        await NotifyOnUIAsync("Gauge Sequence Starts...");
+                        
 
+                        await NotifyOnUIAsync("MOTOR BLOCK CYCLE ON");
                         await WaitForPlcBitAsync("X51");
                         SetPlcDevice("M114", 1);
 
+                        await NotifyOnUIAsync("MOTOR DOWN SIGNAL ON");
                         await WaitForPlcBitAsync("X50");
                         SetPlcDevice("M127", 1);
 
@@ -818,14 +1105,19 @@ namespace EVMS.Service
                         {
 
                             case 1:
-                                await WaitForPlcBitAsync("X65");
-                                await WaitForPlcBitAsync("X75");
-                                await WaitForPlcBitAsync("X71");
-                                await WaitForPlcBitAsync("X101");
-                                SetPlcDevice("M131", 1);
-                                SetPlcDevice("M132", 1);
+                                await NotifyOnUIAsync("RIGHT_ID_CYL 9.508 AND LEFT_ID_CYL 9.508 ON ");
+
+                                await WaitForPlcBitAsync("X65"); //Right_Block_ID-12.642
+                                await WaitForPlcBitAsync("X75"); //Right_Block_ID-8.072
+                                await WaitForPlcBitAsync("X71"); //LEFT_BLOCK_ID-12.642
+                                await WaitForPlcBitAsync("X101"); //LEFT_BLOCK_ID-8.072
+                                SetPlcDevice("M131", 1);//Right_Block_ID-9.508
+                                SetPlcDevice("M132", 1);//LEFT_BLOCK_ID-9.508
                                 break;
                             case 2:
+
+                                await NotifyOnUIAsync("RIGHT_BLOCK_CYL 12.642 AND LEFT_BLOCK_CYL 12.642 ON");
+
                                 await WaitForPlcBitAsync("X67");
                                 await WaitForPlcBitAsync("X61");
                                 await WaitForPlcBitAsync("X75");
@@ -833,36 +1125,47 @@ namespace EVMS.Service
                                 await WaitForPlcBitAsync("X63");
                                 await WaitForPlcBitAsync("X73");
 
-                                if (ActiveIdNo == "44497118")
-                                {
-                                    SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
+                                SetPlcDevice("M116", 1);//Right Cylinder ID-12.642
+                                SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
 
-                                    await WaitForPlcBitAsync("X72");
+                                await NotifyOnUIAsync("RIGHT_ID 12.642 AND LEFT_ID 12.642 ON");
 
-                                    SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
+                                await WaitForPlcBitAsync("X66");
+                                await WaitForPlcBitAsync("X72");
 
-                                }
-                                else
-                                {
-                                    SetPlcDevice("M116", 1);//Right Cylinder ID-12.642
-                                    SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
+                                SetPlcDevice("M133", 1);//Right Cylinder ID-12.642
+                                SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
 
-                                    // Wait sequence – must complete before setting M
-                                    await WaitForPlcBitAsync("X66");
-                                    await WaitForPlcBitAsync("X72");
-
-                                    SetPlcDevice("M133", 1);//Right Cylinder ID-12.642
-                                    SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
-                                }
                                 break;
+
                             case 3:
-                                // Wait sequence – must complete before setting M
+                                await NotifyOnUIAsync("RIGHT_BLOCK_CYL 8.072 AND LEFT_BLOCK_CYL 8.072 ON");
+
+                                await WaitForPlcBitAsync("X77");//Right_CYC_ID-8.072
+                                await WaitForPlcBitAsync("X61");//Right_Block_ID-9.508
+                                await WaitForPlcBitAsync("X65");//Right_Block_ID-12.642
+                                await WaitForPlcBitAsync("X103");//LEFT_CYC_ID-8.072
+                                await WaitForPlcBitAsync("X73");//LEFT_BLOCK_ID-12.642
+                                await WaitForPlcBitAsync("X63");//LEFT_BLOCK_ID-9.508
+
+
+                                SetPlcDevice("M120", 1);//Right_Block_ID-8.072 ON
+                                SetPlcDevice("M122", 1);//LEFT_BLOCK_ID-8.072
+
+                                await NotifyOnUIAsync("RIGHT_ID 8.072 AND LEFT_ID 8.072 ON");
+
+                                await WaitForPlcBitAsync("X76"); //Right_CYC_ID - 8.072 
+                                await WaitForPlcBitAsync("X102");//LEFT_CYC_ID-8.072
+
+                                SetPlcDevice("M135", 1);//Right_ID-8.072 ON
+                                SetPlcDevice("M136", 1);//LEFT_ID-8.072 ON
 
                                 break;
 
                             case 0:
                                 // Do nothing
                                 break;
+
 
                             default:
                                 // Optional: handle unexpected values
@@ -881,11 +1184,11 @@ namespace EVMS.Service
                         // Wait until part is removed (X46 = 0)
                         while (GetPlcDeviceBit("X46") == 1)
                         {
-                            await NotifyOnUIAsync("Remove the part");
+                            await NotifyOnUIAsync("REMOVE THE PART");
                             await Task.Delay(300); // avoid CPU overload
                         }
 
-                        // ✅ Part removed → continue further logic here
+                        //  Part removed → continue further logic here
 
 
 
@@ -893,12 +1196,12 @@ namespace EVMS.Service
                             break;
 
                         // 1️⃣ Ask operator to load the part
-                        await NotifyOnUIAsync("Please load part...");
+                        await NotifyOnUIAsync("LOAD THE PART..");
                         while (GetPlcDeviceBit("X46") != 1) await Task.Delay(100);
                         int Check = GetPlcDeviceBit("M4");
                         if (Check != 1)
                         {
-                            MessageBox.Show("Some Cylinders not at home.");
+                            MessageBox.Show("SOME CYLINDERS ARE NOT AT HOME!");
                             SetPlcDevice("L25", 1);// hOME BIT FORFCE
                             return;
                         }
@@ -907,7 +1210,7 @@ namespace EVMS.Service
                             break;
 
                         // 2️⃣ Ask operator to press start switch
-                        await NotifyOnUIAsync("Part detected. Press Start switch to begin measurement.");
+                        await NotifyOnUIAsync("PART DETECTED. PRESS START SWITCH TO BEGIN MEASUREMENT.");
                         while (GetPlcDeviceBit("X1") != 1 && _continueMeasurement)
                             await Task.Delay(100);
 
@@ -915,9 +1218,11 @@ namespace EVMS.Service
                         if (!_continueMeasurement)
                             break;
 
+                        await NotifyOnUIAsync("MOTOR BLOCK CYCLE ACTIVATED");
                         await WaitForPlcBitAsync("X51");
                         SetPlcDevice("M114", 1);
 
+                        await NotifyOnUIAsync("MOTOR DOWN SIGNAL ACTIVE");
                         await WaitForPlcBitAsync("X50");
                         SetPlcDevice("M127", 1);
 
@@ -925,14 +1230,19 @@ namespace EVMS.Service
                         {
 
                             case 1:
-                                await WaitForPlcBitAsync("X65");
-                                await WaitForPlcBitAsync("X75");
-                                await WaitForPlcBitAsync("X71");
-                                await WaitForPlcBitAsync("X101");
-                                SetPlcDevice("M131", 1);
-                                SetPlcDevice("M132", 1);
+                                await NotifyOnUIAsync("RIGHT_BLOCK_ID = 9.508 AND LEFT_BLOCK_ID = 9.508");
+
+                                await WaitForPlcBitAsync("X65"); //Right_Block_ID-12.642
+                                await WaitForPlcBitAsync("X75"); //Right_Block_ID-8.072
+                                await WaitForPlcBitAsync("X71"); //LEFT_BLOCK_ID-12.642
+                                await WaitForPlcBitAsync("X101"); //LEFT_BLOCK_ID-8.072
+                                SetPlcDevice("M131", 1);//Right_Block_ID-9.508
+                                SetPlcDevice("M132", 1);//LEFT_BLOCK_ID-9.508
                                 break;
                             case 2:
+
+                                await NotifyOnUIAsync("RIGHT_BLOCK_CYL 12.642 AND LEFT_BLOCK_CYL 12.642 ON");
+
                                 await WaitForPlcBitAsync("X67");
                                 await WaitForPlcBitAsync("X61");
                                 await WaitForPlcBitAsync("X75");
@@ -940,30 +1250,40 @@ namespace EVMS.Service
                                 await WaitForPlcBitAsync("X63");
                                 await WaitForPlcBitAsync("X73");
 
-                                if (ActiveIdNo == "44497118")
-                                {
-                                    SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
+                                SetPlcDevice("M116", 1);//Right Cylinder ID-12.642
+                                SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
 
-                                    await WaitForPlcBitAsync("X72");
+                                await NotifyOnUIAsync("RIGHT_ID 12.642 AND LEFT_ID 12.642 ON");
 
-                                    SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
+                                await WaitForPlcBitAsync("X66");
+                                await WaitForPlcBitAsync("X72");
 
-                                }
-                                else
-                                {
-                                    SetPlcDevice("M116", 1);//Right Cylinder ID-12.642
-                                    SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
+                                SetPlcDevice("M133", 1);//Right Cylinder ID-12.642
+                                SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
 
-                                    // Wait sequence – must complete before setting M
-                                    await WaitForPlcBitAsync("X66");
-                                    await WaitForPlcBitAsync("X72");
-
-                                    SetPlcDevice("M133", 1);//Right Cylinder ID-12.642
-                                    SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
-                                }
                                 break;
+
                             case 3:
-                                // Wait sequence – must complete before setting M
+                                await NotifyOnUIAsync("RIGHT_BLOCK_CYL 8.072 AND LEFT_BLOCK_CYL 8.072 ON");
+
+                                await WaitForPlcBitAsync("X77");//Right_CYC_ID-8.072
+                                await WaitForPlcBitAsync("X61");//Right_Block_ID-9.508
+                                await WaitForPlcBitAsync("X65");//Right_Block_ID-12.642
+                                await WaitForPlcBitAsync("X103");//LEFT_CYC_ID-8.072
+                                await WaitForPlcBitAsync("X73");//LEFT_BLOCK_ID-12.642
+                                await WaitForPlcBitAsync("X63");//LEFT_BLOCK_ID-9.508
+
+
+                                SetPlcDevice("M120", 1);//Right_Block_ID-8.072 ON
+                                SetPlcDevice("M122", 1);//LEFT_BLOCK_ID-8.072
+
+                                await NotifyOnUIAsync("RIGHT_ID 8.072 AND LEFT_ID 8.072 ON");
+
+                                await WaitForPlcBitAsync("X76"); //Right_CYC_ID - 8.072 
+                                await WaitForPlcBitAsync("X102");//LEFT_CYC_ID-8.072
+
+                                SetPlcDevice("M135", 1);//Right_ID-8.072 ON
+                                SetPlcDevice("M136", 1);//LEFT_ID-8.072 ON
 
                                 break;
 
@@ -971,33 +1291,25 @@ namespace EVMS.Service
                                 // Do nothing
                                 break;
 
+
                             default:
                                 // Optional: handle unexpected values
                                 break;
                         }
                         await NotifyOnUIAsync("Starting measurement..");
 
-
-                        // 6️⃣ Wait for part to be removed
-
-                        // 7️⃣ Small delay before next cycle
-                        //await Task.Delay(1000);
-
                     }
 
                     else
                     {
-                       
+
                         // === AUTO MODE REPEAT ===
                         if (!_continueMeasurement) break;
-                        //await NotifyOnUIAsync("Waiting Robot to UnLoad Part and reched safe position...");
 
-                        //while (GetPlcDeviceBit("M30") != 0) await Task.Delay(100);
-                        //while (GetPlcDeviceBit("M31") != 0) await Task.Delay(100);
 
-                        await NotifyOnUIAsync("Waiting Robot to Load Part and reched safe position...");
-
+                        await NotifyOnUIAsync("ROBOT IS IN SAFE POSITION. READY TO LOAD NEXT PART.");
                         while (GetPlcDeviceBit("M28") != 1) await Task.Delay(100);
+
 
                         if (_continueMeasurement)
                             while (GetPlcDeviceBit("X46") != 1) await Task.Delay(1000);
@@ -1011,11 +1323,12 @@ namespace EVMS.Service
 
                         if (!_continueMeasurement) break;
 
-                       
 
+                        await NotifyOnUIAsync("MOTOR BLOCK CYCLE ON");
                         await WaitForPlcBitAsync("X51");
                         SetPlcDevice("M114", 1);
 
+                        await NotifyOnUIAsync("MOTOR DOWN SIGNAL ON");
                         await WaitForPlcBitAsync("X50");
                         SetPlcDevice("M127", 1);
 
@@ -1023,14 +1336,19 @@ namespace EVMS.Service
                         {
 
                             case 1:
-                                await WaitForPlcBitAsync("X65");
-                                await WaitForPlcBitAsync("X75");
-                                await WaitForPlcBitAsync("X71");
-                                await WaitForPlcBitAsync("X101");
-                                SetPlcDevice("M131", 1);
-                                SetPlcDevice("M132", 1);
+                                await NotifyOnUIAsync("RIGHT_BLOCK_ID = 9.508 AND LEFT_BLOCK_ID = 9.508");
+
+                                await WaitForPlcBitAsync("X65"); //Right_Block_ID-12.642
+                                await WaitForPlcBitAsync("X75"); //Right_Block_ID-8.072
+                                await WaitForPlcBitAsync("X71"); //LEFT_BLOCK_ID-12.642
+                                await WaitForPlcBitAsync("X101"); //LEFT_BLOCK_ID-8.072
+                                SetPlcDevice("M131", 1);//Right_Block_ID-9.508
+                                SetPlcDevice("M132", 1);//LEFT_BLOCK_ID-9.508
                                 break;
                             case 2:
+
+                                await NotifyOnUIAsync("RIGHT_BLOCK_CYL 12.642 AND LEFT_BLOCK_CYL 12.642 ON");
+
                                 await WaitForPlcBitAsync("X67");
                                 await WaitForPlcBitAsync("X61");
                                 await WaitForPlcBitAsync("X75");
@@ -1038,37 +1356,47 @@ namespace EVMS.Service
                                 await WaitForPlcBitAsync("X63");
                                 await WaitForPlcBitAsync("X73");
 
-                                if (ActiveIdNo == "44497118")
-                                {
-                                    SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
+                                SetPlcDevice("M116", 1);//Right Cylinder ID-12.642
+                                SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
 
-                                    await WaitForPlcBitAsync("X72");
+                                await NotifyOnUIAsync("RIGHT_ID 12.642 AND LEFT_ID 12.642 ON");
 
-                                    SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
+                                await WaitForPlcBitAsync("X66");
+                                await WaitForPlcBitAsync("X72");
 
-                                }
-                                else
-                                {
-                                    SetPlcDevice("M116", 1);//Right Cylinder ID-12.642
-                                    SetPlcDevice("M118", 1);//lEFT Cylinder ID-12.642
+                                SetPlcDevice("M133", 1);//Right Cylinder ID-12.642
+                                SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
 
-                                    // Wait sequence – must complete before setting M
-                                    await WaitForPlcBitAsync("X66");
-                                    await WaitForPlcBitAsync("X72");
-
-                                    SetPlcDevice("M133", 1);//Right Cylinder ID-12.642
-                                    SetPlcDevice("M134", 1);//lEFT Cylinder ID-12.642
-                                }
                                 break;
-                                break;
+
                             case 3:
-                                // Wait sequence – must complete before setting M
+                                await NotifyOnUIAsync("RIGHT_BLOCK_CYL 8.072 AND LEFT_BLOCK_CYL 8.072 ON");
+
+                                await WaitForPlcBitAsync("X77");//Right_CYC_ID-8.072
+                                await WaitForPlcBitAsync("X61");//Right_Block_ID-9.508
+                                await WaitForPlcBitAsync("X65");//Right_Block_ID-12.642
+                                await WaitForPlcBitAsync("X103");//LEFT_CYC_ID-8.072
+                                await WaitForPlcBitAsync("X73");//LEFT_BLOCK_ID-12.642
+                                await WaitForPlcBitAsync("X63");//LEFT_BLOCK_ID-9.508
+
+
+                                SetPlcDevice("M120", 1);//Right_Block_ID-8.072 ON
+                                SetPlcDevice("M122", 1);//LEFT_BLOCK_ID-8.072
+
+                                await NotifyOnUIAsync("RIGHT_ID 8.072 AND LEFT_ID = 8.072 ON");
+
+                                await WaitForPlcBitAsync("X76"); //Right_CYC_ID - 8.072 
+                                await WaitForPlcBitAsync("X102");//LEFT_CYC_ID-8.072
+
+                                SetPlcDevice("M135", 1);//Right_ID-8.072 ON
+                                SetPlcDevice("M136", 1);//LEFT_ID-8.072 ON
 
                                 break;
 
                             case 0:
                                 // Do nothing
                                 break;
+
 
                             default:
                                 // Optional: handle unexpected values
@@ -1077,11 +1405,12 @@ namespace EVMS.Service
                     }
                 }
 
-                // 🛠 Motor should NOT run again after measurement in manual mode
                 if (_continueMeasurement)
                 {
                     await RunMotorAndCollectReadingsAsync(sortedProbeMeasurements, ProcedureMode.Measurement);
                 }
+
+
 
                 var probeMeasurementByNameMeasurement = sortedProbeMeasurements
                     .Where(pm => !string.IsNullOrEmpty(pm.Name))
@@ -1103,114 +1432,43 @@ namespace EVMS.Service
         }
 
 
-        //public async Task WaitForValidProbeReadingAsync(string targetParameterName, bool suppressDetectedMessage = false)
-        //{
-        //    await NotifyOnUIAsync("Initializing probe readings...");
 
-        //    _plcProbeService.StartLiveReading(100);  // ✅ Start serial reading
-
-        //    bool partDetected = false;
-        //    bool messageFired = false;
-
-        //    if (!suppressDetectedMessage)
-        //    {
-        //        if (GetPlcDeviceBit("X0") == 1)
-        //            await NotifyOnUIAsync("Waiting the robo to load part");
-        //        else
-        //            await NotifyOnUIAsync("Load the part");
-        //    }
-
-        //    while (!partDetected)
-        //    {
-        //        await Task.Delay(100);
-
-        //        // ✅ CHANGE: Direct dictionary access
-        //        double? probeVal = _plcProbeService.GetProbeValue(targetParameterName);
-        //        bool partPresent = Math.Abs(probeVal ?? 0) > 0.100;
-
-        //        if (partPresent && !messageFired)
-        //        {
-        //            messageFired = true;
-        //            partDetected = true;
-        //            if (!suppressDetectedMessage)
-        //                await NotifyOnUIAsync("Part detected. Proceeding...");
-        //        }
-        //        else if (!partPresent && messageFired)
-        //        {
-        //            messageFired = false;
-        //            if (!suppressDetectedMessage)
-        //                await NotifyOnUIAsync("Part removed. Waiting for new part...");
-        //        }
-        //    }
-
-        //    _plcProbeService.StopLiveReading();
-        //    if (!suppressDetectedMessage)
-        //        await NotifyOnUIAsync("Values updated...");
-        //}
-
-
-
-        // 🆕 Added Helper for Manual Mode (wait until part removed)
-        //public async Task WaitForPartRemovedAsync(string targetProbeId, bool suppressRemovedMessage = false)
-        //{
-        //    await NotifyOnUIAsync("Remove The Part...");
-
-        //    _plcProbeService.StartLiveReading(100);
-
-        //    bool partRemoved = false;
-
-        //    while (!partRemoved && _continueMeasurement)
-        //    {
-        //        await Task.Delay(100);
-
-        //        var probeVal = _collectedReadings
-        //            .Where(r => r.ProbeId == targetProbeId)
-        //            .Select(r => r.Value)
-        //            .LastOrDefault();
-
-        //        bool partPresent = Math.Abs(probeVal) > 0.100;
-
-        //        if (!partPresent)
-        //        {
-        //            partRemoved = true;
-        //            if (!suppressRemovedMessage)
-        //                await NotifyOnUIAsync("Part removed. Ready for next part.");
-        //        }
-        //    }
-
-        //    _plcProbeService.StopLiveReading();
-
-        //    //if (!suppressRemovedMessage)
-        //    //    await NotifyOnUIAsync("Waiting for next cycle...");
-        //}
-
-
-
-
-
-        private async Task RunMotorAndCollectReadingsAsync(
-    List<ProbeMeasurement> sortedProbeMeasurements,
-    ProcedureMode mode)
+        private async Task RunMotorAndCollectReadingsAsync(List<ProbeMeasurement> sortedProbeMeasurements,ProcedureMode mode)
         {
             const int StabilizationDelayMs = 700;
             int SamplesPerProbe =ArraySize;
-            const int PollIntervalMs = 40;
-            const int InitialDiscardSamples = 5; // kept, not used
-            const int TrimCount = 5;
+            const int PollIntervalMs = 50;
+            const int InitialDiscardSamples = 3; // kept, not used
+            const int TrimCount = 3;
 
             var probesByName = sortedProbeMeasurements.ToDictionary(p => p.Name);
 
             // OD probes combined with RN readings
             var odGroupsByName = new Dictionary<string, List<string>>
-    {
-        { "OD1", new List<string> { "RN1" } },
-        { "OD2", new List<string> { "RN2" } },
-        { "OD3", new List<string> { "RN3" } },
-        { "OD4", new List<string> { "RN4" } },
-        { "OD5", new List<string> { "RN5" } },
-        { "ID-1", new List<string> { "RN6" } },
-        { "ID-2", new List<string> { "RN7" } }
-    };
+            {
+                { "OD1", new List<string> { "RN1" } },
+                { "OD2", new List<string> { "RN2" } },
+                { "OD3", new List<string> { "RN3" } },
+                { "OD4", new List<string> { "RN4" } },
+                { "OD5", new List<string> { "RN5" } },
+                { "ID-1", new List<string> { "RN6" } },
+                { "ID-2", new List<string> { "RN7" } }
+            };
+
+
+
+            // 1️⃣ Check cylinders at home
+            if (GetPlcDeviceBit("X6") != 0)
+            {
+                MessageBox.Show(
+                    "Probe Pressure is Low...\nCheck the Air Pressure!!",
+                    "Auto Mode",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                
+                //SetPlcDevice("L25", 1); // Force Home
+                return;
+            }
 
             try
             {
@@ -1219,9 +1477,13 @@ namespace EVMS.Service
                 if (!await _plcProbeService.ConnectSerialAsync())
                     return;
 
+
+                await NotifyOnUIAsync("PROBES ON");
                 await Task.Delay(StabilizationDelayMs);
                 SetPlcDevice("M137", 1);
-                await Task.Delay(1000);
+
+                await NotifyOnUIAsync("SYSTEM IS COLLECTING READINGS.");
+                await Task.Delay(500);
                 SetPlcDevice("M101", 1);
 
                 // Reset all probes
@@ -1230,9 +1492,8 @@ namespace EVMS.Service
                     pm.Readings.Clear();
                     pm.MinValue = double.MaxValue;
                     pm.MaxValue = double.MinValue;
-                }
-
-                await Task.Delay(500);
+                }   
+                await Task.Delay(10);
                 _plcProbeService.StartLiveReading(8, PollIntervalMs);
 
                 var probesPending = sortedProbeMeasurements
@@ -1262,6 +1523,7 @@ namespace EVMS.Service
 
                     await Task.Delay(PollIntervalMs);
                 }
+                await NotifyOnUIAsync("READINGS DONE.");
 
                 _plcProbeService.StopAndCloseSerial();
                 SetPlcDevice("M101", 0);
@@ -1273,7 +1535,6 @@ namespace EVMS.Service
                 // =====================================================
 
 
-                //Check total Raw Readings for all probes /Single also
                 foreach (var pm in sortedProbeMeasurements)
                 {
 
@@ -1363,12 +1624,14 @@ namespace EVMS.Service
             }
         }
 
+
+
         private async Task HandleProcedurePostProcessingAsync(ProcedureMode mode, List<ProbeMeasurement> probeMeasurements, bool isFirstMeasurementCycle)
         {
             switch (mode)
             {
                 case ProcedureMode.Mastering:
-                    await NotifyOnUIAsync("Mastering Completed. Press Enter to Inspect the Master");
+                    await NotifyOnUIAsync("MASTERING COMPLETED. PRESS ENTER TO INSPECT THE MASTER.");
 
                     var masterValues = probeMeasurements
                              .Where(pm => !string.IsNullOrEmpty(pm.ProbeId))
@@ -1386,6 +1649,8 @@ namespace EVMS.Service
 
                 case ProcedureMode.MasterInspection:
                     {
+                        await NotifyOnUIAsync("Master Inspection Completed...");
+
                         // Build dictionary safely (avoid duplicate keys)
                         var probeMeasurementByName = probeMeasurements
                             .Where(pm => !string.IsNullOrEmpty(pm.Name))
@@ -1404,7 +1669,7 @@ namespace EVMS.Service
                             Thread.Sleep(1500);
 
                             SetPlcDevice("M19", 1); // trigger robot to move to safe position
-                            await NotifyOnUIAsync("Waiting For Robot to Unload the Master");
+                            //await NotifyOnUIAsync("Waiting For Robot to Unload the Master");
 
                             while (GetPlcDeviceBit("M16") != 0) await Task.Delay(100);
 
@@ -1485,77 +1750,62 @@ namespace EVMS.Service
         {
             return probeMeasurements.ContainsKey(param) && dbRefDict.ContainsKey(param);
         }
-
-        private void HandleMasterInspectionStage(Dictionary<string, ProbeMeasurement> probeMeasurements, string partCode)
+        private void HandleMasterInspectionStage(
+            Dictionary<string, ProbeMeasurement> probeMeasurements,
+            string partCode)
         {
             var probeMeasurementByName =
-                                         BuildEffectiveProbesByName(probeMeasurements.Values.ToList());
-            var dbRefList = _dataStorageService.GetMasterProbeRef(_currentPartCode);
+                BuildEffectiveProbesByName(probeMeasurements.Values.ToList());
 
+            var dbRefList = _dataStorageService.GetMasterProbeRef(_currentPartCode);
             var mode = ProcedureMode.MasterInspection;
 
-            // ✅ FIXED: Prevent "duplicate key" crash
             var dbRefDict = dbRefList
-                 .GroupBy(x => x.Name)
-                 .ToDictionary(
-                     g => g.Key,
-                     g => (Min: g.First().Min, Max: g.First().Max));
+                .GroupBy(x => x.Name)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (Min: g.First().Min, Max: g.First().Max));
 
-            // Fetch master part configurations including tolerances
             var masterVals = _dataStorageService.GetMasterReadingByPart(partCode);
-            // var masterp = _dataStorageService.GetPartConfig(partCode);
-
-            // 17 measurement parameters in order
 
             var parameterNames = masterVals
                 .Select(m => m.Parameter)
                 .Distinct()
                 .ToList();
 
-            //    string[] parameterNames = new string[]
-            //    {
-            //"Overall Length", "Datum to End", "Head Diameter", "Groove Position",
-            //"Stem Dia Near Groove", "Stem Dia Near Undercut", "Groove Diameter",
-            //"Straightness", "Seat Height", "Seat Runout", "Datum to Groove",
-            //"Ovality SDG", "Ovality SDU", "Ovality Head", "Stem Taper",
-            //"Face Runout", "End Face Runout"
-            //    };
+            // 🔥 Now stores Min/Max
+            var calculatedValues = new Dictionary<string, (double Min, double Max)>();
 
-            var calculatedValues = new Dictionary<string, double>();
-
-            // Create dummy ParameterInfo list (no sign change/compensation)
             var parameterInfos = parameterNames.Select(p => new ParameterInfo
             {
                 Name = p,
                 SignChange = 0,
-                Compensation = 0.0
+                Compensation = 0
             }).ToList();
 
             foreach (var pInfo in parameterInfos)
             {
                 try
                 {
-                    double val = CalculateProbeValue(pInfo, probeMeasurementByName, dbRefDict, mode);
-                    calculatedValues[pInfo.Name] = val;
+                    calculatedValues[pInfo.Name] =
+                        CalculateProbeValue(pInfo, probeMeasurementByName, dbRefDict, mode);
                 }
                 catch
                 {
-                    calculatedValues[pInfo.Name] = double.NaN;
+                    calculatedValues[pInfo.Name] = (double.NaN, double.NaN);
                 }
             }
-
 
             bool overallOk = true;
             var resultsWithStatus = new Dictionary<string, ParameterResult>();
 
             foreach (var paramName in parameterNames)
             {
-                double val = calculatedValues[paramName];
+                var measured = calculatedValues[paramName];
 
-                var config = masterVals?.FirstOrDefault(m =>
+                var config = masterVals.FirstOrDefault(m =>
                     string.Equals(m.Para_No, paramName, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(m.Parameter, paramName, StringComparison.OrdinalIgnoreCase)
-                );
+                    string.Equals(m.Parameter, paramName, StringComparison.OrdinalIgnoreCase));
 
                 double masterVal = config?.Nominal ?? 0;
                 double tolPlus = config?.RTolPlus ?? 0;
@@ -1564,28 +1814,26 @@ namespace EVMS.Service
                 double minAllowed = masterVal - tolMinus;
                 double maxAllowed = masterVal + tolPlus;
 
-                double FinalResult = val;
+                double measuredMin = measured.Min;
+                double measuredMax = measured.Max;
 
-                bool isOk = !double.IsNaN(FinalResult) && FinalResult >= minAllowed && FinalResult <= maxAllowed;
-                if (!isOk) overallOk = false;
+                bool isOk =
+                    !double.IsNaN(measuredMax) && measuredMax >= minAllowed && measuredMax <= maxAllowed;
+                if (!isOk)
+                    overallOk = false;
 
                 resultsWithStatus[paramName] = new ParameterResult
                 {
-                    Value = Math.Abs(FinalResult),
+                    Min = Math.Round(measuredMin, 3),
+                    Value = Math.Round(measuredMax, 3),
                     IsOk = isOk
                 };
             }
 
             MasteringOK = overallOk;
             OnCalculatedValuesWithStatusReady(resultsWithStatus);
-
-            // Debug info
-            //System.Diagnostics.Debug.WriteLine("=== MASTER INSPECTION RESULTS WITH TOLERANCES ===");
-            //foreach (var kvp in resultsWithStatus)
-            //{
-            //    System.Diagnostics.Debug.WriteLine($"{kvp.Key}: {kvp.Value.Value:F4} [{(kvp.Value.IsOk ? "OK" : "NG")}]");
-            //}
         }
+
 
 
         private void HandleMeasurementStage(Dictionary<string, ProbeMeasurement> probeMeasurements, string partCode)
@@ -1627,20 +1875,22 @@ namespace EVMS.Service
         })
         .ToList();
 
-            var calculatedValues = new Dictionary<string, double>();
+            var calculatedValues = new Dictionary<string, (double Min, double Max)>();
 
             // Calculate each probe value
             foreach (var pInfo in parameterInfos)
             {
                 try
                 {
-                    calculatedValues[pInfo.Name] = CalculateProbeValue(pInfo, probeMeasurements, dbRefDict, mode);
+                    calculatedValues[pInfo.Name] =
+                        CalculateProbeValue(pInfo, probeMeasurements, dbRefDict, mode);
                 }
                 catch
                 {
-                    calculatedValues[pInfo.Name] = double.NaN;
+                    calculatedValues[pInfo.Name] = (double.NaN, double.NaN);
                 }
             }
+
 
             // Determine overall OK/NG and prepare results
             bool overallOk = true;
@@ -1648,7 +1898,7 @@ namespace EVMS.Service
 
             foreach (var paramName in parameterNames)
             {
-                double val = calculatedValues[paramName];
+                var measured = calculatedValues[paramName];
 
                 var config = masterVals?.FirstOrDefault(m =>
                     string.Equals(m.Para_No, paramName, StringComparison.OrdinalIgnoreCase) ||
@@ -1662,17 +1912,23 @@ namespace EVMS.Service
                 double minAllowed = masterVal - tolMinus;
                 double maxAllowed = masterVal + tolPlus;
 
-                double FinalResult = val;
+                double measuredMin = measured.Min;
+                double measuredMax = measured.Max;
 
-                bool isOk = !double.IsNaN(FinalResult) && FinalResult >= minAllowed && FinalResult <= maxAllowed;
-                if (!isOk) overallOk = false;
+                bool isOk =
+                    !double.IsNaN(measuredMax) && measuredMax >= minAllowed && measuredMax <= maxAllowed;
+
+                if (!isOk)
+                    overallOk = false;
 
                 resultsWithStatus[paramName] = new ParameterResult
                 {
-                    Value = Math.Abs(FinalResult),
+                    Min = Math.Round(measuredMin, 3),   // ✅ MEASURED MIN
+                    Value = Math.Round(measuredMax, 3),   // ✅ MEASURED MAX
                     IsOk = isOk
                 };
             }
+
 
             MasteringOK = overallOk;
 
@@ -1684,7 +1940,7 @@ namespace EVMS.Service
 
             int bitValue = GetPlcDeviceBit("X0"); // Auto/Manual PLC bit
 
-            //]var autoList = _dataStorageService.GetActiveBit();
+            //var autoList = _dataStorageService.GetActiveBit();
 
             //var shControl = autoList.FirstOrDefault(c => c.Code == "SH");
             //var sroControl = autoList.FirstOrDefault(c => c.Code == "SRO");
@@ -1736,635 +1992,505 @@ namespace EVMS.Service
 
 
         // Calculation dispatcher adapted to accept both probeMeasurements and dbRefDict
-        private double CalculateProbeValue(
+        private (double Min, double Max) CalculateProbeValue(
      ParameterInfo paramInfo,
      Dictionary<string, ProbeMeasurement> probeMeasurements,
      Dictionary<string, (double Min, double Max)> dbRefDict,
      ProcedureMode mode)
         {
-            if (paramInfo == null || string.IsNullOrWhiteSpace(paramInfo.Name))
-                return 0;
-
             string paramName = paramInfo.Name.ToLower();
             int signChange = paramInfo.SignChange;
             double compensation = paramInfo.Compensation;
 
             switch (paramName)
             {
-                case "od1": return CalculateOD1(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "od2": return CalculateOD2(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "od3": return CalculateOD3(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "od4": return CalculateOD4(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "od5": return CalculateOD5(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "id-1": return CalculateID1(probeMeasurements, dbRefDict, mode, signChange, compensation, ActiveIdValue);
-                case "id-2": return CalculateID2(probeMeasurements, dbRefDict, mode, signChange, compensation, ActiveIdValue);
-                case "ol": return CalculateOverallLength(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "rn1": return CalculateStepRunout1(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "rn2": return CalculateStepRunout2(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "rn3": return CalculateRN1(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "rn4": return CalculateRN2(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "rn5": return CalculateRN3(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "rn6": return CalculateRN4(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                case "rn7": return CalculateRN5(probeMeasurements, dbRefDict, mode, signChange, compensation);
-                default: throw new Exception($"Unknown probe DB name: {paramInfo.Name}");
+                case "od1":
+                    return CalculateOD1(probeMeasurements, dbRefDict, mode, signChange, compensation);
+
+                case "od2":
+                    return CalculateOD2(probeMeasurements, dbRefDict, mode, signChange, compensation);
+
+                case "od3":
+                    return CalculateOD3(probeMeasurements, dbRefDict, mode, signChange, compensation);
+
+                case "od4":
+                    return CalculateOD4(probeMeasurements, dbRefDict, mode, signChange, compensation);
+
+                case "od5":
+                    return CalculateOD5(probeMeasurements, dbRefDict, mode, signChange, compensation);
+
+                case "id-1":
+                    return CalculateID1(probeMeasurements, dbRefDict, mode, signChange, compensation, ActiveIdValue);
+
+                case "id-2":
+                    return CalculateID2(probeMeasurements, dbRefDict, mode, signChange, compensation, ActiveIdValue);
+
+                case "ol":
+                    {
+                        var val = CalculateOverallLength(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                        return (val, val); // OL is a single value → promote to range
+                    }
+
+                case "rn1":
+                    {
+                        var val = CalculateStepRunout1(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                        return (val, val);
+                    }
+
+                case "rn2":
+                    {
+                        var val = CalculateStepRunout2(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                        return (val, val);
+                    }
+
+                case "rn3":
+                    {
+                        var val = CalculateRN1(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                        return (val, val);
+                    }
+
+                case "rn4":
+                    {
+                        var val = CalculateRN2(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                        return (val, val);
+                    }
+
+                case "rn5":
+                    {
+                        var val = CalculateRN3(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                        return (val, val);
+                    }
+
+                case "rn6":
+                    {
+                        var val = CalculateRN4(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                        return (val, val);
+                    }
+
+                case "rn7":
+                    {
+                        var val = CalculateRN5(probeMeasurements, dbRefDict, mode, signChange, compensation);
+                        return (val, val);
+                    }
+
+                default:
+                    Debug.WriteLine($"⚠️ Unknown parameter: {paramInfo.Name}");
+                    return (double.NaN, double.NaN);
             }
+
         }
 
         #region 🔥 MAIN PARAMETERS (Summing Live & Master from 2 Probes)
 
 
-        private double CalculateOD1(
-   Dictionary<string, ProbeMeasurement> probeMeasurements,
-   Dictionary<string, (double Min, double Max)> dbRefDict,
-   ProcedureMode mode,
-   int signChange,
-   double compensation)
-        {
-            // Get max reading from Probe 1 & 2
-            // Get OD5 probe
-            if (!probeMeasurements.TryGetValue("OD1", out var pm))
-                return double.NaN;
-
-            // Use only OD5 Max value as live value
-            double liveValue = pm.Readings.Any() ? pm.MaxValue : 0;
-
-            if (liveValue == 0)
-                return double.NaN;
-
-            double result;
-
-            // Reference values from database
-            double PM1 = dbRefDict.TryGetValue("OD1", out var r1) ? r1.Max : 0;
-
-            // Offset calculation based on OD5 max and reference
-            double offset = liveValue - PM1;
-
-            if (mode == ProcedureMode.Measurement)
-            {
-                result = (signChange == 1) ? pm.MasterValue - offset : pm.MasterValue + offset;
-                if (compensation != 0)
-                    result += compensation;
-            }
-            else
-            {
-                result = pm.MasterValue + offset;
-            }
-
-            return Math.Round(result, 3);
-
-
-        }
-        //  private double CalculateOD1(
-        //Dictionary<string, ProbeMeasurement> probeMeasurements,
-        //Dictionary<string, (double Min, double Max)> dbRefDict,
-        //ProcedureMode mode,
-        //int signChange,
-        //double compensation)
-        //  {
-
-        //      if (!probeMeasurements.TryGetValue("OD1", out var pm)) return double.NaN;
-
-        //      // Probe 1 + Probe 2
-        //      var p1 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 1" && p.Readings.Any());
-        //      var p2 = probeMeasurements.Values.FirstOrDefault(p => p.ProbeId == "Probe 2" && p.Readings.Any());
-
-        //      // Use stored reference Max values (or Min, depending on your spec)
-        //      double PM1 = Math.Abs(dbRefDict.TryGetValue("OD1", out var ref1) ? ref1.Max : 0.0);
-        //      double PM2 = Math.Abs(dbRefDict.TryGetValue("RN1", out var ref2) ? ref2.Max : 0.0);
-
-        //      if (p1 == null && p2 == null) return double.NaN;
-
-        //      double liveValue = 0, masterValue = 0;
-        //      if (p1 != null)
-        //      {
-        //          liveValue += Math.Abs(p1.Readings.Max());
-        //      }
-        //      if (p2 != null)
-        //      {
-        //          liveValue += Math.Abs(p2.Readings.Max());
-        //      }
-
-        //      double dbRefValue = PM1 + PM2;
-        //      double offset = liveValue - dbRefValue;
-        //      double result;
-
-        //      if (mode == ProcedureMode.Measurement)
-        //      {
-        //          result = (signChange == 1) ? pm.MasterValue - offset : pm.MasterValue + offset;
-        //          if (compensation != 0) result += compensation;
-        //      }
-        //      else
-        //      {
-        //          result = pm.MasterValue + offset;
-        //      }
-
-        //      return Math.Round(result, 3);
-        //  }
-
-        private double CalculateOD2(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
-        
-        {
-            // Probe 9 + Probe 10
-            // if (!probeMeasurements.TryGetValue("OD2", out var pm)) return double.NaN;
-            // Get OD5 probe
-            if (!probeMeasurements.TryGetValue("OD2", out var pm))
-                return double.NaN;
-
-            // Use only OD5 Max value as live value
-            double liveValue = pm.Readings.Any() ? pm.MaxValue : 0;
-
-            if (liveValue == 0)
-                return double.NaN;
-
-            double result;
-
-            // Reference values from database
-            double PM1 = dbRefDict.TryGetValue("OD2", out var r1) ? r1.Max : 0;
-
-            // Offset calculation based on OD5 max and reference
-            double offset = liveValue - PM1;
-
-            if (mode == ProcedureMode.Measurement)
-            {
-                result = (signChange == 1) ? pm.MasterValue - offset : pm.MasterValue + offset;
-                if (compensation != 0)
-                    result += compensation;
-            }
-            else
-            {
-                result = pm.MasterValue + offset;
-            }
-
-            return Math.Round(result, 3);
-
-        }
-
-        private double CalculateOD3(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
-        {
-            // Probe 5 + Probe 6
-            // Get OD5 probe
-            if (!probeMeasurements.TryGetValue("OD3", out var pm))
-                return double.NaN;
-
-            // Use only OD5 Max value as live value
-            double liveValue = pm.Readings.Any() ? pm.MaxValue : 0;
-
-            if (liveValue == 0)
-                return double.NaN;
-
-            double result;
-
-            // Reference values from database
-            double PM1 = dbRefDict.TryGetValue("OD3", out var r1) ? r1.Max : 0;
-
-            // Offset calculation based on OD5 max and reference
-            double offset = liveValue - PM1;
-
-            if (mode == ProcedureMode.Measurement)
-            {
-                result = (signChange == 1) ? pm.MasterValue - offset : pm.MasterValue + offset;
-                if (compensation != 0)
-                    result += compensation;
-            }
-            else
-            {
-                result = pm.MasterValue + offset;
-            }
-
-            return Math.Round(result, 3);
-        }
-
-        private double CalculateOD4(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
-        {
-            // Probe 5 + Probe 6
-            // Get OD5 probe
-            if (!probeMeasurements.TryGetValue("OD4", out var pm))
-                return double.NaN;
-
-            // Use only OD5 Max value as live value
-            double liveValue = pm.Readings.Any() ? pm.MaxValue : 0;
-
-            if (liveValue == 0)
-                return double.NaN;
-
-            double result;
-
-            // Reference values from database
-            double PM1 = dbRefDict.TryGetValue("OD4", out var r1) ? r1.Max : 0;
-
-            // Offset calculation based on OD5 max and reference
-            double offset = liveValue - PM1;
-
-            if (mode == ProcedureMode.Measurement)
-            {
-                result = (signChange == 1) ? pm.MasterValue - offset : pm.MasterValue + offset;
-                if (compensation != 0)
-                    result += compensation;
-            }
-            else
-            {
-                result = pm.MasterValue + offset;
-            }
-
-            return Math.Round(result, 3);
-
-        }
-
-        private double CalculateOD5(
+        private (double Min, double Max) CalculateOD1(
      Dictionary<string, ProbeMeasurement> probeMeasurements,
      Dictionary<string, (double Min, double Max)> dbRefDict,
      ProcedureMode mode,
      int signChange,
      double compensation)
         {
-            // Get OD5 probe
+            if (!probeMeasurements.TryGetValue("OD1", out var pm))
+                return (double.NaN, double.NaN);
+
+            double liveValueMax = pm.Readings.Any() ? pm.MaxValue : 0;
+            double liveValueMin = pm.Readings.Any() ? pm.MinValue : 0;
+
+            if (liveValueMax == 0)
+                return (double.NaN, double.NaN);
+
+            if (!dbRefDict.TryGetValue("OD1", out var refVal))
+                return (double.NaN, double.NaN);
+
+            // ---------- MIN calculation ----------
+            double offsetMin = liveValueMin - refVal.Min;
+            double minResult;
+
+            if (mode == ProcedureMode.Measurement)
+            {
+                minResult = (signChange == 1)
+                    ? pm.MasterValue - offsetMin
+                    : pm.MasterValue + offsetMin;
+
+                if (compensation != 0)
+                    minResult += compensation;
+            }
+            else
+            {
+                minResult = pm.MasterValue + offsetMin;
+            }
+
+            // ---------- MAX calculation ----------
+            double offsetMax = liveValueMax - refVal.Max;
+            double maxResult;
+
+            if (mode == ProcedureMode.Measurement)
+            {
+                maxResult = (signChange == 1)
+                    ? pm.MasterValue - offsetMax
+                    : pm.MasterValue + offsetMax;
+
+                if (compensation != 0)
+                    maxResult += compensation;
+            }
+            else
+            {
+                maxResult = pm.MasterValue + offsetMax;
+            }
+
+            return (
+                Math.Round(minResult, 3),
+                Math.Round(maxResult, 3)
+            );
+        }
+
+
+
+        private (double Min, double Max) CalculateOD2(
+    Dictionary<string, ProbeMeasurement> probeMeasurements,
+    Dictionary<string, (double Min, double Max)> dbRefDict,
+    ProcedureMode mode,
+    int signChange,
+    double compensation)
+        {
+            if (!probeMeasurements.TryGetValue("OD2", out var pm))
+                return (double.NaN, double.NaN);
+
+            double liveValueMax = pm.Readings.Any() ? pm.MaxValue : 0;
+            double liveValueMin = pm.Readings.Any() ? pm.MinValue : 0;
+            if (liveValueMax == 0)
+                return (double.NaN, double.NaN);
+
+            if (!dbRefDict.TryGetValue("OD2", out var db))
+                return (double.NaN, double.NaN);
+
+            double offsetMin = liveValueMin  - db.Min;
+            double offsetMax = liveValueMax - db.Max;
+
+            double min = signChange == 1 ? pm.MasterValue - offsetMin : pm.MasterValue + offsetMin;
+            double max = signChange == 1 ? pm.MasterValue - offsetMax : pm.MasterValue + offsetMax;
+
+            if (mode == ProcedureMode.Measurement && compensation != 0)
+            {
+                min += compensation;
+                max += compensation;
+            }
+
+            return (Math.Round(min, 3), Math.Round(max, 3));
+        }
+
+        private (double Min, double Max) CalculateOD3(
+     Dictionary<string, ProbeMeasurement> probeMeasurements,
+     Dictionary<string, (double Min, double Max)> dbRefDict,
+     ProcedureMode mode,
+     int signChange,
+     double compensation)
+        {
+            if (!probeMeasurements.TryGetValue("OD3", out var pm))
+                return (double.NaN, double.NaN);
+
+            double liveValueMax = pm.Readings.Any() ? pm.MaxValue : 0;
+            double liveValueMin = pm.Readings.Any() ? pm.MinValue : 0;
+            if (liveValueMax == 0)
+                return (double.NaN, double.NaN);
+
+            if (!dbRefDict.TryGetValue("OD3", out var db))
+                return (double.NaN, double.NaN);
+
+            double offsetMin = liveValueMin - db.Min;
+            double offsetMax = liveValueMax - db.Max;
+
+
+            double min = signChange == 1 ? pm.MasterValue - offsetMin : pm.MasterValue + offsetMin;
+            double max = signChange == 1 ? pm.MasterValue - offsetMax : pm.MasterValue + offsetMax;
+
+            if (mode == ProcedureMode.Measurement && compensation != 0)
+            {
+                min += compensation;
+                max += compensation;
+            }
+
+            return (Math.Round(min, 3), Math.Round(max, 3));
+        }
+
+
+        private (double Min, double Max) CalculateOD4(
+     Dictionary<string, ProbeMeasurement> probeMeasurements,
+     Dictionary<string, (double Min, double Max)> dbRefDict,
+     ProcedureMode mode,
+     int signChange,
+     double compensation)
+        {
+            if (!probeMeasurements.TryGetValue("OD4", out var pm))
+                return (double.NaN, double.NaN);
+
+            double liveValueMax = pm.Readings.Any() ? pm.MaxValue : 0;
+            double liveValueMin = pm.Readings.Any() ? pm.MinValue : 0;
+            if (liveValueMax == 0)
+                return (double.NaN, double.NaN);
+
+            if (!dbRefDict.TryGetValue("OD4", out var db))
+                return (double.NaN, double.NaN);
+
+            double offsetMin = liveValueMin - db.Min;
+            double offsetMax = liveValueMax - db.Max;
+
+            double min = signChange == 1 ? pm.MasterValue - offsetMin : pm.MasterValue + offsetMin;
+            double max = signChange == 1 ? pm.MasterValue - offsetMax : pm.MasterValue + offsetMax;
+
+            if (mode == ProcedureMode.Measurement && compensation != 0)
+            {
+                min += compensation;
+                max += compensation;
+            }
+
+            return (Math.Round(min, 3), Math.Round(max, 3));
+        }
+
+
+        private (double Min, double Max) CalculateOD5(
+     Dictionary<string, ProbeMeasurement> probeMeasurements,
+     Dictionary<string, (double Min, double Max)> dbRefDict,
+     ProcedureMode mode,
+     int signChange,
+     double compensation)
+        {
             if (!probeMeasurements.TryGetValue("OD5", out var pm))
-                return double.NaN;
+                return (double.NaN, double.NaN);
 
-            // Use only OD5 Max value as live value
-            double liveValue = pm.Readings.Any() ? pm.MaxValue : 0;
+            double liveValueMax = pm.Readings.Any() ? pm.MaxValue : 0;
+            double liveValueMin = pm.Readings.Any() ? pm.MinValue : 0;
+            if (liveValueMax == 0)
+                return (double.NaN, double.NaN);
 
-            if (liveValue == 0)
-                return double.NaN;
+            if (!dbRefDict.TryGetValue("OD5", out var db))
+                return (double.NaN, double.NaN);
 
-            double result;
+            double offsetMin = liveValueMin - db.Min;
+            double offsetMax = liveValueMax - db.Max;
 
-            // Reference values from database
-            double PM1 = dbRefDict.TryGetValue("OD5", out var r1) ? r1.Max : 0;
 
-            // Offset calculation based on OD5 max and reference
-            double offset = liveValue - PM1;
+            double min = signChange == 1 ? pm.MasterValue - offsetMin : pm.MasterValue + offsetMin;
+            double max = signChange == 1 ? pm.MasterValue - offsetMax : pm.MasterValue + offsetMax;
 
-            if (mode == ProcedureMode.Measurement)
+            if (mode == ProcedureMode.Measurement && compensation != 0)
             {
-                result = (signChange == 1) ? pm.MasterValue - offset : pm.MasterValue + offset;
-                if (compensation != 0)
-                    result += compensation;
-            }
-            else
-            {
-                result = pm.MasterValue + offset;
+                min += compensation;
+                max += compensation;
             }
 
-            return Math.Round(result, 3);
+            return (Math.Round(min, 3), Math.Round(max, 3));
         }
 
 
-        private double CalculateID1(Dictionary<string, ProbeMeasurement> probeMeasurements,
-            Dictionary<string, (double Min, double Max)> dbRefDict,
-            ProcedureMode mode, int signChange, double compensation,
-            int activeIdValue)
+
+        private (double Min, double Max) CalculateID1(
+     Dictionary<string, ProbeMeasurement> probeMeasurements,
+     Dictionary<string, (double Min, double Max)> dbRefDict,
+     ProcedureMode mode,
+     int signChange,
+     double compensation,
+     int activeIdValue)
         {
-            // Get OD5 probe
             if (!probeMeasurements.TryGetValue("ID-1", out var pm))
-                return double.NaN;
+                return (double.NaN, double.NaN);
 
-            // Use only OD5 Max value as live value
-            double liveValue = pm.Readings.Any() ? pm.MaxValue : 0;
+            double liveValueMax = pm.Readings.Any() ? pm.MaxValue : 0;
+            double liveValueMin = pm.Readings.Any() ? pm.MinValue : 0;
+            if (liveValueMax == 0)
+                return (double.NaN, double.NaN);
 
-            if (liveValue == 0)
-                return double.NaN;
+            if (!dbRefDict.TryGetValue("ID-1", out var db))
+                return (double.NaN, double.NaN);
 
-            double result;
+            double offsetMin = liveValueMin - db.Min;
+            double offsetMax = liveValueMax - db.Max;
 
-            // Reference values from database
-            double PM1 = dbRefDict.TryGetValue("ID-1", out var r1) ? r1.Max : 0;
+            double min = signChange == 1 ? pm.MasterValue - offsetMin : pm.MasterValue + offsetMin;
+            double max = signChange == 1 ? pm.MasterValue - offsetMax : pm.MasterValue + offsetMax;
 
-            
-
-            // Offset calculation based on OD5 max and reference
-            double offset = liveValue - PM1;
-
-            if (mode == ProcedureMode.Measurement)
+            if (mode == ProcedureMode.Measurement && compensation != 0)
             {
-                result = (signChange == 1) ? pm.MasterValue - offset : pm.MasterValue + offset;
-                if (compensation != 0)
-                    result += compensation;
-            }
-            else
-            {
-                result = pm.MasterValue + offset;
+                min += compensation;
+                max += compensation;
             }
 
-            return Math.Round(result, 3);
+            return (Math.Round(min, 3), Math.Round(max, 3));
         }
 
-        private double CalculateID2(Dictionary<string, ProbeMeasurement> probeMeasurements,
-                   Dictionary<string, (double Min, double Max)> dbRefDict,
-                   ProcedureMode mode, int signChange, double compensation,
-                   int activeIdValue)
+
+        private (double Min, double Max) CalculateID2(
+     Dictionary<string, ProbeMeasurement> probeMeasurements,
+     Dictionary<string, (double Min, double Max)> dbRefDict,
+     ProcedureMode mode,
+     int signChange,
+     double compensation,
+     int activeIdValue)
         {
-            // ✅ PROBE SELECTION BY ID_Value
-            // Get OD5 probe
             if (!probeMeasurements.TryGetValue("ID-2", out var pm))
-                return double.NaN;
+                return (double.NaN, double.NaN);
 
-            // Use only OD5 Max value as live value
-            double liveValue = pm.Readings.Any() ? pm.MaxValue : 0;
+            double liveValueMax = pm.Readings.Any() ? pm.MaxValue : 0;
+            double liveValueMin = pm.Readings.Any() ? pm.MinValue : 0;
+            if (liveValueMax == 0)
+                return (double.NaN, double.NaN);
 
-            if (liveValue == 0)
-                return double.NaN;
+            if (!dbRefDict.TryGetValue("ID-2", out var db))
+                return (double.NaN, double.NaN);
 
-            double result;
+            double offsetMin = liveValueMin - db.Min;
+            double offsetMax = liveValueMax - db.Max;
 
-            // Reference values from database
-            double PM1 = dbRefDict.TryGetValue("ID-2", out var r1) ? r1.Max : 0;
 
-            // Offset calculation based on OD5 max and reference
-            double offset = liveValue - PM1;
+            double min = signChange == 1 ? pm.MasterValue - offsetMin : pm.MasterValue + offsetMin;
+            double max = signChange == 1 ? pm.MasterValue - offsetMax : pm.MasterValue + offsetMax;
 
-            if (mode == ProcedureMode.Measurement)
+            if (mode == ProcedureMode.Measurement && compensation != 0)
             {
-                result = (signChange == 1) ? pm.MasterValue - offset : pm.MasterValue + offset;
-                if (compensation != 0)
-                    result += compensation;
-            }
-            else
-            {
-                result = pm.MasterValue + offset;
+                min += compensation;
+                max += compensation;
             }
 
-            return Math.Round(result, 3);
+            return (Math.Round(min, 3), Math.Round(max, 3));
         }
 
-        private double CalculateOverallLength(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
+
+        private double CalculateOverallLength(
+    Dictionary<string, ProbeMeasurement> probeMeasurements,
+    Dictionary<string, (double Min, double Max)> dbRefDict,
+    ProcedureMode mode,
+    int signChange,
+    double compensation)
         {
-            // ✅ PROBE SELECTION BY ID_Value
-            // Get OD5 probe
             if (!probeMeasurements.TryGetValue("OL", out var pm))
                 return double.NaN;
 
-            // Use only OD5 Max value as live value
             double liveValue = pm.Readings.Any() ? pm.MaxValue : 0;
-
             if (liveValue == 0)
                 return double.NaN;
 
-            double result;
+            if (!dbRefDict.TryGetValue("OL", out var db))
+                return double.NaN;
 
-            // Reference values from database
-            double PM1 = dbRefDict.TryGetValue("OL", out var r1) ? r1.Max : 0;
+            // ✅ Use single reference value (typically db.Max or average)
+            double dbRefValue = db.Max;  // Master reference value
+            double offset = liveValue - dbRefValue;
 
-            // Offset calculation based on OD5 max and reference
-            double offset = liveValue - PM1;
+            // ✅ Single calculated value
+            double value = signChange == 1 ? pm.MasterValue - offset : pm.MasterValue + offset;
 
-            if (mode == ProcedureMode.Measurement)
-            {
-                result = (signChange == 1) ? pm.MasterValue - offset : pm.MasterValue + offset;
-                if (compensation != 0)
-                    result += compensation;
-            }
-            else
-            {
-                result = pm.MasterValue + offset;
-            }
+            if (mode == ProcedureMode.Measurement && compensation != 0)
+                value += compensation;
 
-            return Math.Round(result, 3);
+            return Math.Round(value, 3);  // ✅ Single value only
         }
+
+
 
         #endregion
 
         #region 🔥 RUNOUT PARAMETERS (Max - Min, uses individual probes)
 
-        private double CalculateStepRunout1(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
+        private double  CalculateStepRunout1(
+      Dictionary<string, ProbeMeasurement> probeMeasurements,
+      Dictionary<string, (double Min, double Max)> dbRefDict,
+      ProcedureMode mode,
+      int signChange,
+      double compensation)
         {
-            // Get OD5 probe
-            if (!probeMeasurements.TryGetValue("RN1", out var pm))
-                return double.NaN;
-
-            if (!pm.Readings.Any())
-                return double.NaN;
-
-            double LMAX = pm.MaxValue;
-            double LMIN = pm.MinValue;
-
-            double CAL1 = Math.Abs(Math.Round(LMAX - LMIN, 3));
-
-            //// Reference values
-            //double PM1 = dbRefDict.TryGetValue("RN6", out var r1) ? r1.Max : 0;
-            //double PM2 = dbRefDict.TryGetValue("RN6", out var r2) ? r2.Min : 0;
-
-            //double CAL2 = Math.Abs(Math.Round(PM1 - PM2, 3));
-
-            double offset = CAL1;
-
-            double result = (signChange == 1)
-                ? pm.MasterValue - offset
-                : pm.MasterValue + offset;
-
-            if (mode == ProcedureMode.Measurement)
-                result += compensation;
-
-            return Math.Abs(Math.Round(result, 3));
+            return CalculateRunoutCommon("RN1", probeMeasurements, mode, signChange, compensation);
         }
 
 
-        private double CalculateStepRunout2(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
+        private double CalculateStepRunout2(
+    Dictionary<string, ProbeMeasurement> probeMeasurements,
+    Dictionary<string, (double Min, double Max)> dbRefDict,
+    ProcedureMode mode,
+    int signChange,
+    double compensation)
         {
-            // Probe 2
-            // Get OD5 probe
-            if (!probeMeasurements.TryGetValue("RN2", out var pm))
-                return double.NaN;
-
-            if (!pm.Readings.Any())
-                return double.NaN;
-
-            double LMAX = pm.MaxValue;
-            double LMIN = pm.MinValue;
-
-            double CAL1 = Math.Abs(Math.Round(LMAX - LMIN, 3));
-
-            //// Reference values
-            //double PM1 = dbRefDict.TryGetValue("RN6", out var r1) ? r1.Max : 0;
-            //double PM2 = dbRefDict.TryGetValue("RN6", out var r2) ? r2.Min : 0;
-
-            //double CAL2 = Math.Abs(Math.Round(PM1 - PM2, 3));
-
-            double offset = CAL1;
-
-            double result = (signChange == 1)
-                ? pm.MasterValue - offset
-                : pm.MasterValue + offset;
-
-            if (mode == ProcedureMode.Measurement)
-                result += compensation;
-
-            return Math.Abs(Math.Round(result, 3));
-
-        }
-
-        private double CalculateRN1(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
-        {
-            // Get OD5 probe
-            if (!probeMeasurements.TryGetValue("RN3", out var pm))
-                return double.NaN;
-
-            if (!pm.Readings.Any())
-                return double.NaN;
-
-            double LMAX = pm.MaxValue;
-            double LMIN = pm.MinValue;
-
-            double CAL1 = Math.Abs(Math.Round(LMAX - LMIN, 3));
-
-            //// Reference values
-            //double PM1 = dbRefDict.TryGetValue("RN6", out var r1) ? r1.Max : 0;
-            //double PM2 = dbRefDict.TryGetValue("RN6", out var r2) ? r2.Min : 0;
-
-            //double CAL2 = Math.Abs(Math.Round(PM1 - PM2, 3));
-
-            double offset = CAL1;
-
-            double result = (signChange == 1)
-                ? pm.MasterValue - offset
-                : pm.MasterValue + offset;
-
-            if (mode == ProcedureMode.Measurement)
-                result += compensation;
-
-            return Math.Abs(Math.Round(result, 3));
-
+            return CalculateRunoutCommon("RN2", probeMeasurements, mode, signChange, compensation);
         }
 
 
-        private double CalculateRN2(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
+        private double CalculateRN1(
+    Dictionary<string, ProbeMeasurement> probeMeasurements,
+    Dictionary<string, (double Min, double Max)> dbRefDict,
+    ProcedureMode mode,
+    int signChange,
+    double compensation)
         {
-            // Probe 6
-            // Get OD5 probe
-            if (!probeMeasurements.TryGetValue("RN4", out var pm))
-                return double.NaN;
-
-            if (!pm.Readings.Any())
-                return double.NaN;
-
-            double LMAX = pm.MaxValue;
-            double LMIN = pm.MinValue;
-
-            double CAL1 = Math.Abs(Math.Round(LMAX - LMIN, 3));
-
-            //// Reference values
-            //double PM1 = dbRefDict.TryGetValue("RN6", out var r1) ? r1.Max : 0;
-            //double PM2 = dbRefDict.TryGetValue("RN6", out var r2) ? r2.Min : 0;
-
-            //double CAL2 = Math.Abs(Math.Round(PM1 - PM2, 3));
-
-            double offset = CAL1;
-
-            double result = (signChange == 1)
-                ? pm.MasterValue - offset
-                : pm.MasterValue + offset;
-
-            if (mode == ProcedureMode.Measurement)
-                result += compensation;
-
-            return Math.Abs(Math.Round(result, 3));
-
-
+            return CalculateRunoutCommon("RN3", probeMeasurements, mode, signChange, compensation);
         }
 
-        private double CalculateRN3(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
+
+        private double CalculateRN2(
+    Dictionary<string, ProbeMeasurement> probeMeasurements,
+    Dictionary<string, (double Min, double Max)> dbRefDict,
+    ProcedureMode mode,
+    int signChange,
+    double compensation)
         {
-            // Get OD5 probe
-            if (!probeMeasurements.TryGetValue("RN5", out var pm))
-                return double.NaN;
+            return CalculateRunoutCommon("RN4", probeMeasurements, mode, signChange, compensation);
+        }
 
-            if (!pm.Readings.Any())
-                return double.NaN;
 
-            double LMAX = pm.MaxValue;
-            double LMIN = pm.MinValue;
-
-            double CAL1 = Math.Abs(Math.Round(LMAX - LMIN, 3));
-
-            //// Reference values
-            //double PM1 = dbRefDict.TryGetValue("RN6", out var r1) ? r1.Max : 0;
-            //double PM2 = dbRefDict.TryGetValue("RN6", out var r2) ? r2.Min : 0;
-
-            //double CAL2 = Math.Abs(Math.Round(PM1 - PM2, 3));
-
-            double offset = CAL1;
-
-            double result = (signChange == 1)
-                ? pm.MasterValue - offset
-                : pm.MasterValue + offset;
-
-            if (mode == ProcedureMode.Measurement)
-                result += compensation;
-
-            return Math.Abs(Math.Round(result, 3));
+        private double CalculateRN3(
+    Dictionary<string, ProbeMeasurement> probeMeasurements,
+    Dictionary<string, (double Min, double Max)> dbRefDict,
+    ProcedureMode mode,
+    int signChange,
+    double compensation)
+        {
+            return CalculateRunoutCommon("RN5", probeMeasurements, mode, signChange, compensation);
         }
 
 
         private double CalculateRN4(
-     Dictionary<string, ProbeMeasurement> probeMeasurements,
-     Dictionary<string, (double Min, double Max)> dbRefDict,
-     ProcedureMode mode,
-     int signChange,
-     double compensation)
+    Dictionary<string, ProbeMeasurement> probeMeasurements,
+    Dictionary<string, (double Min, double Max)> dbRefDict,
+    ProcedureMode mode,
+    int signChange,
+    double compensation)
         {
-            if (!probeMeasurements.TryGetValue("RN6", out var pm))
+            return CalculateRunoutCommon("RN6", probeMeasurements, mode, signChange, compensation);
+        }
+
+        private double CalculateRN5(
+    Dictionary<string, ProbeMeasurement> probeMeasurements,
+    Dictionary<string, (double Min, double Max)> dbRefDict,
+    ProcedureMode mode,
+    int signChange,
+    double compensation)
+        {
+            return CalculateRunoutCommon("RN7", probeMeasurements, mode, signChange, compensation);
+        }
+
+
+        private double CalculateRunoutCommon(
+    string key,
+    Dictionary<string, ProbeMeasurement> probeMeasurements,
+    ProcedureMode mode,
+    int signChange,
+    double compensation)
+        {
+            if (!probeMeasurements.TryGetValue(key, out var pm))
                 return double.NaN;
 
             if (!pm.Readings.Any())
                 return double.NaN;
 
-            double LMAX = pm.MaxValue;
-            double LMIN = pm.MinValue;
+            // ✅ CORRECT: Runout = Max - Min of LIVE readings only
+            double runout = Math.Abs(pm.MaxValue - pm.MinValue);
+            runout = Math.Round(runout, 3);
 
-            double CAL1 = Math.Abs(Math.Round(LMAX - LMIN, 3));
+            // Apply compensation for Measurement mode
+            if (mode == ProcedureMode.Measurement && compensation != 0)
+                runout += compensation;
 
-            //// Reference values
-            //double PM1 = dbRefDict.TryGetValue("RN6", out var r1) ? r1.Max : 0;
-            //double PM2 = dbRefDict.TryGetValue("RN6", out var r2) ? r2.Min : 0;
-
-            //double CAL2 = Math.Abs(Math.Round(PM1 - PM2, 3));
-
-            double offset = CAL1;
-
-            double result = (signChange == 1)
-                ? pm.MasterValue - offset
-                : pm.MasterValue + offset;
-
-            if (mode == ProcedureMode.Measurement)
-                result += compensation;
-
-            return Math.Abs(Math.Round(result, 3));
+            return Math.Abs(runout);  // ✅ Single runout value
         }
 
-
-        private double CalculateRN5(Dictionary<string, ProbeMeasurement> probeMeasurements, Dictionary<string, (double Min, double Max)> dbRefDict, ProcedureMode mode, int signChange, double compensation)
-        {
-            // Probe 14
-            // Get OD5 probe
-            if (!probeMeasurements.TryGetValue("RN7", out var pm))
-                return double.NaN;
-
-            if (!pm.Readings.Any())
-                return double.NaN;
-
-            double LMAX = pm.MaxValue;
-            double LMIN = pm.MinValue;
-
-            double CAL1 = Math.Abs(Math.Round(LMAX - LMIN, 3));
-
-            //// Reference values
-            //double PM1 = dbRefDict.TryGetValue("RN6", out var r1) ? r1.Max : 0;
-            //double PM2 = dbRefDict.TryGetValue("RN6", out var r2) ? r2.Min : 0;
-
-            //double CAL2 = Math.Abs(Math.Round(PM1 - PM2, 3));
-
-            double offset = CAL1;
-
-            double result = (signChange == 1)
-                ? pm.MasterValue - offset
-                : pm.MasterValue + offset;
-
-            if (mode == ProcedureMode.Measurement)
-                result += compensation;
-
-            return Math.Abs(Math.Round(result, 3));
-
-        }
 
         #endregion
 

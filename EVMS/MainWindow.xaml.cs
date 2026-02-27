@@ -85,7 +85,12 @@ namespace EVMS
         }
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            await Task.Run(() =>
+            await RefetchActivePartAndGenerateReport();
+        }
+
+        public async Task RefetchActivePartAndGenerateReport()
+        {
+            await Task.Run(async () =>
             {
                 var activeParts = _dataService.GetActiveParts();
                 bool hasActive = activeParts.Count > 0;
@@ -97,24 +102,22 @@ namespace EVMS
                     IsActivePart = hasActive;
                     ActivePartStatusButton.Content = activeName;
                 });
-                // Run report generation on a background thread
+
                 try
                 {
-                    // Do not use Dispatcher here – keeps this background
+                    // Run report generation on a background thread
+                    // Or make this async Task and await here if needed
                     GenerateYesterdayActivePartDailyReport();
                 }
                 catch (Exception ex)
                 {
-                    // Only use Dispatcher for showing the error
                     Dispatcher.Invoke(() =>
                     {
                         MessageBox.Show($"Failed to generate Excel report for part: {ex.Message}");
                     });
                 }
-
             });
         }
-
 
 
 
@@ -485,21 +488,7 @@ namespace EVMS
         //}
 
 
-        private void LogoutButton_Click(object sender, RoutedEventArgs e)
-        {
-            // Clear session info
-            SessionManager.IsAuthenticated = false;
-            SessionManager.UserID = string.Empty;      // ✅
-            SessionManager.UserType = string.Empty;    // ✅
-            LoginButton.IsEnabled = true;
-
-            MessageBox.Show("Logout Successful!\nThank you for using the application.",
-                            "Logout",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Information);
-            ShowStatusMessage("");
-            OpenHomePage();
-        }
+        
 
 
         private void OpenHomePage()
@@ -522,24 +511,53 @@ namespace EVMS
             mainContentGrid.Children.Add(homePage);
         }
 
-
-        private void LoginButton_Click(object sender, RoutedEventArgs e)
+        private void AuthButton_Click(object sender, RoutedEventArgs e)
         {
-            var loginWindow = new Login_Page();
-            bool? dialogResult = loginWindow.ShowDialog();  // Shows login window modally and waits
-
-            if (dialogResult == true && SessionManager.IsAuthenticated)
+            if (!SessionManager.IsAuthenticated)
             {
-                var userid = SessionManager.UserType;
-                // Disable the login button after successful login
-                LoginButton.IsEnabled = false;
-                ShowStatusMessage(string.Format("Welcome {0}", userid));
-                OpenDashboard();
+                // ===== LOGIN LOGIC =====
+                var loginWindow = new Login_Page();
+                bool? dialogResult = loginWindow.ShowDialog();
+
+                if (dialogResult == true && SessionManager.IsAuthenticated)
+                {
+                    var userid = SessionManager.UserType;
+
+                    ShowStatusMessage($"Welcome {userid}");
+                    OpenDashboard();
+
+                    // Change button to Logout
+                    AuthButton.Content = "Logout";
+                    AuthButton.Background = Brushes.Red;
+                    AuthButton.ToolTip = "Logout from the application";
+                }
+                else
+                {
+                    MessageBox.Show("Login failed or cancelled.",
+                                    "Login",
+                                    MessageBoxButton.OK,
+                                    MessageBoxImage.Warning);
+                }
             }
             else
             {
-                // Login failed or cancelled
-                MessageBox.Show("Login failed or cancelled.", "Login", MessageBoxButton.OK, MessageBoxImage.Warning);
+                // ===== LOGOUT LOGIC =====
+                SessionManager.IsAuthenticated = false;
+                SessionManager.UserID = string.Empty;
+                SessionManager.UserType = string.Empty;
+
+                MessageBox.Show("Logout Successful!\nThank you for using the application.",
+                                "Logout",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Information);
+
+                ShowStatusMessage("");
+                OpenHomePage();
+
+                // Change button back to Login
+                AuthButton.Content = "Login";
+                AuthButton.Background = Brushes.Green;
+                AuthButton.ToolTip = "Login to the application";
             }
         }
 

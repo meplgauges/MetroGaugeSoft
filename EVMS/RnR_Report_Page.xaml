@@ -12,7 +12,7 @@
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="/EVMS;component/Style/ReportPageDesign.xaml" />
+                <ResourceDictionary Source="/Style/ReportPageDesign.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <!-- Modern DataGrid Cell Style -->

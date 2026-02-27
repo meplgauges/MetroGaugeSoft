@@ -6,6 +6,8 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace EVMS
 {
@@ -78,10 +80,15 @@ namespace EVMS
         public ProbeInstallPage()
         {
             InitializeComponent();
+
             connectionString = ConfigurationManager.ConnectionStrings["EVMSDb"].ConnectionString!;
             DataContext = this;
+            this.Loaded += Page_Loaded;
+            this.PreviewKeyDown += Page_PreviewKeyDown;
+
 
             Loaded += async (s, e) => await InitializePageAsync();
+
         }
 
         private async Task InitializePageAsync()
@@ -95,8 +102,52 @@ namespace EVMS
             SelectedProbeName = ProbeNames.FirstOrDefault();
             SelectedProbeType = ProbeType.FirstOrDefault();
 
+
+            await Dispatcher.InvokeAsync(() => this.Focus(), DispatcherPriority.Background);
         }
 
+
+        private void Page_Loaded(object? sender, RoutedEventArgs e)
+        {
+            this.Focusable = true;
+            this.IsTabStop = true;
+            Keyboard.Focus(this);
+            FocusManager.SetFocusedElement(Window.GetWindow(this)!, this);
+        }
+
+
+
+        private void Page_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape)
+            {
+                HandleEscKeyAction();
+                e.Handled = true;
+            }
+        }
+
+
+
+        private void HandleEscKeyAction()
+        {
+            Window currentWindow = Window.GetWindow(this);
+            if (currentWindow != null)
+            {
+                var mainContentGrid = currentWindow.FindName("MainContentGrid") as Grid;
+                if (mainContentGrid != null)
+                {
+                    mainContentGrid.Children.Clear();
+
+                    var resultPage = new Dashboard
+                    {
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        VerticalAlignment = VerticalAlignment.Stretch
+                    };
+
+                    mainContentGrid.Children.Add(resultPage);
+                }
+            }
+        }
         // ------------------ LOAD PARAMETERS ------------------  
         private async Task LoadParametersAsync()
         {

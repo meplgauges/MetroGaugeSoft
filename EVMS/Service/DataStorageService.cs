@@ -1,7 +1,6 @@
 ﻿using Microsoft.Data.SqlClient;
 using System.Configuration;
 using System.Data;
-using System.Diagnostics;
 using System.Windows;
 
 
@@ -13,11 +12,22 @@ namespace EVMS.Service
 
         public DataStorageService()
         {
-            _connectionString = ConfigurationManager.ConnectionStrings["EVMSDb"].ConnectionString;
+            try
+            {
+                _connectionString = ConfigurationManager.ConnectionStrings["EVMSDb"]?.ConnectionString
+                    ?? throw new ArgumentException("EVMSDb missing");
 
-            if (string.IsNullOrWhiteSpace(_connectionString))
-                throw new ArgumentException("Connection string must not be empty.", nameof(_connectionString));
+                if (string.IsNullOrWhiteSpace(_connectionString))
+                    throw new ArgumentException("Connection string empty");
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show("DB config error. Check app.config.", "Error",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                throw;
+            }
         }
+
 
         // Get PartConfig list by part number
         public List<PartReadingDataModel> GetPartConfigByPartNumber(string partNumber)
@@ -25,31 +35,154 @@ namespace EVMS.Service
             var list = new List<PartReadingDataModel>();
             string query = "SELECT * FROM PartConfig WHERE Para_No = @PartNumber AND IsEnabled = 1";
 
-            using SqlConnection conn = new(_connectionString);
-            using SqlCommand cmd = new(query, conn);
-            cmd.Parameters.AddWithValue("@PartNumber", partNumber);
-
-            conn.Open();
-            using SqlDataReader reader = cmd.ExecuteReader();
-            while (reader.Read())
+            try
             {
-                list.Add(new PartReadingDataModel
-                {
-                    Para_No = reader["Para_No"].ToString(),
-                    Parameter = reader["Parameter"].ToString(),
-                    ShortName = reader["ShortName"].ToString(),
-                    D_Name = reader["D_Name"].ToString(),
-                    Nominal = Convert.ToDouble(reader["Nominal"]),
-                    RTolPlus = Convert.ToDouble(reader["RTolPlus"]),
-                    RTolMinus = Convert.ToDouble(reader["RTolMinus"]),
-                    Sign_Change = Convert.ToInt32(reader["Sign_Change"]),
-                    Compensation = Convert.ToDouble(reader["Compensation"])
+                using SqlConnection conn = new(_connectionString);
+                using SqlCommand cmd = new(query, conn);
+                cmd.Parameters.AddWithValue("@PartNumber", partNumber);
 
-                });
+                conn.Open();
+                using SqlDataReader reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    list.Add(new PartReadingDataModel
+                    {
+                        Para_No = reader["Para_No"].ToString(),
+                        Parameter = reader["Parameter"].ToString(),
+                        ShortName = reader["ShortName"].ToString(),
+                        D_Name = reader["D_Name"].ToString(),
+                        Nominal = Convert.ToDouble(reader["Nominal"]),
+                        RTolPlus = Convert.ToDouble(reader["RTolPlus"]),
+                        RTolMinus = Convert.ToDouble(reader["RTolMinus"]),
+                        Sign_Change = Convert.ToInt32(reader["Sign_Change"]),
+                        Compensation = Convert.ToDouble(reader["Compensation"])
+                    });
+                }
             }
-            return list;
+            catch (SqlException ex)
+            {
+                //System.Windows.MessageBox.Show("DB query failed. Check connection.", "DB Error",
+                //    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error GetPartConfig: {ex.Message}");
+            }
+            return list;  // Empty if error
         }
 
+
+
+        public List<ProductionCountStats> GetProductionCountsForActivePart(
+      string partNo,
+      string period = "day")
+        {
+            return GetProductionCountsForActivePart(partNo, null, null, period);
+        }
+
+
+        // Overload for date range
+        public List<ProductionCountStats> GetProductionCountsForActivePart(
+            string partNo,
+            DateTime? fromDate,
+            DateTime? toDate,
+            string period = "day")
+        {
+            var list = new List<ProductionCountStats>();
+
+            period = period?.ToLower() ?? "day";
+
+            string groupByClause = period switch
+            {
+                "day" => "CAST(InspectionDate AS DATE) AS PeriodGroup",
+                "month" => "CONVERT(VARCHAR(7), InspectionDate, 126) AS PeriodGroup", // yyyy-MM
+                "year" => "YEAR(InspectionDate) AS PeriodGroup",
+                _ => "CAST(InspectionDate AS DATE) AS PeriodGroup"
+            };
+
+            string groupByField = period switch
+            {
+                "day" => "CAST(InspectionDate AS DATE)",
+                "month" => "CONVERT(VARCHAR(7), InspectionDate, 126)",
+                "year" => "YEAR(InspectionDate)",
+                _ => "CAST(InspectionDate AS DATE)"
+            };
+
+            string dateFilter = "";
+            if (fromDate.HasValue && toDate.HasValue)
+            {
+                dateFilter = @"
+                            AND InspectionDate >= @FromDate
+                            AND InspectionDate < DATEADD(DAY, 1, @ToDate)";
+            }
+
+            string query = $@"
+                            SELECT {groupByClause},
+                                   COUNT(*) AS TotalCount,
+                                   SUM(CASE WHEN Status = 'OK' THEN 1 ELSE 0 END) AS OKCount,
+                                   SUM(CASE WHEN Status = 'NG' THEN 1 ELSE 0 END) AS NGCount
+                            FROM MeasurementResult
+                            WHERE PartNo = @PartNo
+                            {dateFilter}
+                            GROUP BY {groupByField}
+                            ORDER BY {groupByField}";
+
+            using SqlConnection conn = new(_connectionString);
+            using SqlCommand cmd = new(query, conn);
+
+            cmd.Parameters.AddWithValue("@PartNo", partNo);
+
+            if (fromDate.HasValue && toDate.HasValue)
+            {
+                cmd.Parameters.AddWithValue("@FromDate", fromDate.Value);
+                cmd.Parameters.AddWithValue("@ToDate", toDate.Value);
+            }
+            try
+            {
+                conn.Open();
+                using SqlDataReader reader = cmd.ExecuteReader();
+
+                while (reader.Read())
+                {
+                    var stats = new ProductionCountStats
+                    {
+                        TotalCount = reader["TotalCount"] != DBNull.Value ? Convert.ToInt32(reader["TotalCount"]) : 0,
+                        OKCount = reader["OKCount"] != DBNull.Value ? Convert.ToInt32(reader["OKCount"]) : 0,
+                        NGCount = reader["NGCount"] != DBNull.Value ? Convert.ToInt32(reader["NGCount"]) : 0
+                    };
+
+                    var value = reader["PeriodGroup"];
+
+                    switch (period)
+                    {
+                        case "day":
+                            stats.DayGroup = value != DBNull.Value ? (DateTime?)value : null;
+                            break;
+
+                        case "month":
+                            stats.MonthGroup = value?.ToString() ?? "";
+                            break;
+
+                        case "year":
+                            stats.YearGroup = value != DBNull.Value ? Convert.ToInt32(value) : 0;
+                            break;
+                    }
+
+                    list.Add(stats);
+                }
+            }
+            catch (SqlException ex)
+            {
+                System.Windows.MessageBox.Show("DB query failed. Check connection.", "DB Error",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error GetPartConfig: {ex.Message}");
+            }
+
+            return list;
+        }
 
 
 
@@ -73,7 +206,8 @@ namespace EVMS.Service
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error updating Sign_Change: {ex.Message}");
+                System.Windows.MessageBox.Show("DB query failed. Check connection.", "DB Error",
+                     System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
                 return false;
             }
         }
@@ -98,7 +232,8 @@ namespace EVMS.Service
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error updating Compensation: {ex.Message}");
+                System.Windows.MessageBox.Show("DB query failed. Check connection.", "DB Error",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
                 return false;
             }
         }
@@ -112,29 +247,67 @@ namespace EVMS.Service
                               FROM ProbeInstallationData
                               WHERE PartNo = @PartNo
                               ORDER BY ProbeName, ChannelId";
-
-            using SqlConnection conn = new(_connectionString);
-            using SqlCommand cmd = new(query, conn);
-            cmd.Parameters.AddWithValue("@PartNo", partNumber);
-
-            conn.Open();
-            using SqlDataReader reader = cmd.ExecuteReader();
-            while (reader.Read())
+            try
             {
-                var item = new ProbeInstallModel
+                using SqlConnection conn = new(_connectionString);
+                using SqlCommand cmd = new(query, conn);
+                cmd.Parameters.AddWithValue("@PartNo", partNumber);
+
+                conn.Open();
+                using SqlDataReader reader = cmd.ExecuteReader();
+                while (reader.Read())
                 {
-                    PartNo = reader["PartNo"]?.ToString() ?? "",
-                    ProbeName = reader["ProbeName"]?.ToString() ?? "",        // ✅ Separate ProbeName column
-                    ParameterName = reader["ParameterName"]?.ToString() ?? "", // ✅ Keep ParameterName too
-                    BoxId = reader.GetInt32("BoxId"),
-                    ChannelId = reader.GetInt32("ChannelId")
-                };
-                list.Add(item);
+                    var item = new ProbeInstallModel
+                    {
+                        PartNo = reader["PartNo"]?.ToString() ?? "",
+                        ProbeName = reader["ProbeName"]?.ToString() ?? "",        // ✅ Separate ProbeName column
+                        ParameterName = reader["ParameterName"]?.ToString() ?? "", // ✅ Keep ParameterName too
+                        BoxId = reader.GetInt32("BoxId"),
+                        ChannelId = reader.GetInt32("ChannelId")
+                    };
+                    list.Add(item);
+                }
+            }
+            catch
+            {
+                System.Windows.MessageBox.Show("DB query failed. Check connection.", "DB Error",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
             }
             return list;
         }
 
 
+        public List<string> GetPartConfigParameterNames(string partNumber)
+        {
+            var parameters = new List<string>();
+
+            string query = @"
+                            SELECT Parameter
+                            FROM PartConfig
+                            WHERE Para_No = @ParaNo
+                            AND IsEnabled = 1
+                            ORDER BY SrNo";   // ✅ DB order
+            try
+            {
+                using SqlConnection conn = new(_connectionString);
+                using SqlCommand cmd = new(query, conn);
+                cmd.Parameters.AddWithValue("@ParaNo", partNumber);
+
+                conn.Open();
+                using SqlDataReader reader = cmd.ExecuteReader();
+
+                while (reader.Read())
+                {
+                    parameters.Add(reader["Parameter"].ToString());
+                }
+            }
+            catch
+            {
+                //System.Windows.MessageBox.Show("DB query failed. Check connection.", "DB Error",
+                //    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
+            return parameters;
+        }
 
 
 
@@ -162,31 +335,37 @@ namespace EVMS.Service
                     WHERE pc.Para_No = @ParaNo
                       AND pc.IsEnabled = 1
                     ORDER BY pc.Parameter";
-
-            using SqlConnection conn = new(_connectionString);
-            using SqlCommand cmd = new(query, conn);
-            cmd.Parameters.AddWithValue("@ParaNo", partNumber);
-
-            conn.Open();
-            using SqlDataReader reader = cmd.ExecuteReader();
-
-            while (reader.Read())
+            try
             {
-                list.Add(new PartConfigModel
-                {
-                    Para_No = reader["Para_No"].ToString(),
-                    Parameter = reader["Parameter"].ToString(),
-                    Nominal = Convert.ToDouble(reader["Nominal"]), // from MasterReadingData if exists
-                    RTolPlus = Convert.ToDouble(reader["RTolPlus"]),
-                    RTolMinus = Convert.ToDouble(reader["RTolMinus"]),
-                    YTolPlus = Convert.ToDouble(reader["YTolPlus"]),
-                    YTolMinus = Convert.ToDouble(reader["YTolMinus"]),
-                    Sign_Change = Convert.ToInt32(reader["Sign_Change"]),
-                    Compensation = Convert.ToDouble(reader["Compensation"])
-                    // ProbeStatus → map if needed
-                });
-            }
+                using SqlConnection conn = new(_connectionString);
+                using SqlCommand cmd = new(query, conn);
+                cmd.Parameters.AddWithValue("@ParaNo", partNumber);
 
+                conn.Open();
+                using SqlDataReader reader = cmd.ExecuteReader();
+
+                while (reader.Read())
+                {
+                    list.Add(new PartConfigModel
+                    {
+                        Para_No = reader["Para_No"].ToString(),
+                        Parameter = reader["Parameter"].ToString(),
+                        Nominal = Convert.ToDouble(reader["Nominal"]), // from MasterReadingData if exists
+                        RTolPlus = Convert.ToDouble(reader["RTolPlus"]),
+                        RTolMinus = Convert.ToDouble(reader["RTolMinus"]),
+                        YTolPlus = Convert.ToDouble(reader["YTolPlus"]),
+                        YTolMinus = Convert.ToDouble(reader["YTolMinus"]),
+                        Sign_Change = Convert.ToInt32(reader["Sign_Change"]),
+                        Compensation = Convert.ToDouble(reader["Compensation"])
+                        // ProbeStatus → map if needed
+                    });
+                }
+            }
+            catch
+            {
+                //System.Windows.MessageBox.Show("DB query failed. Check connection.", "DB Error",
+                //    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
             return list;
         }
 
@@ -210,29 +389,35 @@ namespace EVMS.Service
         WHERE p.Para_No = @PartNumber
         ORDER BY p.SrNo;
     ";
-
-            using SqlConnection conn = new(_connectionString);
-            using SqlCommand cmd = new(query, conn);
-            cmd.Parameters.Add("@PartNumber", SqlDbType.VarChar).Value = partNumber;
-
-            conn.Open();
-            using SqlDataReader reader = cmd.ExecuteReader();
-
-            while (reader.Read())
+            try
             {
-                list.Add(new MasterReadingModel
+                using SqlConnection conn = new(_connectionString);
+                using SqlCommand cmd = new(query, conn);
+                cmd.Parameters.Add("@PartNumber", SqlDbType.VarChar).Value = partNumber;
+
+                conn.Open();
+                using SqlDataReader reader = cmd.ExecuteReader();
+
+                while (reader.Read())
                 {
-                    Para_No = partNumber,
+                    list.Add(new MasterReadingModel
+                    {
+                        Para_No = partNumber,
 
-                    Parameter = reader["Parameter"]?.ToString(),
-                    D_Name = reader["D_Name"]?.ToString(),   // ✅ FIXED
+                        Parameter = reader["Parameter"]?.ToString(),
+                        D_Name = reader["D_Name"]?.ToString(),   // ✅ FIXED
 
-                    Nominal = reader["Nominal"] != DBNull.Value ? Convert.ToDouble(reader["Nominal"]) : 0,
-                    RTolPlus = reader["RTolPlus"] != DBNull.Value ? Convert.ToDouble(reader["RTolPlus"]) : 0,
-                    RTolMinus = reader["RTolMinus"] != DBNull.Value ? Convert.ToDouble(reader["RTolMinus"]) : 0
-                });
+                        Nominal = reader["Nominal"] != DBNull.Value ? Convert.ToDouble(reader["Nominal"]) : 0,
+                        RTolPlus = reader["RTolPlus"] != DBNull.Value ? Convert.ToDouble(reader["RTolPlus"]) : 0,
+                        RTolMinus = reader["RTolMinus"] != DBNull.Value ? Convert.ToDouble(reader["RTolMinus"]) : 0
+                    });
+                }
             }
-
+            catch
+            {
+                System.Windows.MessageBox.Show("DB query failed. Check connection.", "DB Error",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
             return list;
         }
 
@@ -242,23 +427,31 @@ namespace EVMS.Service
         {
             var list = new List<PartEntryModel>();
             string query = "SELECT Para_No, Para_Name, ActivePart FROM Part_Entry WHERE ActivePart = 1";
-
-            using SqlConnection conn = new(_connectionString);
-            using SqlCommand cmd = new(query, conn);
-
-            conn.Open();
-            using SqlDataReader reader = cmd.ExecuteReader();
-            while (reader.Read())
+            try
             {
-                list.Add(new PartEntryModel
+                using SqlConnection conn = new(_connectionString);
+                using SqlCommand cmd = new(query, conn);
+
+                conn.Open();
+                using SqlDataReader reader = cmd.ExecuteReader();
+                while (reader.Read())
                 {
-                    Para_No = reader["Para_No"].ToString(),
-                    Para_Name = reader["Para_Name"].ToString(),
-                    ActivePart = Convert.ToInt32(reader["ActivePart"])
-                });
+                    list.Add(new PartEntryModel
+                    {
+                        Para_No = reader["Para_No"].ToString(),
+                        Para_Name = reader["Para_Name"].ToString(),
+                        ActivePart = Convert.ToInt32(reader["ActivePart"])
+                    });
+                }
+            }
+            catch
+            {
+                System.Windows.MessageBox.Show("DB query failed. Check connection.", "DB Error",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
             }
             return list;
         }
+
 
 
 
@@ -270,92 +463,121 @@ namespace EVMS.Service
                     SELECT Para_No, ID_Value, BOT_Value
                     FROM Part_Entry
                     WHERE ActivePart = 1";
-
-            using SqlConnection conn = new(_connectionString);
-            using SqlCommand cmd = new(query, conn);
-
-            conn.Open();
-            using SqlDataReader reader = cmd.ExecuteReader();
-            while (reader.Read())
+            try
             {
-                list.Add(new PartID
-                {
-                    Para_No = reader["Para_No"].ToString(),
-                    ID_Value = Convert.ToInt32(reader["ID_Value"]),
-                    BOT_Value = Convert.ToInt32(reader["BOT_Value"])
-                });
-            }
 
+                using SqlConnection conn = new(_connectionString);
+                using SqlCommand cmd = new(query, conn);
+
+                conn.Open();
+                using SqlDataReader reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    list.Add(new PartID
+                    {
+                        Para_No = reader["Para_No"].ToString(),
+                        ID_Value = Convert.ToInt32(reader["ID_Value"]),
+                        BOT_Value = Convert.ToInt32(reader["BOT_Value"])
+                    });
+                }
+            }
+            catch
+            {
+                System.Windows.MessageBox.Show("DB query failed. Check connection.", "DB Error",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
             return list;
         }
 
         public PartReadingDataModel? GetOLConfigByPartNumber(string partNumber)
         {
             const string query = @"
- SELECT Parameter, Nominal
- FROM PartConfig
- WHERE Parameter = 'OL'
-   AND Para_No = @PartNumber";
-
-            using SqlConnection conn = new(_connectionString);
-            using SqlCommand cmd = new(query, conn);
-            cmd.Parameters.Add("@PartNumber", SqlDbType.VarChar).Value = partNumber;
-
-            conn.Open();
-            using SqlDataReader reader = cmd.ExecuteReader();
-
-            if (reader.Read())
+                                 SELECT Parameter, Nominal
+                                 FROM PartConfig
+                                 WHERE Parameter = 'OL'
+                                 AND Para_No = @PartNumber";
+            try
             {
-                return new PartReadingDataModel
+                using SqlConnection conn = new(_connectionString);
+                using SqlCommand cmd = new(query, conn);
+                cmd.Parameters.Add("@PartNumber", SqlDbType.VarChar).Value = partNumber;
+
+                conn.Open();
+                using SqlDataReader reader = cmd.ExecuteReader();
+
+                if (reader.Read())
                 {
-                    Parameter = reader["Parameter"].ToString(),
-                    Nominal = Convert.ToDouble(reader["Nominal"])
-                };
+                    return new PartReadingDataModel
+                    {
+                        Parameter = reader["Parameter"].ToString(),
+                        Nominal = Convert.ToDouble(reader["Nominal"])
+                    };
+                }
+            }
+            catch
+            {
+                System.Windows.MessageBox.Show("DB query failed. Check connection.", "DB Error",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
             }
 
             return null;
         }
-        public string GetRoboBitByLength(decimal totalLength)
+        public BitConfiguration GetBitConfigByPartNo(string partNo)
         {
-            string roboBit = string.Empty;
-            string query = "SELECT RoboBit FROM RoboConfig WHERE TotalLength = @TotalLength";
+            string query = @"
+        SELECT RoboBit, LaserBit 
+        FROM RoboConfig 
+        WHERE PartNo = @PartNo";
 
             using (SqlConnection conn = new SqlConnection(_connectionString))
             using (SqlCommand cmd = new SqlCommand(query, conn))
             {
-                cmd.Parameters.AddWithValue("@TotalLength", totalLength);
-                conn.Open();
-                object result = cmd.ExecuteScalar();
-                if (result != null)
-                    roboBit = result.ToString();
-            }
-
-            return roboBit;
-        }
-
-
-        public List<string> GetAllRoboBits()
-        {
-            var roboBits = new List<string>();
-            string query = "SELECT RoboBit FROM RoboConfig"; // No WHERE clause
-
-            using (SqlConnection conn = new SqlConnection(_connectionString))
-            using (SqlCommand cmd = new SqlCommand(query, conn))
-            {
+                cmd.Parameters.AddWithValue("@PartNo", partNo ?? (object)DBNull.Value);
                 conn.Open();
 
                 using (SqlDataReader reader = cmd.ExecuteReader())
                 {
-                    while (reader.Read())
+                    if (reader.Read())
                     {
-                        if (reader["RoboBit"] != DBNull.Value)
-                            roboBits.Add(reader["RoboBit"].ToString());
+                        return new BitConfiguration
+                        {
+                            RoboBit = reader["RoboBit"]?.ToString() ?? string.Empty,
+                            LaserBit = reader["LaserBit"]?.ToString() ?? string.Empty
+                        };
                     }
                 }
             }
 
-            return roboBits;
+            return new BitConfiguration(); // Empty config if not found
         }
+
+
+
+
+        public List<BitConfiguration> GetAllBits()
+        {
+            var allBits = new List<BitConfiguration>();
+            string query = "SELECT DISTINCT RoboBit, LaserBit FROM RoboConfig WHERE RoboBit IS NOT NULL OR LaserBit IS NOT NULL";
+
+            using (SqlConnection conn = new SqlConnection(_connectionString))
+            using (SqlCommand cmd = new SqlCommand(query, conn))
+            {
+                conn.Open();
+                using (SqlDataReader reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        allBits.Add(new BitConfiguration
+                        {
+                            RoboBit = reader["RoboBit"]?.ToString() ?? string.Empty,
+                            LaserBit = reader["LaserBit"]?.ToString() ?? string.Empty
+                        });
+                    }
+                }
+            }
+            return allBits;
+        }
+
 
         public List<PartConfigInfo> GetPartConfigBits(string partNo)
         {
@@ -522,7 +744,7 @@ namespace EVMS.Service
         {
             var list = new List<Dictionary<string, object>>();
 
-            string query = "SELECT * FROM MeasuredData WHERE PartNo = @PartNo";
+            string query = "SELECT * FROM MeasurementResult WHERE PartNo = @PartNo";
 
             if (filterDate.HasValue)
             {
@@ -660,33 +882,39 @@ namespace EVMS.Service
         }
 
 
-        public async Task InsertMeasurementReadingAsync(
+        public async Task InsertMeasurementResultAsync(
     string partNo, string operatorId, string lotNo,
-                          decimal stepOd1, decimal stepRunout1,
-                          decimal od1, decimal rn1,
-                          decimal od2, decimal rn2,
-                          decimal od3, decimal rn3,
-                          decimal stepOd2, decimal stepRunout2,
-                          decimal id1, decimal rn4,
-                          decimal id2, decimal rn5,
-                          decimal ol,
-                          string? status)
+    decimal od1Min, decimal od1Max, decimal rn1,
+    decimal od2Min, decimal od2Max, decimal rn2,
+    decimal od3Min, decimal od3Max, decimal rn3,
+    decimal od4Min, decimal od4Max, decimal rn4,
+    decimal od5Min, decimal od5Max, decimal rn5,
+    decimal id1Min, decimal id1Max, decimal rn6,
+    decimal id2Min, decimal id2Max, decimal rn7,
+    decimal ol,
+    string? status)
         {
             const string query = @"
-                            INSERT INTO dbo.MeasuredData
-                            (PartNo, Operator_ID, LotNo,
-                             [STEP OD1], [STEP RUNOUT-1], [OD-1], [RN-1],
-                             [OD-2], [RN-2], [OD-3], [RN-3],
-                             [STEP OD2], [STEP RUNOUT-2],
-                             [ID-1], [RN-4], [ID-2], [RN-5],
-                             OL, Status, InspectionDate)
-                            VALUES
-                            (@PartNo, @Operator_ID, @LotNo,
-                             @STEP_OD1, @STEP_RUNOUT_1, @OD_1, @RN_1,
-                             @OD_2, @RN_2, @OD_3, @RN_3,
-                             @STEP_OD2, @STEP_RUNOUT_2,
-                             @ID_1, @RN_4, @ID_2, @RN_5,
-                             @OL, @Status, GETDATE());";
+        INSERT INTO dbo.MeasurementResult
+        (PartNo, Operator_ID, LotNo,
+         [OD1_Min], [OD1_Max], [RN1],
+         [OD2_Min], [OD2_Max], [RN2],
+         [OD3_Min], [OD3_Max], [RN3],
+         [OD4_Min], [OD4_Max], [RN4],
+         [OD5_Min], [OD5_Max], [RN5],
+         [ID-1_Min], [ID-1_Max], [RN6],
+         [ID-2_Min], [ID-2_Max], [RN7],
+         OL, Status, InspectionDate)
+        VALUES
+        (@PartNo, @Operator_ID, @LotNo,
+         @OD1_MIN, @OD1_MAX, @RN1,
+         @OD2_MIN, @OD2_MAX, @RN2,
+         @OD3_MIN, @OD3_MAX, @RN3,
+         @OD4_MIN, @OD4_MAX, @RN4,
+         @OD5_MIN, @OD5_MAX, @RN5,
+         @ID1_MIN, @ID1_MAX, @RN6,
+         @ID2_MIN, @ID2_MAX, @RN7,
+         @OL, @Status, GETDATE());";
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand(query, connection);
@@ -695,29 +923,22 @@ namespace EVMS.Service
             command.Parameters.AddWithValue("@Operator_ID", operatorId);
             command.Parameters.AddWithValue("@LotNo", lotNo);
 
-            command.Parameters.AddWithValue("@STEP_OD1", stepOd1);
-            command.Parameters.AddWithValue("@STEP_RUNOUT_1", stepRunout1);
-            command.Parameters.AddWithValue("@OD_1", od1);
-            command.Parameters.AddWithValue("@RN_1", rn1);
-            command.Parameters.AddWithValue("@OD_2", od2);
-            command.Parameters.AddWithValue("@RN_2", rn2);
-            command.Parameters.AddWithValue("@OD_3", od3);
-            command.Parameters.AddWithValue("@RN_3", rn3);
-            command.Parameters.AddWithValue("@STEP_OD2", stepOd2);
-            command.Parameters.AddWithValue("@STEP_RUNOUT_2", stepRunout2);
-            command.Parameters.AddWithValue("@ID_1", id1);
-            command.Parameters.AddWithValue("@RN_4", rn4);
-            command.Parameters.AddWithValue("@ID_2", id2);
-            command.Parameters.AddWithValue("@RN_5", rn5);
+            command.Parameters.AddWithValue("@OD1_MIN", od1Min); command.Parameters.AddWithValue("@OD1_MAX", od1Max); command.Parameters.AddWithValue("@RN1", rn1);
+            command.Parameters.AddWithValue("@OD2_MIN", od2Min); command.Parameters.AddWithValue("@OD2_MAX", od2Max); command.Parameters.AddWithValue("@RN2", rn2);
+            command.Parameters.AddWithValue("@OD3_MIN", od3Min); command.Parameters.AddWithValue("@OD3_MAX", od3Max); command.Parameters.AddWithValue("@RN3", rn3);
+            command.Parameters.AddWithValue("@OD4_MIN", od4Min); command.Parameters.AddWithValue("@OD4_MAX", od4Max); command.Parameters.AddWithValue("@RN4", rn4);
+            command.Parameters.AddWithValue("@OD5_MIN", od5Min); command.Parameters.AddWithValue("@OD5_MAX", od5Max); command.Parameters.AddWithValue("@RN5", rn5);
+            command.Parameters.AddWithValue("@ID1_MIN", id1Min); command.Parameters.AddWithValue("@ID1_MAX", id1Max); command.Parameters.AddWithValue("@RN6", rn6);
+            command.Parameters.AddWithValue("@ID2_MIN", id2Min); command.Parameters.AddWithValue("@ID2_MAX", id2Max); command.Parameters.AddWithValue("@RN7", rn7);
             command.Parameters.AddWithValue("@OL", ol);
-
             command.Parameters.AddWithValue("@Status", (object?)status ?? DBNull.Value);
 
             await connection.OpenAsync();
             var rows = await command.ExecuteNonQueryAsync();
-            if (rows == 0)
-                throw new Exception("Insert failed: No rows were affected.");
+            if (rows == 0) throw new Exception("Insert failed");
         }
+
+
 
         public async Task<DataTable> GetParameterDataTableAsync(string partNo)
         {
@@ -837,7 +1058,7 @@ namespace EVMS.Service
 
                 string query = @"
                                 SELECT DISTINCT LotNo
-                                FROM dbo.MeasuredData
+                                FROM dbo.MeasurementResult
                                 WHERE 1 = 1";
 
                 if (!string.IsNullOrEmpty(partNo))
@@ -885,7 +1106,7 @@ namespace EVMS.Service
             {
                 await con.OpenAsync();
 
-                string query = @"SELECT DISTINCT Operator_ID FROM MeasuredData WHERE 1=1";
+                string query = @"SELECT DISTINCT Operator_ID FROM MeasurementResult WHERE 1=1";
 
                 if (!string.IsNullOrEmpty(partNo))
                     query += " AND PartNo = @PartNo";
@@ -1057,7 +1278,7 @@ namespace EVMS.Service
 
                 string query = @"
                             SELECT *
-                            FROM dbo.MeasuredData
+                            FROM dbo.MeasurementResult
                             WHERE (@PartNo IS NULL OR PartNo = @PartNo)";
 
                 if (!string.IsNullOrEmpty(lotNo))
@@ -1103,20 +1324,112 @@ namespace EVMS.Service
                                 Operator_ID = reader.GetString(reader.GetOrdinal("Operator_ID")),
                                 LotNo = reader.GetString(reader.GetOrdinal("LotNo")),
 
-                                StepOd1 = reader.GetDecimal(reader.GetOrdinal("STEP OD1")),
-                                StepRunout1 = reader.GetDecimal(reader.GetOrdinal("STEP RUNOUT-1")),
-                                Od1 = reader.GetDecimal(reader.GetOrdinal("OD-1")),
-                                Rn1 = reader.GetDecimal(reader.GetOrdinal("RN-1")),
-                                Od2 = reader.GetDecimal(reader.GetOrdinal("OD-2")),
-                                Rn2 = reader.GetDecimal(reader.GetOrdinal("RN-2")),
-                                Od3 = reader.GetDecimal(reader.GetOrdinal("OD-3")),
-                                Rn3 = reader.GetDecimal(reader.GetOrdinal("RN-3")),
-                                StepOd2 = reader.GetDecimal(reader.GetOrdinal("STEP OD2")),
-                                StepRunout2 = reader.GetDecimal(reader.GetOrdinal("STEP RUNOUT-2")),
-                                Id1 = reader.GetDecimal(reader.GetOrdinal("ID-1")),
-                                Rn4 = reader.GetDecimal(reader.GetOrdinal("RN-4")),
-                                Id2 = reader.GetDecimal(reader.GetOrdinal("ID-2")),
-                                Rn5 = reader.GetDecimal(reader.GetOrdinal("RN-5")),
+                                StepOd1 = reader.GetDecimal(reader.GetOrdinal("OD1_Max")),
+                                StepRunout1 = reader.GetDecimal(reader.GetOrdinal("RN1")),
+                                Od1 = reader.GetDecimal(reader.GetOrdinal("OD2_Max")),
+                                Rn1 = reader.GetDecimal(reader.GetOrdinal("RN2")),
+                                Od2 = reader.GetDecimal(reader.GetOrdinal("OD3_Max")),
+                                Rn2 = reader.GetDecimal(reader.GetOrdinal("RN3")),
+                                Od3 = reader.GetDecimal(reader.GetOrdinal("OD4_Max")),
+                                Rn3 = reader.GetDecimal(reader.GetOrdinal("RN4")),
+                                StepOd2 = reader.GetDecimal(reader.GetOrdinal("OD5_Max")),
+                                StepRunout2 = reader.GetDecimal(reader.GetOrdinal("RN5")),
+                                Id1 = reader.GetDecimal(reader.GetOrdinal("ID-1_Max")),
+                                Rn4 = reader.GetDecimal(reader.GetOrdinal("RN6")),
+                                Id2 = reader.GetDecimal(reader.GetOrdinal("ID-1_Max")),
+                                Rn5 = reader.GetDecimal(reader.GetOrdinal("RN7")),
+                                Ol = reader.GetDecimal(reader.GetOrdinal("OL")),
+
+                                MeasurementDate = reader.GetDateTime(reader.GetOrdinal("InspectionDate")),
+                                Status = reader.IsDBNull(reader.GetOrdinal("Status"))
+                                    ? "Unknown"
+                                    : reader.GetString(reader.GetOrdinal("Status"))
+                            };
+
+                            readings.Add(r);
+                        }
+                    }
+                }
+            }
+
+            return readings;
+        }
+
+        public async Task<List<MeasurementReading>> GetMeasurementMinReadingsAsync(
+                    string? partNo,
+                    string? lotNo,
+                    string? operatorId,
+                    DateTime? dateFrom,
+                    DateTime? dateTo)
+        {
+            var readings = new List<MeasurementReading>();
+
+            using (var con = new SqlConnection(_connectionString))
+            {
+                await con.OpenAsync();
+
+                string query = @"
+                            SELECT *
+                            FROM dbo.MeasurementResult
+                            WHERE (@PartNo IS NULL OR PartNo = @PartNo)";
+
+                if (!string.IsNullOrEmpty(lotNo))
+                    query += " AND LotNo = @LotNo";
+
+                if (!string.IsNullOrEmpty(operatorId))
+                    query += " AND Operator_ID = @OperatorId";
+
+                if (dateFrom.HasValue)
+                    query += " AND InspectionDate >= @DateFrom";
+
+                if (dateTo.HasValue)
+                    query += " AND InspectionDate <= @DateTo";
+
+                using (var cmd = new SqlCommand(query, con))
+                {
+                    if (string.IsNullOrEmpty(partNo) ||
+                        partNo.Equals("All", StringComparison.OrdinalIgnoreCase))
+                        cmd.Parameters.AddWithValue("@PartNo", DBNull.Value);
+                    else
+                        cmd.Parameters.AddWithValue("@PartNo", partNo);
+
+                    if (!string.IsNullOrEmpty(lotNo))
+                        cmd.Parameters.AddWithValue("@LotNo", lotNo);
+
+                    if (!string.IsNullOrEmpty(operatorId))
+                        cmd.Parameters.AddWithValue("@OperatorId", operatorId);
+
+                    if (dateFrom.HasValue)
+                        cmd.Parameters.AddWithValue("@DateFrom", dateFrom.Value);
+
+                    if (dateTo.HasValue)
+                        cmd.Parameters.AddWithValue("@DateTo", dateTo.Value);
+
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var r = new MeasurementReading
+                            {
+                                Id = reader.GetInt32(reader.GetOrdinal("ID")),
+                                PartNo = reader.GetString(reader.GetOrdinal("PartNo")),
+                                Operator_ID = reader.GetString(reader.GetOrdinal("Operator_ID")),
+                                LotNo = reader.GetString(reader.GetOrdinal("LotNo")),
+
+                                StepOd1 = reader.GetDecimal(reader.GetOrdinal("OD1_Min")),
+                                StepRunout1 = reader.GetDecimal(reader.GetOrdinal("RN1")),
+                                Od1 = reader.GetDecimal(reader.GetOrdinal("OD2_Min")),
+                                Rn1 = reader.GetDecimal(reader.GetOrdinal("RN2")),
+                                Od2 = reader.GetDecimal(reader.GetOrdinal("OD3_Min")),
+                                Rn2 = reader.GetDecimal(reader.GetOrdinal("RN3")),
+                                Od3 = reader.GetDecimal(reader.GetOrdinal("OD4_Min")),
+                                Rn3 = reader.GetDecimal(reader.GetOrdinal("RN4")),
+                                StepOd2 = reader.GetDecimal(reader.GetOrdinal("OD5_Min")),
+                                StepRunout2 = reader.GetDecimal(reader.GetOrdinal("RN5")),
+                                Id1 = reader.GetDecimal(reader.GetOrdinal("ID-1_Min")),
+                                Rn4 = reader.GetDecimal(reader.GetOrdinal("RN6")),
+                                Id2 = reader.GetDecimal(reader.GetOrdinal("ID-1_Min")),
+                                Rn5 = reader.GetDecimal(reader.GetOrdinal("RN7")),
                                 Ol = reader.GetDecimal(reader.GetOrdinal("OL")),
 
                                 MeasurementDate = reader.GetDateTime(reader.GetOrdinal("InspectionDate")),
@@ -1141,7 +1454,7 @@ namespace EVMS.Service
             {
                 await con.OpenAsync();
 
-                string query = "DELETE FROM MeasuredData WHERE ID = @ID";
+                string query = "DELETE FROM MeasurementResult WHERE ID = @ID";
 
                 using (SqlCommand cmd = new SqlCommand(query, con))
                 {
@@ -1162,9 +1475,9 @@ namespace EVMS.Service
                 await con.OpenAsync();
 
                 string query = @"
-                                DELETE FROM MeasuredData
+                                DELETE FROM MeasurementResult
                                 WHERE Id = (
-                                    SELECT TOP 1 ID FROM MeasuredData
+                                    SELECT TOP 1 ID FROM MeasurementResult
                                     WHERE PartNo = @PartNo
                                       AND LotNo = @LotNo
                                       AND Operator_ID = @OperatorId
@@ -1229,7 +1542,41 @@ namespace EVMS.Service
             }
         }
 
+        public CameraConfigurationModel? GetCameraConfiguration()
+        {
+            string query = @"SELECT TOP 1 Camera1IP, Camera2IP, Port
+                     FROM CameraConfiguration
+                     ORDER BY Id DESC";
 
+            try
+            {
+                using SqlConnection conn = new(_connectionString);
+                using SqlCommand cmd = new(query, conn);
+
+                conn.Open();
+
+                using SqlDataReader reader = cmd.ExecuteReader();
+
+                if (reader.Read())
+                {
+                    return new CameraConfigurationModel
+                    {
+                        Camera1IP = reader["Camera1IP"]?.ToString(),
+                        Camera2IP = reader["Camera2IP"]?.ToString(),
+                        Port = Convert.ToInt32(reader["Port"])
+                    };
+                }
+            }
+            catch
+            {
+                System.Windows.MessageBox.Show("DB query failed. Check connection.",
+                    "DB Error",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
+            }
+
+            return null;
+        }
 
         public void Dispose()
         {
@@ -1359,6 +1706,34 @@ namespace EVMS.Service
     }
 
 
+    public class ProductionCountStats
+    {
+        public DateTime? DayGroup { get; set; }
+        public string MonthGroup { get; set; }
+        public int YearGroup { get; set; }
+
+        public int TotalCount { get; set; }
+        public int OKCount { get; set; }
+        public int NGCount { get; set; }
+
+    }
+
+
+    public class BitConfiguration
+    {
+        public string RoboBit { get; set; } = string.Empty;
+        public string LaserBit { get; set; } = string.Empty;
+
+        public bool HasRoboBit => !string.IsNullOrEmpty(RoboBit);
+        public bool HasLaserBit => !string.IsNullOrEmpty(LaserBit);
+    }
+
+    public class CameraConfigurationModel
+    {
+        public string Camera1IP { get; set; }
+        public string Camera2IP { get; set; }
+        public int Port { get; set; }
+    }
     public class MeasurementReading
     {
         public int Id { get; set; }

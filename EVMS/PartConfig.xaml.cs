@@ -51,21 +51,21 @@ namespace EVMS
         {
             var parameters = new List<object>
     {
-        new { DisplayText = "STEP OD1", Value = "OD1" },
-        new { DisplayText = "STEP RN1", Value = "RN1" },
-        new { DisplayText = "OD2", Value = "OD2" },
-        new { DisplayText = "RN2", Value = "RN2" },
-        new { DisplayText = "OD3", Value = "OD3" },
-        new { DisplayText = "RN3", Value = "RN3" },
-        new { DisplayText = "OD4", Value = "OD4" },
-        new { DisplayText = "RN4", Value = "RN4" },
-        new { DisplayText = "STEP OD2", Value = "OD5" },
-        new { DisplayText = "STEP RN2", Value = "RN5" },
-        new { DisplayText = "ID-1", Value = "ID-1" },
-        new { DisplayText = "RN6", Value = "RN6" },
-        new { DisplayText = "ID-2", Value = "ID-2" },
-        new { DisplayText = "RN7", Value = "RN7" },
-        new { DisplayText = "Total Lenght", Value = "OL" }
+                new { DisplayText = "STEP OD1", Value = "OD1" },
+                new { DisplayText = "STEP RN1", Value = "RN1" },
+                new { DisplayText = "OD2", Value = "OD2" },
+                new { DisplayText = "RN2", Value = "RN2" },
+                new { DisplayText = "OD3", Value = "OD3" },
+                new { DisplayText = "RN3", Value = "RN3" },
+                new { DisplayText = "OD4", Value = "OD4" },
+                new { DisplayText = "RN4", Value = "RN4" },
+                new { DisplayText = "STEP OD2", Value = "OD5" },
+                new { DisplayText = "STEP RN2", Value = "RN5" },
+                new { DisplayText = "ID-1", Value = "ID-1" },
+                new { DisplayText = "RN6", Value = "RN6" },
+                new { DisplayText = "ID-2", Value = "ID-2" },
+                new { DisplayText = "RN7", Value = "RN7" },
+                new { DisplayText = "Total Lenght", Value = "OL" }
     };
 
             cmbParameter.ItemsSource = parameters;
@@ -161,8 +161,6 @@ namespace EVMS
                             Nominal, 
                             RTolPlus, 
                             RTolMinus, 
-                            YTolPlus, 
-                            YTolMinus, 
                             ProbeStatus,
                             ShortName,
                             D_Name,
@@ -199,8 +197,6 @@ namespace EVMS
                             Nominal, 
                             RTolPlus, 
                             RTolMinus, 
-                            YTolPlus, 
-                            YTolMinus, 
                             ProbeStatus,
                             ShortName,
                             D_Name,
@@ -270,16 +266,15 @@ namespace EVMS
                 decimal nominal = ParseDecimal(txtNominal.Text);
                 decimal rTolPlus = ParseDecimal(txtRTolPlus.Text);
                 decimal rTolMinus = ParseDecimal(txtRTolMinus.Text);
-                decimal yTolPlus = ParseDecimal(txtYTolPlus.Text);
-                decimal yTolMinus = ParseDecimal(txtYTolMinus.Text);
+
                 string probeStatus = chkProbe.IsChecked == true ? "Probe" : "Para";
 
                 using (SqlConnection con = new SqlConnection(connectionString))
                 {
                     con.Open();
                     string query = @"INSERT INTO PartConfig
-                    (Para_No, Parameter, Nominal, RTolPlus, RTolMinus, YTolPlus, YTolMinus, ProbeStatus, ShortName, D_Name, Sign_Change, Compensation)
-                    VALUES (@Para_No, @Parameter, @Nominal, @RTolPlus, @RTolMinus, @YTolPlus, @YTolMinus, @ProbeStatus, @ShortName, @D_Name, @Sign_Change, @Compensation)";
+                    (Para_No, Parameter, Nominal, RTolPlus, RTolMinus, ProbeStatus, ShortName, D_Name, Sign_Change, Compensation)
+                    VALUES (@Para_No, @Parameter, @Nominal, @RTolPlus, @RTolMinus,@ProbeStatus, @ShortName, @D_Name, @Sign_Change, @Compensation)";
                     using (SqlCommand cmd = new SqlCommand(query, con))
                     {
                         cmd.Parameters.AddWithValue("@Para_No", Para_No);
@@ -287,8 +282,6 @@ namespace EVMS
                         cmd.Parameters.AddWithValue("@Nominal", nominal);
                         cmd.Parameters.AddWithValue("@RTolPlus", rTolPlus);
                         cmd.Parameters.AddWithValue("@RTolMinus", rTolMinus);
-                        cmd.Parameters.AddWithValue("@YTolPlus", yTolPlus);
-                        cmd.Parameters.AddWithValue("@YTolMinus", yTolMinus);
                         cmd.Parameters.AddWithValue("@ProbeStatus", probeStatus);
                         cmd.Parameters.AddWithValue("@ShortName", ShortName);
                         cmd.Parameters.AddWithValue("@D_Name", ShowPara);
@@ -331,8 +324,7 @@ namespace EVMS
                 decimal nominal = ParseDecimal(txtNominal.Text);
                 decimal rTolPlus = ParseDecimal(txtRTolPlus.Text);
                 decimal rTolMinus = ParseDecimal(txtRTolMinus.Text);
-                decimal yTolPlus = ParseDecimal(txtYTolPlus.Text);
-                decimal yTolMinus = ParseDecimal(txtYTolMinus.Text);
+
                 string probeStatus = chkProbe.IsChecked == true ? "Probe" : "Para";
 
                 using (SqlConnection con = new SqlConnection(connectionString))
@@ -344,8 +336,6 @@ namespace EVMS
                                         Nominal=@Nominal, 
                                         RTolPlus=@RTolPlus, 
                                         RTolMinus=@RTolMinus, 
-                                        YTolPlus=@YTolPlus, 
-                                        YTolMinus=@YTolMinus, 
                                         ProbeStatus=@ProbeStatus,
                                         ShortName=@ShortName,
                                         D_Name=@D_Name
@@ -357,8 +347,6 @@ namespace EVMS
                         cmd.Parameters.AddWithValue("@Nominal", nominal);
                         cmd.Parameters.AddWithValue("@RTolPlus", rTolPlus);
                         cmd.Parameters.AddWithValue("@RTolMinus", rTolMinus);
-                        cmd.Parameters.AddWithValue("@YTolPlus", yTolPlus);
-                        cmd.Parameters.AddWithValue("@YTolMinus", yTolMinus);
                         cmd.Parameters.AddWithValue("@ProbeStatus", probeStatus);
                         cmd.Parameters.AddWithValue("@ShortName", ShortName);
                         cmd.Parameters.AddWithValue("@D_Name", ShowPara);
@@ -434,8 +422,6 @@ namespace EVMS
             txtNominal.Clear();
             txtRTolPlus.Clear();
             txtRTolMinus.Clear();
-            txtYTolPlus.Clear();
-            txtYTolMinus.Clear();
             chkProbe.IsChecked = false;
 
             cmbParameter.IsEnabled = true;
@@ -507,8 +493,6 @@ namespace EVMS
                 txtNominal.Text = row["Nominal"]?.ToString() ?? "";
                 txtRTolPlus.Text = row["RTolPlus"]?.ToString() ?? "";
                 txtRTolMinus.Text = row["RTolMinus"]?.ToString() ?? "";
-                txtYTolPlus.Text = row["YTolPlus"]?.ToString() ?? "";
-                txtYTolMinus.Text = row["YTolMinus"]?.ToString() ?? "";
                 chkProbe.IsChecked = row["ProbeStatus"]?.ToString() == "Probe";
                 txtShort.Text = row["ShortName"]?.ToString() ?? "";
                 txtViewPara.Text = row["D_Name"]?.ToString() ?? "";

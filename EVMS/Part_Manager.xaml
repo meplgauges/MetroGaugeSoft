@@ -122,42 +122,119 @@
                       Style="{StaticResource ModernDataGrid}"
                       AutoGenerateColumns="False"
                       CanUserAddRows="False"
+                      IsReadOnly="True"
+
                       CellStyle="{StaticResource CenterCellStyle}"
                       SelectionChanged="dataGrid_SelectionChanged">
 
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="ID" Binding="{Binding ID}" Width="80" IsReadOnly="True" ElementStyle="{StaticResource CenterCellText}"/>
+                    <DataGridTextColumn Header="SI No"
+                    IsReadOnly="True"
+                    Width="80"
+                    ElementStyle="{StaticResource CenterCellText}"
+                    Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow},
+                              Path=Header}" />
                     <DataGridTextColumn Header="Part Number" Binding="{Binding Para_No}" Width="*" ElementStyle="{StaticResource CenterCellText}"/>
                     <DataGridTextColumn Header="Part Name" Binding="{Binding Para_Name}" Width="*" ElementStyle="{StaticResource CenterCellText}"/>
                     <DataGridTextColumn Header="ID" Binding="{Binding ID_Value}" Width="*" ElementStyle="{StaticResource CenterCellText}"/>
                     <DataGridTextColumn Header="BOT" Binding="{Binding BOT_Value}" Width="*" ElementStyle="{StaticResource CenterCellText}"/>
 
-                    <DataGridTemplateColumn Header="Status" Width="80">
+                    <DataGridTemplateColumn Header="Status" Width="300">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <Border Background="Transparent"
-                    MouseLeftButtonDown="StatusEllipse_Click"
-                    Cursor="Hand"
-                    Padding="8,4">
-                                    <Ellipse Width="18"
-                         Height="18"
-                         HorizontalAlignment="Center"
-                         VerticalAlignment="Center">
-                                        <Ellipse.Style>
-                                            <Style TargetType="Ellipse">
-                                                <!-- 🔴 Default -->
-                                                <Setter Property="Fill" Value="#EF4444"/>
+                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
 
+                                    <!-- Clickable container -->
+                                    <Border Width="34"
+                                            Height="34"
+                                            CornerRadius="22"
+                                            Background="#F1F5F9"
+                                            Cursor="Hand"
+                                            MouseLeftButtonDown="StatusEllipse_Click">
+
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <!-- Default -->
+                                                <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+
+                                                <!-- Hover / Press feedback -->
                                                 <Style.Triggers>
-                                                    <!-- 🟢 ACTIVE (BOOLEAN) -->
-                                                    <DataTrigger Binding="{Binding [IsActive]}" Value="True">
-                                                        <Setter Property="Fill" Value="#22C55E"/>
-                                                    </DataTrigger>
+
+                                                    <!-- Hover -->
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="#E2E8F0"/>
+                                                    </Trigger>
+
+                                                    <!-- Pressed (mouse down) -->
+                                                    <EventTrigger RoutedEvent="MouseLeftButtonDown">
+                                                        <BeginStoryboard>
+                                                            <Storyboard>
+                                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                             To="0.9"
+                                                             Duration="0:0:0.05"/>
+                                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                             To="0.9"
+                                                             Duration="0:0:0.05"/>
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </EventTrigger>
+
+                                                    <!-- Release -->
+                                                    <EventTrigger RoutedEvent="MouseLeftButtonUp">
+                                                        <BeginStoryboard>
+                                                            <Storyboard>
+                                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                             To="1"
+                                                             Duration="0:0:0.05"/>
+                                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                             To="1"
+                                                             Duration="0:0:0.05"/>
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </EventTrigger>
+
                                                 </Style.Triggers>
                                             </Style>
-                                        </Ellipse.Style>
-                                    </Ellipse>
-                                </Border>
+                                        </Border.Style>
+
+                                        <Border.RenderTransform>
+                                            <ScaleTransform/>
+                                        </Border.RenderTransform>
+
+                                        <!-- Status dot -->
+                                        <Ellipse Width="22"
+                                                 Height="22"
+                                                 HorizontalAlignment="Center"
+                                                 VerticalAlignment="Center">
+                                            <Ellipse.Style>
+                                                <Style TargetType="Ellipse">
+
+                                                    <!-- 🔴 Inactive -->
+                                                    <Setter Property="Fill" Value="#EF4444"/>
+
+                                                    <!-- Soft shadow -->
+                                                    <Setter Property="Effect">
+                                                        <Setter.Value>
+                                                            <DropShadowEffect BlurRadius="8"
+                                                          ShadowDepth="0"
+                                                          Opacity="0.25"/>
+                                                        </Setter.Value>
+                                                    </Setter>
+
+                                                    <Style.Triggers>
+
+                                                        <!-- 🟢 Active -->
+                                                        <DataTrigger Binding="{Binding [IsActive]}" Value="True">
+                                                            <Setter Property="Fill" Value="#22C55E"/>
+                                                        </DataTrigger>
+
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Ellipse.Style>
+                                        </Ellipse>
+
+                                    </Border>
+                                </Grid>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>

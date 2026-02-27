@@ -125,6 +125,7 @@ namespace EVMS
             Reproducibility = active.Av;
             PartVariation = active.Pv;
             TotalTolerance = active.Tv;
+
             Ndc = active.Ndc;
             TotalPVPercent = active.PercentPv;
 
@@ -179,17 +180,21 @@ namespace EVMS
         public RnR_Report_Page()
         {
             InitializeComponent();
+           
             _dataService = new DataStorageService();
             connectionString = ConfigurationManager.ConnectionStrings["EVMSDb"].ConnectionString;
 
             SubmitCommand = new RelayCommand(async _ => await LoadRnRDataAsync(), _ => CanSubmit());
             CloseCommand = new RelayCommand(_ => ClosePage());
 
+            this.PreviewKeyDown += ReportViewPage_PreviewKeyDown;
+
             SelectPVMethodCommand = new RelayCommand(_ => SelectedMethod = RrMethod.PV);
             SelectToleranceMethodCommand = new RelayCommand(_ => SelectedMethod = RrMethod.Tolerance);
             RecalculateCommand = new RelayCommand(_ => RecalculateFromGrids());
             ExportToExcelCommand = new RelayCommand(_ => ExportToExcel());
 
+            this.Loaded += RnRViewPage_Loaded;
             LoadActiveParts();
             LoadOperators();
             LoadCompanyInfo();
@@ -200,6 +205,47 @@ namespace EVMS
             DataContext = this;
         }
 
+        private void RnRViewPage_Loaded(object? sender, RoutedEventArgs e)
+        {
+            this.Focusable = true;
+            this.IsTabStop = true;
+            Keyboard.Focus(this);
+            FocusManager.SetFocusedElement(Window.GetWindow(this)!, this);
+        }
+
+
+
+        private void ReportViewPage_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape)
+            {
+                HandleEscKeyAction();
+                e.Handled = true;
+            }
+        }
+
+
+
+        private void HandleEscKeyAction()
+        {
+            Window currentWindow = Window.GetWindow(this);
+            if (currentWindow != null)
+            {
+                var mainContentGrid = currentWindow.FindName("MainContentGrid") as Grid;
+                if (mainContentGrid != null)
+                {
+                    mainContentGrid.Children.Clear();
+
+                    var resultPage = new Dashboard
+                    {
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        VerticalAlignment = VerticalAlignment.Stretch
+                    };
+
+                    mainContentGrid.Children.Add(resultPage);
+                }
+            }
+        }
         protected void OnPropertyChanged(string name) =>
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 

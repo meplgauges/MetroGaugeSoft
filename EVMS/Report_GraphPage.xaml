@@ -14,7 +14,7 @@ xmlns:scottplot="clr-namespace:ScottPlot;assembly=ScottPlot.WPF"
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="/EVMS;component/Style/ReportPageDesign.xaml"/>
+                <ResourceDictionary Source="/Style/ReportPageDesign.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </UserControl.Resources>
