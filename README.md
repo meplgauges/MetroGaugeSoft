@@ -130,7 +130,7 @@ NuGet Package Missing
 
 - Ensure SQL Server service is running.
 - Use Release build for production.
-- Avoid hardcoding connection strings in production systems.
+
 
 ---
 
